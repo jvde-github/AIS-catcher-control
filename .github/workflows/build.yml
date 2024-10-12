@@ -69,20 +69,33 @@ jobs:
           echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}"
           mkdir -p build
           go build -ldflags="-s -w" -o build/AIS-catcher-control_arm64 .
+          
+      # Step 8: Determine Release Tag
+      - name: Determine Release Tag
+        id: get_release
+        run: |
+          # Fetch tags sorted by creation date descending
+          TAG=$(git tag --sort=-creatordate | head -n1)
+          echo "Latest tag: $TAG"
+          echo "::set-output name=tag::$TAG"
 
-      # Step 8: List build directory to verify executables
-      - name: List Build Directory
-        run: ls -la build/
-
-      # Step 9: Create Release and Upload Assets
-      - name: Create Release and Upload Assets
-        uses: ncipollo/release-action@v1
+      # Step 9: Upload Assets to Latest Release
+      - name: Upload armhf Executable to Release
+        uses: actions/upload-release-asset@v1
         with:
-          tag: latest
-          name: Latest AIS-catcher-control Release
-          body: 'Automatically generated release with the latest build.'
-          files: |
-            build/AIS-catcher-control_armhf
-            build/AIS-catcher-control_arm64
+          upload_url: ${{ steps.get_release.outputs.tag }}
+          asset_path: ./build/AIS-catcher-control_armhf
+          asset_name: AIS-catcher-control_armhf
+          asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload arm64 Executable to Release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.get_release.outputs.tag }}
+          asset_path: ./build/AIS-catcher-control_arm64
+          asset_name: AIS-catcher-control_arm64
+          asset_content_type: application/octet-stream
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
