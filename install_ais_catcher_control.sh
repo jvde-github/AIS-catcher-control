@@ -112,6 +112,12 @@ download_binary() {
 install_binary() {
   print_message "Installing the binary to ${INSTALL_PATH}..."
 
+  # Stop the service if it exists
+  if systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
+    print_message "Stopping existing ${SERVICE_NAME} service..."
+    systemctl stop "${SERVICE_NAME}"
+  fi
+
   mv "${TEMP_DIR}/${BIN_NAME}" "${INSTALL_PATH}"
   chmod +x "${INSTALL_PATH}"
 
@@ -143,6 +149,40 @@ EOF
   print_message "Systemd service file created."
 }
 
+# Function to check prerequisites
+check_prerequisites() {
+  print_message "Checking prerequisites..."
+
+  # Check if 'ais-catcher' service exists
+  if ! systemctl list-unit-files | grep -q "^ais-catcher.service"; then
+    print_message "The 'ais-catcher' service does not exist. Please install 'ais-catcher' before proceeding."
+    exit 1
+  else
+    print_message "'ais-catcher' service is installed."
+  fi
+
+  # Check if directory '/etc/AIS-catcher/' exists with required files
+  if [[ ! -d "/etc/AIS-catcher" ]]; then
+    print_message "Directory '/etc/AIS-catcher/' does not exist."
+    exit 1
+  fi
+
+  if [[ ! -f "/etc/AIS-catcher/config.json" || ! -f "/etc/AIS-catcher/config.cmd" ]]; then
+    print_message "Required configuration files 'config.json' or 'config.cmd' are missing in '/etc/AIS-catcher/'."
+    exit 1
+  else
+    print_message "Required configuration files are present."
+  fi
+
+  # Check if port 8110 is free
+  if ss -tulpn | grep -q ":8110"; then
+    print_message "Port 8110 is in use. Please free up the port before proceeding."
+    exit 1
+  else
+    print_message "Port 8110 is free."
+  fi
+}
+
 # Function to enable and start the service
 enable_and_start_service() {
   print_message "Reloading systemd daemon..."
@@ -172,6 +212,7 @@ fi
 
 install_dependencies
 detect_architecture
+check_prerequisites
 download_binary
 install_binary
 create_systemd_service
