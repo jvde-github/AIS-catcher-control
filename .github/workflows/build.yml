@@ -1,0 +1,75 @@
+name: Build AIS-catcher-control Executables
+
+# Trigger the workflow on push to the main branch and on pull requests
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build for Raspberry Pi
+    runs-on: ubuntu-latest
+
+    # Define a matrix for different target architectures
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: arm
+            goarm: 5        # Set to 5 to avoid hardware floating point
+            target: armhf
+          - os: linux
+            arch: arm64
+            goarm: null     # Not applicable for arm64
+            target: arm64
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Go environment
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20' # Specify the Go version you are using
+
+      # Step 3: Cache Go modules to speed up builds
+      - name: Cache Go Modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # Step 4: Run Tests (Optional but Recommended)
+      - name: Run Tests
+        run: |
+          go test ./...
+
+      # Step 5: Build the Go application
+      - name: Build Executable
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 0       # Disable CGO for static binaries
+        run: |
+          echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}, GOARM=${GOARM}"
+          mkdir -p build
+          # Set output file name based on target
+          OUTPUT_NAME="AIS-catcher-control_${{ matrix.target }}"
+          # Build the Go executable
+          go build -ldflags="-s -w" -o build/${OUTPUT_NAME} .
+
+      # Step 6: Upload the built executable as an artifact
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: AIS-catcher-control-${{ matrix.target }}
+          path: build/AIS-catcher-control_${{ matrix.target }}
