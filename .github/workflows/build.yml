@@ -1,14 +1,11 @@
 name: Build AIS-catcher-control Executables
 
-# Trigger the workflow on push to the main branch, pull requests, and when a release is published
+# Trigger the workflow on push to the main branch and on pull requests
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  # Optionally, trigger on tag creation if you use versioned releases
-  # tags:
-  #   - 'v*.*.*'
 
 jobs:
   build:
@@ -75,34 +72,12 @@ jobs:
           # Build the Go executable
           go build -ldflags="-s -w" -o build/${OUTPUT_NAME} .
 
-      # Step 7: Create or Update GitHub Release
-      - name: Create or Update Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
+      # Step 7: Create or Update GitHub Release and Upload Assets
+      - name: Create Release and Upload Assets
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: 'latest'
-          name: 'Latest AIS-catcher-control Release'
-          body: 'Automatically generated release with the latest build.'
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Step 8: Upload Executables to the Release
-      - name: Upload Executable to Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: 'latest'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Attach all built executables as release assets
-        continue-on-error: false
-        run: |
-          # Loop through the build directory and upload each executable
-          for file in build/*; do
-            gh release upload latest "$file" --clobber
-          done
-
-      # Alternatively, use a single step with a loop if the above does not work as expected
-      # You can use actions/upload-release-asset@v1, but it's deprecated
-      # Hence, using softprops/action-gh-release@v1 which is maintained
+          tag: latest
+          name: Latest AIS-catcher-control Release
+          files: |
+            build/AIS-catcher-control_armhf
+            build/AIS-catcher-control_arm64
