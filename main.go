@@ -1,12 +1,14 @@
 package main
 
 import (
+    "bufio"
     "crypto/sha256"
     "embed"
     "encoding/hex"
     "encoding/json"
     "fmt"
     "html/template"
+    "io"
     "io/fs"
     "io/ioutil"
     "log"
@@ -16,6 +18,7 @@ import (
     "path/filepath"
     "strings"
     "time"
+    "unicode"
 )
 
 // Embedding the templates and static files
@@ -40,8 +43,9 @@ var sessions = map[string]string{} // session_id -> username
 
 // Configuration struct
 type Config struct {
-    PasswordHash string `json:"password_hash"`
-    Port         string `json:"port"`
+    PasswordHash   string `json:"password_hash"`
+    Port           string `json:"port"`
+    ServiceEnabled bool   `json:"service_enabled"`
 }
 
 // Global variable to hold the configuration
@@ -84,8 +88,9 @@ func loadConfig() error {
     if os.IsNotExist(err) {
         // If settings file doesn't exist, create it with default values
         config = Config{
-            PasswordHash: hashPassword(defaultPassword),
-            Port:         "8110",
+            PasswordHash:   hashPassword(defaultPassword),
+            Port:           "8110",
+            ServiceEnabled: true, // default to enabled
         }
         return saveConfig()
     } else if err != nil {
@@ -108,7 +113,7 @@ func saveConfig() error {
     return ioutil.WriteFile(settingsFilePath, data, 0644)
 }
 
-// Rest of the code remains the same...
+// Authentication functions
 
 func authenticate(username, password string) bool {
     if username != defaultUsername {
@@ -144,6 +149,20 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
     } else {
         templates.ExecuteTemplate(w, "login.html", "Invalid credentials")
     }
+}
+
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+    cookie, err := r.Cookie(sessionCookieName)
+    if err == nil {
+        delete(sessions, cookie.Value)
+        http.SetCookie(w, &http.Cookie{
+            Name:   sessionCookieName,
+            Value:  "",
+            Path:   "/",
+            MaxAge: -1,
+        })
+    }
+    http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
@@ -189,11 +208,17 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
     status := getServiceStatus()
     uptime := getServiceUptime()
     logs := getServiceLogs(10) // Get the last 10 log entries
+    enabled, err := getServiceEnabled()
+    if err != nil {
+        enabled = false // default to false if error occurs
+        log.Println("Error fetching service enabled status:", err)
+    }
 
     data := map[string]interface{}{
-        "Status": status,
-        "Uptime": uptime,
-        "Logs":   logs,
+        "Status":         status,
+        "Uptime":         uptime,
+        "Logs":           logs,
+        "ServiceEnabled": enabled,
     }
     templates.ExecuteTemplate(w, "dashboard.html", data)
 }
@@ -284,16 +309,53 @@ func controlService(action string) error {
     return cmd.Run()
 }
 
+func getServiceEnabled() (bool, error) {
+    cmd := exec.Command("systemctl", "is-enabled", "ais-catcher.service")
+    output, err := cmd.Output()
+    status := strings.TrimSpace(string(output))
+
+    if err != nil {
+        if exitErr, ok := err.(*exec.ExitError); ok {
+            if exitErr.ExitCode() == 1 {
+                return false, nil
+            }
+        }
+        return false, err
+    }
+
+    return status == "enabled", nil
+}
+
+
 func serviceHandler(w http.ResponseWriter, r *http.Request) {
     action := r.URL.Query().Get("action")
-    if action != "start" && action != "stop" && action != "restart" {
+    validActions := map[string]bool{
+        "start":    true,
+        "stop":     true,
+        "restart":  true,
+        "enable":   true,
+        "disable":  true,
+    }
+
+    if !validActions[action] {
         http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
         return
     }
+
     err := controlService(action)
     if err != nil {
         log.Println("Service control error:", err)
     }
+
+    // Update the config if action is enable or disable
+    if action == "enable" {
+        config.ServiceEnabled = true
+        saveConfig()
+    } else if action == "disable" {
+        config.ServiceEnabled = false
+        saveConfig()
+    }
+
     http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
@@ -325,6 +387,9 @@ func editorHandler(w http.ResponseWriter, r *http.Request) {
     if r.Method == http.MethodPost {
         content := r.FormValue("content")
 
+        // Remove all \r characters to avoid carriage returns
+        content = strings.ReplaceAll(content, "\r", "")
+
         // Save the updated command line
         err := ioutil.WriteFile(configCmdFilePath, []byte(content), 0644)
         if err != nil {
@@ -343,6 +408,55 @@ func editorHandler(w http.ResponseWriter, r *http.Request) {
         }
         templates.ExecuteTemplate(w, "editor.html", data)
     }
+}
+
+func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
+    flusher, ok := w.(http.Flusher)
+    if !ok {
+        http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("Connection", "keep-alive")
+
+    cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-f", "--no-pager", "--output=short-iso")
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+        http.Error(w, "Failed to get stdout", http.StatusInternalServerError)
+        return
+    }
+
+    if err := cmd.Start(); err != nil {
+        http.Error(w, "Failed to start journalctl", http.StatusInternalServerError)
+        return
+    }
+
+    defer cmd.Wait()
+
+    scanner := bufio.NewScanner(stdout)
+    for scanner.Scan() {
+        line := scanner.Text()
+        sanitizedLine := sanitizeLogLine(line)
+        //  log.Printf("Streaming log: %s", sanitizedLine) // Debugging log
+        fmt.Fprintf(w, "data: %s\n\n", sanitizedLine)
+        flusher.Flush()
+    }
+
+    if err := scanner.Err(); err != nil && err != io.EOF {
+        log.Println("Error reading logs:", err)
+    }
+}
+
+func sanitizeLogLine(line string) string {
+    var sanitized strings.Builder
+    for _, r := range line {
+        if unicode.IsPrint(r) || unicode.IsSpace(r) {
+            sanitized.WriteRune(r)
+        }
+    }
+    return sanitized.String()
 }
 
 func main() {
@@ -375,6 +489,8 @@ func main() {
     http.HandleFunc("/dashboard", authMiddleware(dashboardHandler))
     http.HandleFunc("/service", authMiddleware(serviceHandler))
     http.HandleFunc("/editor", authMiddleware(editorHandler))
+    http.HandleFunc("/logs-stream", authMiddleware(logsStreamHandler))
+    http.HandleFunc("/logout", authMiddleware(logoutHandler))
 
     // Redirect root to login or dashboard based on authentication
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
