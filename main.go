@@ -207,7 +207,7 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 func dashboardHandler(w http.ResponseWriter, r *http.Request) {
     status := getServiceStatus()
     uptime := getServiceUptime()
-    logs := getServiceLogs(10) // Get the last 10 log entries
+    logs := getServiceLogs(50) // Get the last 10 log entries
     enabled, err := getServiceEnabled()
     if err != nil {
         enabled = false // default to false if error occurs
