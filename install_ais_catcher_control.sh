@@ -123,7 +123,15 @@ install_binary() {
     print_message "Stopping existing ${SERVICE_NAME} service..."
     systemctl stop "${SERVICE_NAME}"
   fi
-
+  
+  # Check if port 8110 is free
+  if ss -tulpn | grep -q ":8110"; then
+    print_message "Port 8110 is in use. Please free up the port before proceeding."
+    exit 1
+  else
+    print_message "Port 8110 is free."
+  fi
+  
   mv "${TEMP_DIR}/${BIN_NAME}" "${INSTALL_PATH}"
   chmod +x "${INSTALL_PATH}"
 
@@ -178,14 +186,6 @@ check_prerequisites() {
     exit 1
   else
     print_message "Required configuration files are present."
-  fi
-
-  # Check if port 8110 is free
-  if ss -tulpn | grep -q ":8110"; then
-    print_message "Port 8110 is in use. Please free up the port before proceeding."
-    exit 1
-  else
-    print_message "Port 8110 is free."
   fi
 }
 
