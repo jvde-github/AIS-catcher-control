@@ -8,22 +8,14 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
-    name: Build for Raspberry Pi
+  build-and-release:
+    name: Build and Release for Raspberry Pi
     runs-on: ubuntu-latest
 
-    # Define a matrix for different target architectures
-    strategy:
-      matrix:
-        include:
-          - os: linux
-            arch: arm
-            goarm: 5        # Set to 5 to avoid hardware floating point (armhf)
-            target: armhf
-          - os: linux
-            arch: arm64
-            goarm: null     # Not applicable for arm64
-            target: arm64
+    # Grant the workflow necessary permissions
+    permissions:
+      contents: write    # Required to create/update releases and upload assets
+      actions: read      # Default permission
 
     steps:
       # Step 1: Checkout the repository
@@ -49,35 +41,45 @@ jobs:
 
       # Step 4: Download Dependencies
       - name: Download Dependencies
-        run: |
-          go mod tidy
+        run: go mod tidy
 
       # Step 5: Run Tests (Optional but Recommended)
       - name: Run Tests
-        run: |
-          go test ./...
+        run: go test ./...
 
-      # Step 6: Build the Go application
-      - name: Build Executable
+      # Step 6: Build armhf Executable (Raspberry Pi Zero)
+      - name: Build armhf Executable
         env:
-          GOOS: ${{ matrix.os }}
-          GOARCH: ${{ matrix.arch }}
-          GOARM: ${{ matrix.goarm }}
-          CGO_ENABLED: 0       # Disable CGO for static binaries
+          GOOS: linux
+          GOARCH: arm
+          GOARM: 5        # Set to 5 to avoid hardware floating point
+          CGO_ENABLED: 0  # Disable CGO for static binaries
         run: |
           echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}, GOARM=${GOARM}"
           mkdir -p build
-          # Set output file name based on target
-          OUTPUT_NAME="AIS-catcher-control_${{ matrix.target }}"
-          # Build the Go executable
-          go build -ldflags="-s -w" -o build/${OUTPUT_NAME} .
+          go build -ldflags="-s -w" -o build/AIS-catcher-control_armhf .
 
-      # Step 7: Create Release and Upload Assets
+      # Step 7: Build arm64 Executable (64-bit Raspberry Pi)
+      - name: Build arm64 Executable
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: 0  # Disable CGO for static binaries
+        run: |
+          echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}"
+          mkdir -p build
+          go build -ldflags="-s -w" -o build/AIS-catcher-control_arm64 .
+
+      # Step 8: List build directory to verify executables
+      - name: List Build Directory
+        run: ls -la build/
+
+      # Step 9: Create Release and Upload Assets
       - name: Create Release and Upload Assets
-        uses: softprops/action-gh-release@v1
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: 'latest'
-          name: 'Latest AIS-catcher-control Release'
+          tag: latest
+          name: Latest AIS-catcher-control Release
           body: 'Automatically generated release with the latest build.'
           files: |
             build/AIS-catcher-control_armhf
