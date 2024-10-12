@@ -1,11 +1,14 @@
 name: Build AIS-catcher-control Executables
 
-# Trigger the workflow on push to the main branch and on pull requests
+# Trigger the workflow on push to the main branch, pull requests, and when a release is published
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  # Optionally, trigger on tag creation if you use versioned releases
+  # tags:
+  #   - 'v*.*.*'
 
 jobs:
   build:
@@ -18,7 +21,7 @@ jobs:
         include:
           - os: linux
             arch: arm
-            goarm: 5        # Set to 5 to avoid hardware floating point
+            goarm: 5        # Set to 5 to avoid hardware floating point (armhf)
             target: armhf
           - os: linux
             arch: arm64
@@ -47,12 +50,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      # Step 4: Run Tests (Optional but Recommended)
+      # Step 4: Download Dependencies
+      - name: Download Dependencies
+        run: |
+          go mod tidy
+
+      # Step 5: Run Tests (Optional but Recommended)
       - name: Run Tests
         run: |
           go test ./...
 
-      # Step 5: Build the Go application
+      # Step 6: Build the Go application
       - name: Build Executable
         env:
           GOOS: ${{ matrix.os }}
@@ -67,9 +75,34 @@ jobs:
           # Build the Go executable
           go build -ldflags="-s -w" -o build/${OUTPUT_NAME} .
 
-      # Step 6: Upload the built executable as an artifact
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+      # Step 7: Create or Update GitHub Release
+      - name: Create or Update Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
         with:
-          name: AIS-catcher-control-${{ matrix.target }}
-          path: build/AIS-catcher-control_${{ matrix.target }}
+          tag_name: 'latest'
+          name: 'Latest AIS-catcher-control Release'
+          body: 'Automatically generated release with the latest build.'
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 8: Upload Executables to the Release
+      - name: Upload Executable to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: 'latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Attach all built executables as release assets
+        continue-on-error: false
+        run: |
+          # Loop through the build directory and upload each executable
+          for file in build/*; do
+            gh release upload latest "$file" --clobber
+          done
+
+      # Alternatively, use a single step with a loop if the above does not work as expected
+      # You can use actions/upload-release-asset@v1, but it's deprecated
+      # Hence, using softprops/action-gh-release@v1 which is maintained
