@@ -72,12 +72,15 @@ jobs:
           # Build the Go executable
           go build -ldflags="-s -w" -o build/${OUTPUT_NAME} .
 
-      # Step 7: Create or Update GitHub Release and Upload Assets
+      # Step 7: Create Release and Upload Assets
       - name: Create Release and Upload Assets
-        uses: ncipollo/release-action@v1
+        uses: softprops/action-gh-release@v1
         with:
-          tag: latest
-          name: Latest AIS-catcher-control Release
+          tag_name: 'latest'
+          name: 'Latest AIS-catcher-control Release'
+          body: 'Automatically generated release with the latest build.'
           files: |
             build/AIS-catcher-control_armhf
             build/AIS-catcher-control_arm64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
