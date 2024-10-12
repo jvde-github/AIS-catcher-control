@@ -69,33 +69,76 @@ jobs:
           echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}"
           mkdir -p build
           go build -ldflags="-s -w" -o build/AIS-catcher-control_arm64 .
-          
-      # Step 8: Determine Release Tag
-      - name: Determine Release Tag
-        id: get_release
-        run: |
-          # Fetch tags sorted by creation date descending
-          TAG=$(git tag --sort=-creatordate | head -n1)
-          echo "Latest tag: $TAG"
-          echo "::set-output name=tag::$TAG"
 
-      # Step 9: Upload Assets to Latest Release
-      - name: Upload armhf Executable to Release
-        uses: actions/upload-release-asset@v1
+      # Step 8: Upload Artifacts to GitHub Actions
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
         with:
-          upload_url: ${{ steps.get_release.outputs.tag }}
-          asset_path: ./build/AIS-catcher-control_armhf
-          asset_name: AIS-catcher-control_armhf
-          asset_content_type: application/octet-stream
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: AIS-catcher-control_binaries
+          path: build/*
 
-      - name: Upload arm64 Executable to Release
-        uses: actions/upload-release-asset@v1
+      # Step 9: Get the latest release
+      - name: Get the Latest Release
+        id: get_latest_release
+        uses: actions/github-script@v6
         with:
-          upload_url: ${{ steps.get_release.outputs.tag }}
-          asset_path: ./build/AIS-catcher-control_arm64
-          asset_name: AIS-catcher-control_arm64
-          asset_content_type: application/octet-stream
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const latestRelease = await github.rest.repos.getLatestRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            core.setOutput('release_id', latestRelease.data.id);
+
+      # Step 10: Upload Assets to the Latest Release
+      - name: Upload Assets to Latest Release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const releaseId = '${{ steps.get_latest_release.outputs.release_id }}';
+
+            const assets = fs.readdirSync('build').map(fileName => {
+              return {
+                name: fileName,
+                path: path.join('build', fileName)
+              }
+            });
+
+            for (const asset of assets) {
+              const contentLength = fs.statSync(asset.path).size;
+              const headers = {
+                'content-type': 'application/octet-stream',
+                'content-length': contentLength
+              };
+
+              // Check if the asset already exists
+              const existingAssets = await github.rest.repos.listReleaseAssets({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId,
+              });
+
+              const existingAsset = existingAssets.data.find(a => a.name === asset.name);
+              if (existingAsset) {
+                // Delete the existing asset
+                await github.rest.repos.deleteReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  asset_id: existingAsset.id
+                });
+              }
+
+              // Upload the new asset
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId,
+                name: asset.name,
+                data: fs.readFileSync(asset.path),
+                headers: headers
+              });
+            }
