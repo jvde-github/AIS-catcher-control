@@ -57,6 +57,12 @@ install_dependencies() {
     print_message "systemctl not found. Ensure you're running a system with systemd."
     exit 1
   fi
+
+  if ! command_exists ss; then
+    print_message "Installing iproute2 for 'ss' command..."
+    apt update
+    apt install -y iproute2
+  fi
 }
 
 # Function to detect CPU architecture
@@ -112,8 +118,8 @@ download_binary() {
 install_binary() {
   print_message "Installing the binary to ${INSTALL_PATH}..."
 
-  # Stop the service if it exists
-  if systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
+  # Stop the ais-catcher-control service if it is active
+  if systemctl is-active --quiet "${SERVICE_NAME}"; then
     print_message "Stopping existing ${SERVICE_NAME} service..."
     systemctl stop "${SERVICE_NAME}"
   fi
