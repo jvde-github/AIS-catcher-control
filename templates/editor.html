@@ -25,7 +25,13 @@
                     const config = JSON.parse(jsonContent);
                     types.forEach(type => {
                         if (Array.isArray(config[type])) {
-                            configData[type] = config[type];
+                            // Ensure each entry has 'active' set to true if undefined
+                            configData[type] = config[type].map(entry => {
+                                if (typeof entry.active === 'undefined') {
+                                    return { ...entry, active: true };
+                                }
+                                return entry;
+                            });
                         } else {
                             configData[type] = [];
                         }
@@ -430,8 +436,8 @@
                 <div class="collapsible-header flex justify-between items-center cursor-pointer mb-2">
                     <h2 class="text-xl font-semibold text-gray-700">UDP Output</h2>
                     <span class="toggle-icon">
-                        <svg class="w-4 h-4 transform rotate-180 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg"
-                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="w-4 h-4 transform rotate-180 transition-transform duration-200"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
                     </span>
@@ -506,8 +512,8 @@
                 <div class="collapsible-header flex justify-between items-center cursor-pointer mb-2">
                     <h2 class="text-xl font-semibold text-gray-700">AIS-catcher JSON Configuration</h2>
                     <span class="toggle-icon">
-                        <svg class="w-4 h-4 transform rotate-180 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg"
-                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="w-4 h-4 transform rotate-180 transition-transform duration-200"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
                     </span>
