@@ -27,14 +27,28 @@
             </div>
             {{end}}
             <form method="post">
-                <div class="mb-6">
-                    <label class="block text-gray-700 font-medium mb-2">AIS-catcher Command Line Configuration</label>
-                    <textarea name="content" class="w-full h-64 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-600" required>{{.Content}}</textarea>
+                <!-- config.cmd Section -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-medium text-gray-700 mb-2">AIS-catcher Command Line Configuration</h2>
+                    <textarea name="cmd_content" class="w-full h-40 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-600" required>{{.CmdContent}}</textarea>
                 </div>
+                
+                <!-- config.json Section -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-medium text-gray-700 mb-2">AIS-catcher JSON Configuration</h2>
+                    <textarea name="json_content" class="w-full h-64 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-600" required>{{.JsonContent}}</textarea>
+                </div>
+                
                 <button class="bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200" type="submit">
                     Save Configuration
                 </button>
             </form>
+            <!-- Back to Dashboard Button -->
+            <div class="mt-4">
+                <a href="/dashboard" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200">
+                    Back to Dashboard
+                </a>
+            </div>
         </div>
     </div>
 </body>

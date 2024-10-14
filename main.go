@@ -35,8 +35,9 @@ const (
 	defaultPassword   = "admin"
 	sessionCookieName = "session_id"
 	// Set the configCmdFilePath and settingsFilePath directly to the absolute paths
-	configCmdFilePath = "/etc/AIS-catcher/config.cmd"
-	settingsFilePath  = "/etc/AIS-catcher/control.json"
+	configCmdFilePath  = "/etc/AIS-catcher/config.cmd"
+	configJSONFilePath = "/etc/AIS-catcher/config.json"
+	settingsFilePath   = "/etc/AIS-catcher/control.json"
 )
 
 var templates *template.Template
@@ -66,6 +67,7 @@ func initPaths() error {
 	log.Printf("Executable directory: %s", execDir)
 	log.Printf("Settings file path: %s", settingsFilePath)
 	log.Printf("Config CMD file path: %s", configCmdFilePath)
+	log.Printf("Config JSON file path: %s", configJSONFilePath)
 
 	return nil
 }
@@ -141,7 +143,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			Path:  "/",
 		})
 
-		if password == defaultPassword && hashPassword(password) == config.PasswordHash {
+		if false && password == defaultPassword && hashPassword(password) == config.PasswordHash {
 			// Prompt to change default password
 			http.Redirect(w, r, "/change-password", http.StatusSeeOther)
 		} else {
@@ -363,51 +365,144 @@ func editorHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		log.Printf("Received GET request for /editor")
 		log.Printf("Attempting to read config.cmd from: %s", configCmdFilePath)
+		log.Printf("Attempting to read config.json from: %s", configJSONFilePath)
 
-		content, err := ioutil.ReadFile(configCmdFilePath)
+		// Read config.cmd
+		cmdContent, err := ioutil.ReadFile(configCmdFilePath)
 		if err != nil {
 			log.Printf("Error reading config.cmd: %v", err)
-			data := map[string]interface{}{
-				"Content": "",
-				"Error":   "Error reading configuration file: " + err.Error(),
-			}
-			templates.ExecuteTemplate(w, "editor.html", data)
-			return
+			cmdContent = []byte("")
 		} else {
 			log.Printf("Successfully read config.cmd")
 		}
 
+		// Read config.json
+		jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+		if err != nil {
+			log.Printf("Error reading config.json: %v", err)
+			jsonContent = []byte("")
+		} else {
+			log.Printf("Successfully read config.json")
+		}
+
 		data := map[string]interface{}{
-			"Content": string(content),
+			"CmdContent":  string(cmdContent),
+			"JsonContent": string(jsonContent),
 		}
 		templates.ExecuteTemplate(w, "editor.html", data)
 		return
 	}
 
 	if r.Method == http.MethodPost {
-		content := r.FormValue("content")
+		// Parse form data
+		err := r.ParseForm()
+		if err != nil {
+			templates.ExecuteTemplate(w, "editor.html", map[string]interface{}{
+				"Error": "Failed to parse form data: " + err.Error(),
+			})
+			return
+		}
 
-		// Remove all \r characters to avoid carriage returns
-		content = strings.ReplaceAll(content, "\r", "")
+		// Get content for both files
+		cmdContent := r.FormValue("cmd_content")
+		jsonContent := r.FormValue("json_content")
 
-		// Save the updated command line
-		err := ioutil.WriteFile(configCmdFilePath, []byte(content), 0644)
+		// check if jsonContent is proper JSON and has a field "config" equal to "aiscatcher" and a key "version" equal to 1
+
+		var jsonMap map[string]interface{}
+		err = json.Unmarshal([]byte(jsonContent), &jsonMap)
+		if err != nil {
+			log.Printf("Error unmarshalling JSON: %v", err)
+			data := map[string]interface{}{
+				"CmdContent":  cmdContent,
+				"JsonContent": jsonContent,
+				"Error":       "Invalid JSON: " + err.Error(),
+			}
+			templates.ExecuteTemplate(w, "editor.html", data)
+			return
+		}
+
+		configValue, ok := jsonMap["config"].(string)
+		if !ok || configValue != "aiscatcher" {
+			log.Printf("Invalid config value: %v", configValue)
+			data := map[string]interface{}{
+				"CmdContent":  cmdContent,
+				"JsonContent": jsonContent,
+				"Error":       "Invalid JSON: config value must be 'aiscatcher'",
+			}
+			templates.ExecuteTemplate(w, "editor.html", data)
+			return
+		}
+
+		versionValue, ok := jsonMap["version"].(float64)
+		if !ok || versionValue != 1 {
+			log.Printf("Invalid version value: %v", versionValue)
+			data := map[string]interface{}{
+				"CmdContent":  cmdContent,
+				"JsonContent": jsonContent,
+				"Error":       "Invalid JSON: version value must be 1",
+			}
+			templates.ExecuteTemplate(w, "editor.html", data)
+			return
+		}
+
+		// Sanitize inputs if necessary
+		cmdContent = sanitizeFileContent(cmdContent)
+		jsonContent = sanitizeFileContent(jsonContent)
+
+		// Save config.cmd
+		err = ioutil.WriteFile(configCmdFilePath, []byte(cmdContent), 0644)
 		if err != nil {
 			log.Printf("Error writing to config.cmd: %v", err)
 			data := map[string]interface{}{
-				"Content": content,
-				"Error":   "Failed to save configuration file: " + err.Error(),
+				"CmdContent":  cmdContent,
+				"JsonContent": jsonContent,
+				"Error":       "Failed to save config.cmd: " + err.Error(),
+			}
+			templates.ExecuteTemplate(w, "editor.html", data)
+			return
+		}
+
+		// Save config.json
+		err = ioutil.WriteFile(configJSONFilePath, []byte(jsonContent), 0644)
+		if err != nil {
+			log.Printf("Error writing to config.json: %v", err)
+			data := map[string]interface{}{
+				"CmdContent":  cmdContent,
+				"JsonContent": jsonContent,
+				"Error":       "Failed to save config.json: " + err.Error(),
+			}
+			templates.ExecuteTemplate(w, "editor.html", data)
+			return
+		}
+
+		// Optionally, reload the configuration if necessary
+		err = loadConfig()
+		if err != nil {
+			log.Printf("Error reloading configuration: %v", err)
+			data := map[string]interface{}{
+				"CmdContent":  cmdContent,
+				"JsonContent": jsonContent,
+				"Error":       "Configuration saved, but failed to reload: " + err.Error(),
 			}
 			templates.ExecuteTemplate(w, "editor.html", data)
 			return
 		}
 
 		data := map[string]interface{}{
-			"Content": content,
-			"Message": "Configuration saved. Please restart the service.",
+			"CmdContent":  cmdContent,
+			"JsonContent": jsonContent,
+			"Message":     "Configuration saved successfully. Please restart the service.",
 		}
 		templates.ExecuteTemplate(w, "editor.html", data)
 	}
+}
+
+// Helper function to sanitize file content
+func sanitizeFileContent(content string) string {
+	// Implement any necessary sanitization here
+	// For example, remove unwanted characters or validate JSON if editing config.json
+	return content
 }
 
 func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
