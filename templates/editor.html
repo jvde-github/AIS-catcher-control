@@ -1,51 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Edit Configuration - AIS-catcher Control</title>
     <link href="/static/tailwind.min.css" rel="stylesheet">
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            // UDP Management Script (existing)
-            const udpTableBody = document.getElementById("udp-table-body");
-            const addUdpBtn = document.getElementById("add-udp-btn");
-            const udpModal = document.getElementById("udp-modal");
-            const udpForm = document.getElementById("udp-form");
-            const closeModalBtn = document.getElementById("close-modal");
-            const udpAction = document.getElementById("udp-action");
-            const udpIndex = document.getElementById("udp-index");
+        document.addEventListener("DOMContentLoaded", function () {
+            // Define standard keys to exclude from custom fields
+            const standardKeys = ['active', 'host', 'port', 'json'];
 
-            let udpData = [];
-            let editingIndex = null;
+            // Generalized Management Script for UDP and TCP
+            const types = ['udp', 'tcp']; // Define the types
+            let configData = {
+                udp: [],
+                tcp: []
+            };
+            let currentType = null; // 'udp' or 'tcp'
 
-            // Initialize UDP Data from JSON Content
-            function initializeUdpData() {
+            // Initialize Data from JSON Content
+            function initializeData() {
                 const jsonContent = document.getElementById("json_content").value;
                 try {
                     const config = JSON.parse(jsonContent);
-                    if (Array.isArray(config.udp)) {
-                        udpData = config.udp;
-                    } else {
-                        udpData = [];
-                    }
+                    types.forEach(type => {
+                        if (Array.isArray(config[type])) {
+                            configData[type] = config[type];
+                        } else {
+                            configData[type] = [];
+                        }
+                    });
                 } catch (e) {
                     console.error("Invalid JSON in config.json:", e);
-                    udpData = [];
+                    types.forEach(type => {
+                        configData[type] = [];
+                    });
                 }
-                renderUdpTable();
+                renderAllTables();
             }
 
-            // Render UDP Table
-            function renderUdpTable() {
-                udpTableBody.innerHTML = "";
-                udpData.forEach((udp, index) => {
+            // Render All Tables
+            function renderAllTables() {
+                types.forEach(type => renderTable(type));
+                updateJsonContent();
+            }
+
+            // Render Table for a Specific Type
+            function renderTable(type) {
+                const tableBody = document.getElementById(`${type}-table-body`);
+                tableBody.innerHTML = "";
+                configData[type].forEach((entry, index) => {
                     const row = document.createElement("tr");
                     row.classList.add("border-b", "hover:bg-gray-100");
 
                     // Active Status
                     const activeCell = document.createElement("td");
                     activeCell.classList.add("px-4", "py-2", "text-center");
-                    const activeBadge = udp.active ? 
+                    const activeBadge = entry.active ?
                         `<span class="inline-block px-2 py-1 text-xs font-semibold text-green-800 bg-green-200 rounded-full">Active</span>` :
                         `<span class="inline-block px-2 py-1 text-xs font-semibold text-red-800 bg-red-200 rounded-full">Inactive</span>`;
                     activeCell.innerHTML = activeBadge;
@@ -54,33 +65,45 @@
                     // Host
                     const hostCell = document.createElement("td");
                     hostCell.classList.add("px-4", "py-2");
-                    hostCell.textContent = udp.host || "-";
+                    hostCell.textContent = entry.host || "-";
                     row.appendChild(hostCell);
 
                     // Port
                     const portCell = document.createElement("td");
                     portCell.classList.add("px-4", "py-2", "text-center");
-                    portCell.textContent = udp.port || "-";
+                    portCell.textContent = entry.port || "-";
                     row.appendChild(portCell);
 
                     // JSON Output
                     const jsonCell = document.createElement("td");
                     jsonCell.classList.add("px-4", "py-2", "text-center");
-                    jsonCell.textContent = udp.json !== undefined ? (udp.json ? "Yes" : "No") : "No";
+                    jsonCell.textContent = entry.json !== undefined ? (entry.json ? "Yes" : "No") : "No";
                     row.appendChild(jsonCell);
+
+                    // Custom Fields
+                    const customCell = document.createElement("td");
+                    customCell.classList.add("px-4", "py-2", "text-left");
+                    let customContent = "";
+                    Object.keys(entry).forEach(key => {
+                        if (!standardKeys.includes(key)) {
+                            customContent += `<div><strong>${escapeHtml(key)}:</strong> ${escapeHtml(entry[key])}</div>`;
+                        }
+                    });
+                    customCell.innerHTML = customContent || "-";
+                    row.appendChild(customCell);
 
                     // Actions
                     const actionsCell = document.createElement("td");
                     actionsCell.classList.add("px-4", "py-2", "text-center", "space-x-2");
 
-                    // Edit Button with New Icon
+                    // Edit Button with Icon
                     const editBtn = document.createElement("button");
                     editBtn.setAttribute("aria-label", "Edit");
                     editBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368">
                                             <path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/>
                                         </svg>`;
                     editBtn.classList.add("focus:outline-none");
-                    editBtn.onclick = () => openUdpModal("edit", index);
+                    editBtn.onclick = () => openModal("edit", type, index);
                     actionsCell.appendChild(editBtn);
 
                     // Delete Button with Icon
@@ -90,82 +113,170 @@
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                          </svg>`;
                     deleteBtn.classList.add("focus:outline-none");
-                    deleteBtn.onclick = () => deleteUdp(index);
+                    deleteBtn.onclick = () => deleteEntry(type, index);
                     actionsCell.appendChild(deleteBtn);
 
                     row.appendChild(actionsCell);
 
-                    udpTableBody.appendChild(row);
+                    tableBody.appendChild(row);
                 });
                 updateJsonContent();
             }
 
-            // Open UDP Modal for Add/Edit
-            function openUdpModal(action, index = null) {
-                udpModal.classList.remove("hidden");
-                udpAction.value = action;
-                udpIndex.value = index;
+            // Escape HTML to prevent XSS
+            function escapeHtml(text) {
+                const map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+                // Convert text to string and handle null/undefined
+                return String(text).replace(/[&<>"']/g, function (m) { return map[m]; });
+            }
+
+
+            // Open Modal for Add/Edit
+            function openModal(action, type, index = null) {
+                currentType = type;
+                const modal = document.getElementById("entry-modal");
+                const modalTitle = document.getElementById("modal-title");
+                const saveBtn = document.getElementById("modal-save-btn");
+                const customFieldsContainer = document.getElementById("custom-fields-container");
+                const customFieldsList = document.getElementById("custom-fields-list");
+
+                modal.classList.remove("hidden");
+                document.getElementById("modal-action").value = action;
+                document.getElementById("modal-type").value = type;
+                document.getElementById("modal-index").value = index;
+
+                // Clear existing custom fields
+                customFieldsList.innerHTML = "";
 
                 if (action === "edit" && index !== null) {
-                    const udp = udpData[index];
-                    document.getElementById("udp-active").checked = udp.active !== undefined ? udp.active : true; // Set active by default
-                    document.getElementById("udp-host").value = udp.host || "";
-                    document.getElementById("udp-port").value = udp.port || "";
-                    document.getElementById("udp-json").checked = udp.json !== undefined ? udp.json : false;
+                    const entry = configData[type][index];
+                    document.getElementById("modal-active").checked = entry.active !== undefined ? entry.active : true;
+                    document.getElementById("modal-host").value = entry.host || "";
+                    document.getElementById("modal-port").value = entry.port || "";
+                    document.getElementById("modal-json").checked = entry.json !== undefined ? entry.json : false;
+                    modalTitle.textContent = `Edit ${type.toUpperCase()} Output`;
+
+                    // Populate custom fields if any
+                    Object.keys(entry).forEach(key => {
+                        if (!standardKeys.includes(key)) {
+                            addCustomField(key, entry[key]);
+                        }
+                    });
                 } else {
-                    udpForm.reset();
-                    document.getElementById("udp-active").checked = true; // Active by default
+                    document.getElementById("entry-form").reset();
+                    document.getElementById("modal-active").checked = true; // Active by default
+                    modalTitle.textContent = `Add ${type.toUpperCase()} Output`;
                 }
             }
 
-            // Close UDP Modal
-            function closeUdpModal() {
-                udpModal.classList.add("hidden");
-                udpForm.reset();
+            // Close Modal
+            function closeModal() {
+                const modal = document.getElementById("entry-modal");
+                modal.classList.add("hidden");
+                document.getElementById("entry-form").reset();
+
+                // Clear custom fields
+                const customFieldsList = document.getElementById("custom-fields-list");
+                customFieldsList.innerHTML = "";
             }
 
-            // Add or Update UDP Entry
-            function submitUdpForm(event) {
-                event.preventDefault();
-                const action = udpAction.value;
-                const index = udpIndex.value;
+            // Add Custom Field
+            function addCustomField(key = '', value = '') {
+                const customFieldsList = document.getElementById("custom-fields-list");
+                const fieldDiv = document.createElement("div");
+                fieldDiv.classList.add("flex", "items-center", "mb-2");
 
-                const udpEntry = {
-                    active: document.getElementById("udp-active").checked,
-                    host: document.getElementById("udp-host").value.trim(),
-                    port: document.getElementById("udp-port").value.trim(),
-                    json: document.getElementById("udp-json").checked
+                const keyInput = document.createElement("input");
+                keyInput.type = "text";
+                keyInput.placeholder = "Key";
+                keyInput.value = key;
+                keyInput.classList.add("w-1/2", "px-3", "py-2", "border", "border-gray-300", "rounded-md", "focus:outline-none", "focus:ring-2", "focus:ring-green-500", "mr-2");
+                fieldDiv.appendChild(keyInput);
+
+                const valueInput = document.createElement("input");
+                valueInput.type = "text";
+                valueInput.placeholder = "Value";
+                valueInput.value = value;
+                valueInput.classList.add("w-1/2", "px-3", "py-2", "border", "border-gray-300", "rounded-md", "focus:outline-none", "focus:ring-2", "focus:ring-green-500", "mr-2");
+                fieldDiv.appendChild(valueInput);
+
+                const removeBtn = document.createElement("button");
+                removeBtn.type = "button";
+                removeBtn.classList.add("text-red-500", "hover:text-red-600", "ml-2");
+                removeBtn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                      </svg>`;
+                removeBtn.onclick = () => fieldDiv.remove();
+                fieldDiv.appendChild(removeBtn);
+
+                customFieldsList.appendChild(fieldDiv);
+            }
+
+            // Add or Update Entry
+            function submitForm(event) {
+                event.preventDefault();
+                const action = document.getElementById("modal-action").value;
+                const type = document.getElementById("modal-type").value;
+                const index = document.getElementById("modal-index").value;
+
+                // Initialize entry with standard fields
+                const entry = {
+                    active: document.getElementById("modal-active").checked,
+                    host: document.getElementById("modal-host").value.trim(),
+                    port: document.getElementById("modal-port").value.trim(),
+                    json: document.getElementById("modal-json").checked
                 };
 
+                // Collect custom fields and add them directly to the entry
+                const customFieldsList = document.getElementById("custom-fields-list");
+                const fieldDivs = customFieldsList.querySelectorAll("div.flex");
+                fieldDivs.forEach(div => {
+                    const key = div.children[0].value.trim();
+                    const value = div.children[1].value.trim();
+                    if (key) { // Only add if key is not empty
+                        if (standardKeys.includes(key)) {
+                            alert(`The key "${key}" is reserved and cannot be used as a custom field.`);
+                            throw new Error(`Reserved key used: ${key}`);
+                        }
+                        entry[key] = value;
+                    }
+                });
+
                 // Basic Validation
-                if (!udpEntry.host || !udpEntry.port) {
+                if (!entry.host || !entry.port) {
                     alert("Host and Port are required.");
                     return;
                 }
 
                 // Additional Validation: Port must be a number between 1 and 65535
-                const portNumber = parseInt(udpEntry.port, 10);
+                const portNumber = parseInt(entry.port, 10);
                 if (isNaN(portNumber) || portNumber < 1 || portNumber > 65535) {
                     alert("Port must be a number between 1 and 65535.");
                     return;
                 }
 
                 if (action === "add") {
-                    udpData.push(udpEntry);
+                    configData[type].push(entry);
                 } else if (action === "edit" && index !== null) {
-                    // Perform a partial update to preserve unknown keys
-                    udpData[index] = Object.assign({}, udpData[index], udpEntry);
+                    // Replace the entire entry with the updated one
+                    configData[type][index] = entry;
                 }
 
-                renderUdpTable();
-                closeUdpModal();
+                renderTable(type);
+                closeModal();
             }
 
-            // Delete UDP Entry
-            function deleteUdp(index) {
-                if (confirm("Are you sure you want to delete this UDP entry?")) {
-                    udpData.splice(index, 1);
-                    renderUdpTable();
+            // Delete Entry
+            function deleteEntry(type, index) {
+                if (confirm(`Are you sure you want to delete this ${type.toUpperCase()} entry?`)) {
+                    configData[type].splice(index, 1);
+                    renderTable(type);
                 }
             }
 
@@ -174,20 +285,32 @@
                 const jsonContent = document.getElementById("json_content").value;
                 try {
                     const config = JSON.parse(jsonContent);
-                    config.udp = udpData;
+                    types.forEach(type => {
+                        config[type] = configData[type];
+                    });
                     document.getElementById("json_content").value = JSON.stringify(config, null, 4);
                 } catch (e) {
                     console.error("Invalid JSON in config.json:", e);
                 }
             }
 
-            // Event Listeners
-            addUdpBtn.addEventListener("click", () => openUdpModal("add"));
-            closeModalBtn.addEventListener("click", closeUdpModal);
-            udpForm.addEventListener("submit", submitUdpForm);
+            // Event Listeners for Add Buttons
+            types.forEach(type => {
+                const addBtn = document.getElementById(`add-${type}-btn`);
+                addBtn.addEventListener("click", () => openModal("add", type));
+            });
 
-            // Initialize
-            initializeUdpData();
+            // Event Listener for Close Modal Button
+            document.getElementById("close-modal").addEventListener("click", closeModal);
+
+            // Event Listener for Form Submission
+            document.getElementById("entry-form").addEventListener("submit", submitForm);
+
+            // Initialize Data
+            initializeData();
+
+            // Render All Tables Initially
+            renderAllTables();
 
             // Collapsible Sections Script
             const collapsibleHeaders = document.querySelectorAll(".collapsible-header");
@@ -211,16 +334,23 @@
                     }
                 });
             });
+
+            // Add Custom Field Button
+            document.getElementById("add-custom-field-btn").addEventListener("click", () => {
+                addCustomField();
+            });
         });
     </script>
 </head>
+
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Navigation Bar -->
     <nav class="bg-white shadow-md">
         <div class="container mx-auto px-4 py-4 flex justify-between items-center">
             <h1 class="text-2xl font-bold text-gray-800">AIS-catcher Control Panel</h1>
             <div>
-                <a href="/dashboard" class="text-gray-600 hover:text-gray-800 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                <a href="/dashboard"
+                    class="text-gray-600 hover:text-gray-800 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
             </div>
         </div>
     </nav>
@@ -241,21 +371,78 @@
             </div>
             {{end}}
 
+            <!-- TCP Outputs Management (Expanded by Default) -->
+            <div class="mb-8">
+                <div class="collapsible-header flex justify-between items-center cursor-pointer mb-2">
+                    <h2 class="text-xl font-semibold text-gray-700">TCP Output</h2>
+                    <span class="toggle-icon">
+                        <svg class="w-4 h-4 transform rotate-180 transition-transform duration-200"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </span>
+                </div>
+                <div class="collapsible-content"> <!-- Removed 'hidden' to expand by default -->
+                    <div class="flex justify-between items-center mb-4">
+                        <button id="add-tcp-btn"
+                            class="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Add TCP Output
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white">
+                            <thead>
+                                <tr>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Active</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Host</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Port</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        JSON Output</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Custom Fields</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tcp-table-body">
+                                <!-- TCP Entries will be dynamically inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- UDP Outputs Management (Expanded by Default) -->
             <div class="mb-8">
                 <div class="collapsible-header flex justify-between items-center cursor-pointer mb-2">
                     <h2 class="text-xl font-semibold text-gray-700">UDP Output</h2>
                     <span class="toggle-icon">
-                        <svg class="w-4 h-4 transform rotate-180 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="w-4 h-4 transform rotate-180 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg"
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
                     </span>
                 </div>
-                <div class="collapsible-content">
+                <div class="collapsible-content"> <!-- Removed 'hidden' to expand by default -->
                     <div class="flex justify-between items-center mb-4">
-                        <button id="add-udp-btn" class="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded flex items-center">
+                        <button id="add-udp-btn"
+                            class="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded flex items-center">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 4v16m8-8H4"></path>
                             </svg>
                             Add UDP Output
                         </button>
@@ -264,11 +451,24 @@
                         <table class="min-w-full bg-white">
                             <thead>
                                 <tr>
-                                    <th class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Active</th>
-                                    <th class="py-2 px-4 border-b bg-gray-100 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Host</th>
-                                    <th class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Port</th>
-                                    <th class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">JSON Output</th>
-                                    <th class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Active</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Host</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Port</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        JSON Output</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Custom Fields</th>
+                                    <th
+                                        class="py-2 px-4 border-b bg-gray-100 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="udp-table-body">
@@ -284,7 +484,8 @@
                 <div class="collapsible-header flex justify-between items-center cursor-pointer mb-2">
                     <h2 class="text-xl font-semibold text-gray-700">AIS-catcher Command Line Configuration</h2>
                     <span class="toggle-icon">
-                        <svg class="w-4 h-4 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="w-4 h-4 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg"
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
                     </span>
@@ -293,33 +494,40 @@
                     <form method="post" class="space-y-8">
                         <!-- config.cmd Section -->
                         <div>
-                            <textarea name="cmd_content" class="w-full h-40 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500" required>{{.CmdContent}}</textarea>
+                            <textarea name="cmd_content"
+                                class="w-full h-40 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                required>{{.CmdContent}}</textarea>
                         </div>
                 </div>
             </div>
 
-            <!-- AIS-catcher JSON Configuration (Collapsed by Default) -->
+            <!-- AIS-catcher JSON Configuration (Expanded by Default) -->
             <div class="mb-8">
                 <div class="collapsible-header flex justify-between items-center cursor-pointer mb-2">
                     <h2 class="text-xl font-semibold text-gray-700">AIS-catcher JSON Configuration</h2>
                     <span class="toggle-icon">
-                        <svg class="w-4 h-4 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="w-4 h-4 transform rotate-180 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg"
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
                     </span>
                 </div>
-                <div class="collapsible-content hidden">
-                        <!-- config.json Section -->
-                        <div>
-                            <textarea id="json_content" name="json_content" class="w-full h-64 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500" readonly>{{.JsonContent}}</textarea>
-                        </div>
-                        
-                        <!-- Submit Button -->
-                        <div>
-                            <button class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-6 rounded-md shadow-md transition duration-200" type="submit">
-                                Save Configuration
-                            </button>
-                        </div>
+                <div class="collapsible-content"> <!-- Removed 'hidden' to expand by default -->
+                    <!-- config.json Section -->
+                    <div>
+                        <textarea id="json_content" name="json_content"
+                            class="w-full h-64 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            readonly>{{.JsonContent}}</textarea>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div>
+                        <button
+                            class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-6 rounded-md shadow-md transition duration-200"
+                            type="submit">
+                            Save Configuration
+                        </button>
+                    </div>
                     </form>
                 </div>
             </div>
@@ -328,45 +536,66 @@
 
     <!-- Back to Dashboard Button -->
     <div class="container mx-auto px-4 pb-4">
-        <a href="/dashboard" class="inline-block bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-6 rounded-md shadow-md transition duration-200">
+        <a href="/dashboard"
+            class="inline-block bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-6 rounded-md shadow-md transition duration-200">
             Back to Dashboard
         </a>
     </div>
 
-    <!-- UDP Modal (Remains the Same) -->
-    <div id="udp-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
+    <!-- Entry Modal (Unified for UDP and TCP) -->
+    <div id="entry-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
         <div class="bg-white rounded-lg shadow-lg w-96">
             <div class="flex justify-between items-center p-4 border-b">
-                <h3 class="text-lg font-semibold text-gray-700" id="modal-title">Add UDP Output</h3>
+                <h3 class="text-lg font-semibold text-gray-700" id="modal-title">Add Entry</h3>
                 <button id="close-modal" class="text-gray-500 hover:text-gray-700">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
                     </svg>
                 </button>
             </div>
-            <form id="udp-form" class="p-4">
+            <form id="entry-form" class="p-4">
                 <div class="mb-4 flex items-center">
-                    <input type="checkbox" id="udp-active" class="form-checkbox h-5 w-5 text-green-600 mr-2" checked>
-                    <label for="udp-active" class="text-gray-700">Active</label>
+                    <input type="checkbox" id="modal-active" class="form-checkbox h-5 w-5 text-green-600 mr-2" checked>
+                    <label for="modal-active" class="text-gray-700">Active</label>
                 </div>
                 <div class="mb-4">
-                    <label for="udp-host" class="block text-gray-700 mb-2">Host</label>
-                    <input type="text" id="udp-host" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                    <label for="modal-host" class="block text-gray-700 mb-2">Host</label>
+                    <input type="text" id="modal-host"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                        required>
                 </div>
                 <div class="mb-4">
-                    <label for="udp-port" class="block text-gray-700 mb-2">Port</label>
-                    <input type="number" id="udp-port" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" min="1" max="65535" required>
+                    <label for="modal-port" class="block text-gray-700 mb-2">Port</label>
+                    <input type="number" id="modal-port"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                        min="1" max="65535" required>
                 </div>
                 <div class="mb-4 flex items-center">
-                    <input type="checkbox" id="udp-json" class="form-checkbox h-5 w-5 text-purple-600 mr-2">
-                    <label for="udp-json" class="text-gray-700">JSON Output</label>
+                    <input type="checkbox" id="modal-json" class="form-checkbox h-5 w-5 text-purple-600 mr-2">
+                    <label for="modal-json" class="text-gray-700">JSON Output</label>
                 </div>
+
+                <!-- Custom Fields Section -->
+                <div class="mb-4">
+                    <label class="block text-gray-700 mb-2">Custom Fields</label>
+                    <div id="custom-fields-list">
+                        <!-- Custom key-value pairs will be added here -->
+                    </div>
+                    <button type="button" id="add-custom-field-btn"
+                        class="mt-2 bg-blue-500 hover:bg-blue-600 text-white font-medium py-1 px-3 rounded">
+                        Additional Option
+                    </button>
+                </div>
+
                 <!-- Hidden Fields -->
-                <input type="hidden" id="udp-action" value="">
-                <input type="hidden" id="udp-index" value="">
+                <input type="hidden" id="modal-action" value="">
+                <input type="hidden" id="modal-type" value="">
+                <input type="hidden" id="modal-index" value="">
                 <!-- Submit Button -->
                 <div class="flex justify-end">
-                    <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <button id="modal-save-btn" type="submit"
+                        class="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400">
                         Save
                     </button>
                 </div>
@@ -374,4 +603,5 @@
         </div>
     </div>
 </body>
+
 </html>
