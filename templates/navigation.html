@@ -1,0 +1,71 @@
+<div
+  class="hidden md:block w-full md:w-1/4 border-b md:border-b-0 md:border-r bg-gray-50 scrollbar-thin overflow-y-auto">
+  <nav class="flex flex-col">
+    
+    <!-- Control Category -->
+    <div class="border-b">
+      <a href="/control"
+        class="w-full flex items-center justify-between px-6 py-4 text-left text-gray-700 hover:bg-gray-100 focus:outline-none focus:bg-gray-100">
+        <div class="flex items-center">
+          <!-- Control Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368" class="h-5 w-5 mr-3">
+            <path d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z"/>
+          </svg>
+          Control
+        </div>
+      </a>
+    </div>
+
+    <!-- Input Category -->
+    <div class="border-b">
+      <a href="/input"
+        class="w-full flex items-center justify-between px-6 py-4 text-left text-gray-700 hover:bg-gray-100 focus:outline-none focus:bg-gray-100">
+        <div class="flex items-center">
+          <!-- Input Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368" class="h-5 w-5 mr-3">
+            <path d="M160-160q-33 0-56.5-23.5T80-240v-120h80v120h640v-480H160v120H80v-120q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm300-140-56-58 83-82H80v-80h407l-83-82 56-58 180 180-180 180Z"/>
+          </svg>
+          Input
+        </div>
+      </a>
+    </div>
+
+    <!-- Output Category -->
+    <div class="border-b">
+      <button
+        class="w-full flex items-center justify-between px-6 py-4 text-left text-gray-700 hover:bg-gray-100 focus:outline-none focus:bg-gray-100"
+        onclick="toggleSubmenu('output-submenu', 'output-chevron')">
+        <div class="flex items-center">
+          <!-- Output Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368" class="h-5 w-5 mr-3">
+            <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v80h-80v-80H200v560h560v-80h80v80q0 33-23.5 56.5T760-120H200Zm480-160-56-56 103-104H360v-80h367L624-624l56-56 200 200-200 200Z"/>
+          </svg>
+          Output
+        </div>
+        <!-- Chevron Icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transition-transform duration-200" id="output-chevron"
+          viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z"
+            clip-rule="evenodd" />
+        </svg>
+      </button>
+      <!-- Submenu for Output -->
+      <div id="output-submenu" class="submenu hidden flex-col bg-gray-50">
+        <a href="/sharing"
+          class="w-full flex items-center px-12 py-2 text-gray-600 hover:bg-gray-100 focus:outline-none focus:bg-gray-100">
+          Community
+        </a>
+        <a href="/udp"
+          class="w-full flex items-center px-12 py-2 text-gray-600 hover:bg-gray-100 focus:outline-none focus:bg-gray-100">
+          UDP
+        </a>
+        <a href="/tcp"
+          class="w-full flex items-center px-12 py-2 text-gray-600 hover:bg-gray-100 focus:outline-none focus:bg-gray-100">
+          TCP Client
+        </a>
+      </div>
+    </div>
+
+  </nav>
+</div>

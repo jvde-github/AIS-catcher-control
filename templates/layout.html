@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }}</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/styles.css?v={{ .CssVersion }}">
+</head>
+
+<body class="bg-gray-100">
+
+  <!-- Include Header -->
+  {{ template "header.html" . }}
+
+  <!-- Main Container -->
+  <div class="min-h-screen flex items-start justify-center p-4">
+    <div class="bg-white shadow-lg rounded-lg w-full max-w-5xl">
+      <!-- Flex Container: Navigation and Main Content -->
+      <div class="flex flex-col md:flex-row">
+        <!-- Navigation Sidebar -->
+        {{ template "navigation.html" . }}
+
+        <!-- Main Content Area -->
+        <div class="w-full md:w-3/4 p-6 overflow-auto flex flex-col">
+          <div id="status-message" class="hidden"></div>
+          <!-- Dynamic Content -->
+          <div class="flex-1">
+            {{ dynamicTemplate .ContentTemplate . }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Include Footer -->
+  {{ template "footer.html" . }}
+
+  <!-- Custom JavaScript -->
+  <script src="/static/js/scripts.js?v={{ .JsVersion }}"></script>
+</body>
+
+</html>

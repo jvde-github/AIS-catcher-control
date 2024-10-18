@@ -1,0 +1,45 @@
+{{ define "tcp-channels" }}
+<div id="tcp-channels">
+    <h3 class="text-xl font-medium text-gray-800 mb-4">TCP Client Output</h3>
+    <form>
+        <div id="tcp-channels-list"> </div>
+
+        <button type="button" onclick="addTcpChannel()"
+            class="mt-2 p-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 flex items-center justify-center transition duration-200"
+            title="Add TCP Channel">
+            <!-- Add Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" />
+            </svg>
+        </button>
+    </form>
+    <hr class="my-6 border-gray-300">
+    <!-- Submit Button -->
+    <div class="flex justify-end">
+        <button id="save-button"
+            class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-200"
+            onclick="saveData()">Save</button>
+    </div>
+    </form>
+
+    <!-- Collapsible Section -->
+    <div class="mt-4">
+        <!-- Toggle Button -->
+        <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-800 focus:outline-none">
+            <!-- Chevron Icon -->
+            <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
+                xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+            <span class="ml-2 font-medium">Show JSON Content</span>
+        </button>
+
+        <!-- Collapsible Content -->
+        <div id="json-content-container" class="mt-2 hidden">
+            <div id="json_content" name="json_content"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                readonly>{{.JsonContent}}</div>
+        </div>
+    </div>
+</div>
+{{ end }}

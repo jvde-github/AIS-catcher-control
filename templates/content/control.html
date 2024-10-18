@@ -1,0 +1,134 @@
+{{ define "control" }}
+<div id="control-dashboard">
+
+    <!-- Service Status and Actions Section -->
+    <div class="mb-8">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+            <!-- Service Status -->
+            <div>
+                <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Status</h2>
+                <div class="flex items-center">
+                    <span class="text-gray-700 mr-2">Status:</span>
+                    {{if eq .Status "active (running)"}}
+                    <span
+                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        Active (Running)
+                    </span>
+                    {{else if eq .Status "inactive (stopped)"}}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                        Inactive (Stopped)
+                    </span>
+                    {{else if eq .Status "failed"}}
+                    <span
+                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                        Failed
+                    </span>
+                    {{else}}
+                    <span
+                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                        {{.Status}}
+                    </span>
+                    {{end}}
+                </div>
+                <div class="flex items-center mt-2">
+                    <span class="text-gray-700 mr-2">Uptime:</span>
+                    <span class="text-gray-800">{{.Uptime}}</span>
+                </div>
+                <div class="flex items-center mt-2">
+                    <span class="text-gray-700 mr-2">Enabled:</span>
+                    {{if .ServiceEnabled}}
+                    <span
+                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        Yes
+                    </span>
+                    {{else}}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                        No
+                    </span>
+                    {{end}}
+                </div>
+            </div>
+            <!-- Service Actions -->
+            <div class="mt-4 md:mt-0 flex flex-wrap gap-2">
+                <a href="/service?action=start"
+                    class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Start</a>
+                <a href="/service?action=stop"
+                    class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Stop</a>
+                <a href="/service?action=restart"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Restart</a>
+                <a href="/service?action=enable"
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Enable</a>
+                <a href="/service?action=disable"
+                    class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Disable</a>
+            </div>
+        </div>
+        <!-- Spinner for Service Actions -->
+        <div id="action-spinner" class="spinner"></div>
+    </div>
+
+    <!-- Recent Logs Section -->
+    <div class="mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">Recent Logs</h2>
+        <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-64 overflow-y-auto">
+            <div id="logs">
+                {{if .Logs}}
+                <pre class="text-sm leading-relaxed">
+{{range .Logs}}{{.}}
+{{end}}</pre>
+                {{else}}
+                <p class="text-gray-400">No logs available.</p>
+                {{end}}
+            </div>
+        </div>
+    </div>
+
+
+    <!-- JavaScript for Spinner and SSE -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Action Buttons and Spinner
+            const actionButtons = document.querySelectorAll('.action-button');
+            const actionSpinner = document.getElementById('action-spinner');
+
+            actionButtons.forEach(button => {
+                button.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const href = this.getAttribute('href');
+                    actionSpinner.style.display = 'inline-block';
+
+                    fetch(href)
+                        .then(response => {
+                            actionSpinner.style.display = 'none';
+                            if (response.redirected) {
+                                window.location.href = response.url;
+                            }
+                        })
+                        .catch(error => {
+                            actionSpinner.style.display = 'none';
+                            alert('An error occurred: ' + error);
+                        });
+                });
+            });
+
+            // Refresh Button and Spinner
+            const refreshSpinner = document.getElementById('refresh-spinner');
+
+            // SSE for real-time logs
+            const logsDiv = document.getElementById('logs');
+            const eventSource = new EventSource('/logs-stream');
+
+            eventSource.onmessage = function (event) {
+                const newLog = document.createElement('div');
+                newLog.textContent = event.data;
+                logsDiv.appendChild(newLog);
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+            };
+
+            eventSource.onerror = function () {
+                console.error('Error with SSE');
+                eventSource.close();
+            };
+        });
+    </script>
+</div>
+{{ end }}

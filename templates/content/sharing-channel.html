@@ -1,0 +1,66 @@
+{{ define "sharing-channel" }}
+<div id="sharing-channel">
+  <h3 class="text-xl font-medium text-gray-800 mb-4">Community Sharing</h3>
+  <form>
+    <!-- Sharing Toggle -->
+    <div class="flex items-center mb-4">
+      <label for="sharing-toggle" class="mr-4 text-gray-700">Sharing:</label>
+      <label class="switch">
+        <input type="checkbox" id="sharing-toggle">
+        <span class="slider round"></span>
+      </label>
+    </div>
+
+    <!-- Sharing Key Input (Visible only when sharing is enabled) -->
+    <div id="sharing-key-container" class="mb-4 hidden">
+      <label for="sharing-key" class="block text-gray-700 text-sm font-medium mb-2">Sharing Key (UUID):</label>
+      <div class="flex items-center">
+        <input type="text" id="sharing-key" name="sharing_key" placeholder="Enter UUID"
+          class="flex-grow px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500">
+        <button type="button" id="create-sharing-key-btn"
+          class="ml-4 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-200 flex items-center"
+          title="Create Sharing Key">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8L10 14" />
+          </svg>
+          Create
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <hr class="my-6 border-gray-300">
+
+  <!-- Submit Button -->
+  <div class="flex justify-end">
+    <button id="save-button"
+      class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-200"
+      onclick="saveData()">Save</button>
+  </div>
+
+  <!-- Status Message -->
+  <div id="status-message" class="mt-2 mb-4 p-2 transition-opacity duration-300 opacity-0" role="alert"
+    aria-live="assertive"></div>
+
+  <!-- Collapsible Section -->
+  <div class="mt-4">
+    <!-- Toggle Button -->
+    <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-800 focus:outline-none">
+      <!-- Chevron Icon -->
+      <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
+        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+      <span class="ml-2 font-medium">Show JSON Content</span>
+    </button>
+
+    <!-- Collapsible Content -->
+    <div id="json-content-container" class="mt-2 hidden">
+      <pre id="json_content" name="json_content"
+        class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 overflow-auto focus:outline-none focus:ring-2 focus:ring-yellow-500"
+        readonly>{{.JsonContent}}</pre>
+    </div>
+  </div>
+</div>
+{{ end }}

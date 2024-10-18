@@ -34,13 +34,50 @@ const (
 	defaultUsername   = "admin"
 	defaultPassword   = "admin"
 	sessionCookieName = "session_id"
-	// Set the configCmdFilePath and settingsFilePath directly to the absolute paths
-	configCmdFilePath  = "/etc/AIS-catcher/config.cmd"
+	// Set the configJSONFilePath and settingsFilePath directly to the absolute paths
 	configJSONFilePath = "/etc/AIS-catcher/config.json"
 	settingsFilePath   = "/etc/AIS-catcher/control.json"
 )
 
+var (
+	cssVersion string
+	jsVersion  string
+)
+
 var templates *template.Template
+
+func init() {
+	funcMap := template.FuncMap{
+		"dynamicTemplate": func(name string, data interface{}) (template.HTML, error) {
+			var buf strings.Builder
+			err := templates.ExecuteTemplate(&buf, name, data)
+			return template.HTML(buf.String()), err
+		},
+	}
+
+	// Create a new template with the function map
+	templates = template.New("").Funcs(funcMap)
+
+	// Parse all templates including partials and content from the embedded filesystem
+	var err error
+	templates, err = templates.ParseFS(templatesFS,
+		"templates/layout.html",
+		"templates/login.html",
+		"templates/header.html",
+		"templates/navigation.html",
+		"templates/footer.html",
+		"templates/modal/modal.html",
+		"templates/content/control.html",
+		"templates/content/udp-channels.html",
+		"templates/content/tcp-channels.html",
+		"templates/content/sharing-channel.html",
+	)
+
+	if err != nil {
+		log.Fatalf("Failed to parse templates: %v", err)
+	}
+}
+
 var sessions = map[string]string{} // session_id -> username
 
 // Configuration struct
@@ -66,18 +103,28 @@ func initPaths() error {
 
 	log.Printf("Executable directory: %s", execDir)
 	log.Printf("Settings file path: %s", settingsFilePath)
-	log.Printf("Config CMD file path: %s", configCmdFilePath)
 	log.Printf("Config JSON file path: %s", configJSONFilePath)
 
 	return nil
 }
 
-func initTemplates() {
-	tmplFS, err := fs.Sub(templatesFS, "templates")
+func getServiceStartTime() (time.Time, error) {
+	cmd := exec.Command("systemctl", "show", "ais-catcher.service", "--property=ActiveEnterTimestamp")
+	output, err := cmd.Output()
 	if err != nil {
-		log.Fatal(err)
+		return time.Time{}, err
 	}
-	templates = template.Must(template.ParseFS(tmplFS, "*.html"))
+	line := strings.TrimSpace(string(output))
+	parts := strings.SplitN(line, "=", 2)
+	if len(parts) != 2 {
+		return time.Time{}, fmt.Errorf("Unexpected output from systemctl")
+	}
+	timestamp := parts[1]
+	t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", timestamp)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t, nil
 }
 
 func hashPassword(password string) string {
@@ -147,7 +194,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			// Prompt to change default password
 			http.Redirect(w, r, "/change-password", http.StatusSeeOther)
 		} else {
-			http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+			http.Redirect(w, r, "/control", http.StatusSeeOther)
 		}
 	} else {
 		templates.ExecuteTemplate(w, "login.html", "Invalid credentials")
@@ -204,7 +251,41 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	cookie, _ := r.Cookie(sessionCookieName)
 	sessions[cookie.Value] = defaultUsername
 
-	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+	http.Redirect(w, r, "/control", http.StatusSeeOther)
+}
+
+func controlHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Gather necessary data
+	status := getServiceStatus()
+	uptime := getServiceUptime()
+	logs := getServiceLogs(50) // Adjust the number of logs as needed
+	enabled, err := getServiceEnabled()
+	if err != nil {
+		enabled = false // Default to false if there's an error
+		log.Println("Error fetching service enabled status:", err)
+	}
+
+	data := map[string]interface{}{
+		"CssVersion":      cssVersion,
+		"JsVersion":       jsVersion,
+		"Title":           "Control Dashboard",
+		"Status":          status,
+		"Uptime":          uptime,
+		"Logs":            logs,
+		"ServiceEnabled":  enabled,
+		"ContentTemplate": "control",
+	}
+
+	err = templates.ExecuteTemplate(w, "layout.html", data)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Printf("Template execution error: %v", err)
+	}
 }
 
 func dashboardHandler(w http.ResponseWriter, r *http.Request) {
@@ -340,7 +421,7 @@ func serviceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !validActions[action] {
-		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		http.Redirect(w, r, "/control", http.StatusSeeOther)
 		return
 	}
 
@@ -358,23 +439,13 @@ func serviceHandler(w http.ResponseWriter, r *http.Request) {
 		saveConfig()
 	}
 
-	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+	http.Redirect(w, r, "/control", http.StatusSeeOther)
 }
 
 func editorHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		log.Printf("Received GET request for /editor")
-		log.Printf("Attempting to read config.cmd from: %s", configCmdFilePath)
 		log.Printf("Attempting to read config.json from: %s", configJSONFilePath)
-
-		// Read config.cmd
-		cmdContent, err := ioutil.ReadFile(configCmdFilePath)
-		if err != nil {
-			log.Printf("Error reading config.cmd: %v", err)
-			cmdContent = []byte("")
-		} else {
-			log.Printf("Successfully read config.cmd")
-		}
 
 		// Read config.json
 		jsonContent, err := ioutil.ReadFile(configJSONFilePath)
@@ -386,7 +457,6 @@ func editorHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		data := map[string]interface{}{
-			"CmdContent":  string(cmdContent),
 			"JsonContent": string(jsonContent),
 		}
 		templates.ExecuteTemplate(w, "editor.html", data)
@@ -403,74 +473,16 @@ func editorHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Get content for both files
-		cmdContent := r.FormValue("cmd_content")
+		// Get content for config.json
 		jsonContent := r.FormValue("json_content")
 
-		// check if jsonContent is proper JSON and has a field "config" equal to "aiscatcher" and a key "version" equal to 1
-
-		var jsonMap map[string]interface{}
-		err = json.Unmarshal([]byte(jsonContent), &jsonMap)
+		// Validate and save config.json
+		err = validateAndSaveConfigJSON([]byte(jsonContent))
 		if err != nil {
-			log.Printf("Error unmarshalling JSON: %v", err)
+			log.Printf("Error saving config.json: %v", err)
 			data := map[string]interface{}{
-				"CmdContent":  cmdContent,
 				"JsonContent": jsonContent,
-				"Error":       "Invalid JSON: " + err.Error(),
-			}
-			templates.ExecuteTemplate(w, "editor.html", data)
-			return
-		}
-
-		configValue, ok := jsonMap["config"].(string)
-		if !ok || configValue != "aiscatcher" {
-			log.Printf("Invalid config value: %v", configValue)
-			data := map[string]interface{}{
-				"CmdContent":  cmdContent,
-				"JsonContent": jsonContent,
-				"Error":       "Invalid JSON: config value must be 'aiscatcher'",
-			}
-			templates.ExecuteTemplate(w, "editor.html", data)
-			return
-		}
-
-		versionValue, ok := jsonMap["version"].(float64)
-		if !ok || versionValue != 1 {
-			log.Printf("Invalid version value: %v", versionValue)
-			data := map[string]interface{}{
-				"CmdContent":  cmdContent,
-				"JsonContent": jsonContent,
-				"Error":       "Invalid JSON: version value must be 1",
-			}
-			templates.ExecuteTemplate(w, "editor.html", data)
-			return
-		}
-
-		// Sanitize inputs if necessary
-		cmdContent = sanitizeFileContent(cmdContent)
-		jsonContent = sanitizeFileContent(jsonContent)
-
-		// Save config.cmd
-		err = ioutil.WriteFile(configCmdFilePath, []byte(cmdContent), 0644)
-		if err != nil {
-			log.Printf("Error writing to config.cmd: %v", err)
-			data := map[string]interface{}{
-				"CmdContent":  cmdContent,
-				"JsonContent": jsonContent,
-				"Error":       "Failed to save config.cmd: " + err.Error(),
-			}
-			templates.ExecuteTemplate(w, "editor.html", data)
-			return
-		}
-
-		// Save config.json
-		err = ioutil.WriteFile(configJSONFilePath, []byte(jsonContent), 0644)
-		if err != nil {
-			log.Printf("Error writing to config.json: %v", err)
-			data := map[string]interface{}{
-				"CmdContent":  cmdContent,
-				"JsonContent": jsonContent,
-				"Error":       "Failed to save config.json: " + err.Error(),
+				"Error":       err.Error(),
 			}
 			templates.ExecuteTemplate(w, "editor.html", data)
 			return
@@ -481,7 +493,6 @@ func editorHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("Error reloading configuration: %v", err)
 			data := map[string]interface{}{
-				"CmdContent":  cmdContent,
 				"JsonContent": jsonContent,
 				"Error":       "Configuration saved, but failed to reload: " + err.Error(),
 			}
@@ -490,7 +501,6 @@ func editorHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		data := map[string]interface{}{
-			"CmdContent":  cmdContent,
 			"JsonContent": jsonContent,
 			"Message":     "Configuration saved successfully. Please restart the service.",
 		}
@@ -565,6 +575,193 @@ func sanitizeLogLine(line string) string {
 	return sanitized.String()
 }
 
+func validateAndSaveConfigJSON(data []byte) error {
+	// Validate the JSON data
+	var jsonMap map[string]interface{}
+	err := json.Unmarshal(data, &jsonMap)
+	if err != nil {
+		return fmt.Errorf("Invalid JSON: %v", err)
+	}
+
+	// Check that "config" is "aiscatcher" and "version" is 1
+	configValue, ok := jsonMap["config"].(string)
+	if !ok || configValue != "aiscatcher" {
+		return fmt.Errorf("Invalid JSON: config value must be 'aiscatcher'")
+	}
+
+	versionValue, ok := jsonMap["version"].(float64)
+	if !ok || versionValue != 1 {
+		return fmt.Errorf("Invalid JSON: version value must be 1")
+	}
+
+	// Save the JSON data to the config.json file
+	err = ioutil.WriteFile(configJSONFilePath, data, 0644)
+	if err != nil {
+		return fmt.Errorf("Failed to save config.json: %v", err)
+	}
+
+	return nil
+}
+
+// --- New Function: saveUDPChannelsConfig ---
+func saveUDPChannelsConfig(w http.ResponseWriter, r *http.Request) error {
+	// Read the JSON data from the request body
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return fmt.Errorf("Failed to read request body: %v", err)
+	}
+
+	// Validate and save the JSON data
+	err = validateAndSaveConfigJSON(body)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// --- Updated udpChannelsHandler ---
+func udpChannelsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		log.Printf("Received GET request for /udp")
+
+		// Read config.json
+		jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+		if err != nil {
+			log.Printf("Error reading config.json: %v", err)
+			jsonContent = []byte("")
+		}
+
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"JsonContent":     string(jsonContent),
+			"Title":           "UDP Channels",
+			"ContentTemplate": "udp-channels", // Specify the content template
+		}
+
+		errt := templates.ExecuteTemplate(w, "layout.html", data)
+		if errt != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Template execution error: %v", errt)
+		}
+	} else if r.Method == http.MethodPost {
+		// Handle POST request to save JSON data
+		err := saveUDPChannelsConfig(w, r)
+		if err != nil {
+			// Send error response
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// Send success response
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Configuration saved successfully."))
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+}
+
+func sharingChannelsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		log.Printf("Received GET request for /sharing")
+
+		// Read config.json
+		jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+		if err != nil {
+			log.Printf("Error reading config.json: %v", err)
+			jsonContent = []byte("")
+		}
+
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"JsonContent":     string(jsonContent),
+			"Title":           "Community Sharing Settings",
+			"ContentTemplate": "sharing-channel",
+		}
+
+		errt := templates.ExecuteTemplate(w, "layout.html", data)
+		if errt != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Template execution error: %v", errt)
+		}
+	} else if r.Method == http.MethodPost {
+		// Handle POST request to save JSON data
+		err := saveUDPChannelsConfig(w, r)
+		if err != nil {
+			// Send error response
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// Send success response
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Configuration saved successfully."))
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+}
+
+func tcpChannelsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		log.Printf("Received GET request for /tcp")
+
+		// Read config.json
+		jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+		if err != nil {
+			log.Printf("Error reading config.json: %v", err)
+			jsonContent = []byte("")
+		}
+
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"JsonContent":     string(jsonContent),
+			"Title":           "TCP Channels",
+			"ContentTemplate": "tcp-channels", // Specify the content template
+		}
+
+		errt := templates.ExecuteTemplate(w, "layout.html", data)
+		if errt != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Template execution error: %v", errt)
+		}
+	} else if r.Method == http.MethodPost {
+		// Handle POST request to save JSON data
+		err := saveUDPChannelsConfig(w, r)
+		if err != nil {
+			// Send error response
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// Send success response
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Configuration saved successfully."))
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+}
+
+func getFileVersion(staticFSys fs.FS, filepath string) string {
+	f, err := staticFSys.Open(filepath)
+	if err != nil {
+		log.Printf("Error opening %s for versioning: %v", filepath, err)
+		return ""
+	}
+	defer f.Close()
+
+	content, err := io.ReadAll(f)
+	if err != nil {
+		log.Printf("Error reading %s for versioning: %v", filepath, err)
+		return ""
+	}
+
+	hash := sha256.Sum256(content)
+	return hex.EncodeToString(hash[:])[:8] // Use first 8 characters for brevity
+}
+
 func main() {
 	// Initialize paths
 	err := initPaths()
@@ -578,19 +775,24 @@ func main() {
 		log.Fatal("Failed to load configuration:", err)
 	}
 
-	initTemplates()
-
 	// Set up the embedded static file system
 	staticFSys, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		log.Fatal("Failed to create sub filesystem:", err)
 	}
 
-	// Serve static files with correct MIME types
+	// Compute version hashes for CSS and JS files
+	cssVersion = getFileVersion(staticFSys, "css/styles.css")
+	jsVersion = getFileVersion(staticFSys, "js/scripts.js")
+
+	// Handlers
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFSys))))
 
-	// Register handlers
 	http.HandleFunc("/login", loginHandler)
+	http.HandleFunc("/sharing", authMiddleware(sharingChannelsHandler))
+	http.HandleFunc("/udp", authMiddleware(udpChannelsHandler))
+	http.HandleFunc("/tcp", authMiddleware(tcpChannelsHandler))
+	http.HandleFunc("/control", authMiddleware(controlHandler))
 	http.HandleFunc("/change-password", authMiddleware(changePasswordHandler))
 	http.HandleFunc("/dashboard", authMiddleware(dashboardHandler))
 	http.HandleFunc("/service", authMiddleware(serviceHandler))
@@ -602,7 +804,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)
 		if err == nil && sessions[cookie.Value] == defaultUsername {
-			http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+			http.Redirect(w, r, "/control", http.StatusSeeOther)
 		} else {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 		}
