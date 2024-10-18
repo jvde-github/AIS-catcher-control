@@ -1,4 +1,4 @@
-Simple control tool for the AIS-catcher service installed via the offical page for the Raspberry Pi only. 
+Simple control tool for the AIS-catcher service installed via the official page for the Raspberry Pi only. Username/password is admin/admin.
 
 Install control tool with:
 ```
