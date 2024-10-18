@@ -71,6 +71,7 @@ func init() {
 		"templates/content/udp-channels.html",
 		"templates/content/tcp-channels.html",
 		"templates/content/sharing-channel.html",
+		"templates/content/change-password.html",
 	)
 
 	if err != nil {
@@ -228,7 +229,15 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		templates.ExecuteTemplate(w, "change_password.html", nil)
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"Title":           "Change Password",
+			"ContentTemplate": "change-password",
+			"message":         "",
+		}
+
+		templates.ExecuteTemplate(w, "layout.html", data)
 		return
 	}
 
@@ -236,14 +245,31 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	confirmPassword := r.FormValue("confirm_password")
 
 	if newPassword != confirmPassword {
-		templates.ExecuteTemplate(w, "change_password.html", "Passwords do not match")
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"Title":           "Change Password",
+			"ContentTemplate": "change-password",
+			"message":         "Password do not match",
+		}
+
+		templates.ExecuteTemplate(w, "layout.html", data)
+
 		return
 	}
 
 	config.PasswordHash = hashPassword(newPassword)
 	err := saveConfig()
 	if err != nil {
-		templates.ExecuteTemplate(w, "change_password.html", "Failed to save new password")
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"Title":           "Change Password",
+			"ContentTemplate": "change-password",
+			"message":         "Failed to save new password",
+		}
+
+		templates.ExecuteTemplate(w, "layout.html", data)
 		return
 	}
 
