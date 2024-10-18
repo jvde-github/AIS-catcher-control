@@ -786,7 +786,16 @@ func main() {
 	jsVersion = getFileVersion(staticFSys, "js/scripts.js")
 
 	// Handlers
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFSys))))
+	//http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFSys))))
+
+	http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".css") {
+			w.Header().Set("Content-Type", "text/css")
+		} else if strings.HasSuffix(r.URL.Path, ".js") {
+			w.Header().Set("Content-Type", "application/javascript")
+		}
+		http.StripPrefix("/static/", http.FileServer(http.FS(staticFSys))).ServeHTTP(w, r)
+	})
 
 	http.HandleFunc("/login", loginHandler)
 	http.HandleFunc("/sharing", authMiddleware(sharingChannelsHandler))
