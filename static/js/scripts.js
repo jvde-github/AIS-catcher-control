@@ -731,6 +731,7 @@ function selectDevice(device) {
   }
 
   const deviceInput = document.getElementById('device-input');
+  const serialKeyInput = document.getElementById('serial-key');
 
   // Populate the device input and serial key fields
   deviceInput.value = device.input ? capitalizeFirstLetter(device.input.toLowerCase()) : '';
@@ -738,8 +739,8 @@ function selectDevice(device) {
 
   // Update jsonData accordingly
   // Ensure consistency in JSON keys. Here, assuming 'device_input' and 'serial_key'
-  jsonData.device_input = device.input || '';
-  jsonData.serial_key = device.serial || '';
+  jsonData.device = device.input || '';
+  jsonData.serial = device.serial || '';
 
   // Handle unsaved changes and update JSON display
   handleUnsavedChanges(true, 'Device selection has been updated. Please save your changes.');
@@ -756,18 +757,18 @@ function initializeInputSelection() {
 
   // Initialize the input based on jsonData
   // Ensure consistency in JSON keys. Here, assuming 'device_input' and 'serial_key'
-  if (jsonData.device_input) {
-    deviceInput.value = jsonData.device_input;
+  if (jsonData.device) {
+    deviceInput.value = jsonData.device;
   }
 
-  if (jsonData.serial_key) {
-    serialKeyInput.value = jsonData.serial_key;
+  if (jsonData.serial) {
+    serialKeyInput.value = jsonData.serial;
   }
 
   // Event listener for the device input field
   deviceInput.addEventListener('change', (e) => {
     const input = e.target.value.trim();
-    jsonData.device_input = input;
+    jsonData.device = input;
 
     handleUnsavedChanges(true, 'Device input has been modified. Please save your changes.');
     updateJsonTextarea();
@@ -776,7 +777,7 @@ function initializeInputSelection() {
   // Event listener for the serial key field
   serialKeyInput.addEventListener('change', (e) => {
     const serial = e.target.value.trim();
-    jsonData.serial_key = serial;
+    jsonData.serial = serial;
 
     handleUnsavedChanges(true, 'Serial key has been modified. Please save your changes.');
     updateJsonTextarea();
