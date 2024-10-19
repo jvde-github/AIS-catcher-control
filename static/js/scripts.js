@@ -730,6 +730,8 @@ function selectDevice(device) {
     return;
   }
 
+  const deviceInput = document.getElementById('device-input');
+
   // Populate the device input and serial key fields
   deviceInput.value = device.input ? capitalizeFirstLetter(device.input.toLowerCase()) : '';
   serialKeyInput.value = device.serial || '';
