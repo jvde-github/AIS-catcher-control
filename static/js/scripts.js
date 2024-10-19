@@ -730,6 +730,7 @@ function selectDevice(device) {
     return;
   }
 
+
   const deviceInput = document.getElementById('device-input');
   const serialKeyInput = document.getElementById('serial-key');
 
@@ -756,7 +757,6 @@ function initializeInputSelection() {
   if (!deviceInput || !serialKeyInput) return;
 
   // Initialize the input based on jsonData
-  // Ensure consistency in JSON keys. Here, assuming 'device_input' and 'serial_key'
   if (jsonData.input) {
     deviceInput.value = jsonData.input;
   }

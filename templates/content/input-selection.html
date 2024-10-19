@@ -10,8 +10,7 @@
         <label for="device-input" class="block text-gray-700 text-sm font-medium mb-2">Device Type:</label>
         <select id="device-input" name="device_input"
           class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500">
-          <option value="">Select Device Type</option>
-          <option value="NONE">None</option>
+          <option value="">None</option>
           <option value="RTLSDR">RTLSDR</option>
           <option value="AIRSPY">AIRSPY</option>
           <option value="AIRSPYHF">AIRSPYHF</option>
@@ -41,7 +40,7 @@
     <!-- Select Device Button -->
     <div class="mb-6">
       <button type="button" id="select-device-btn"
-        onclick="openDeviceSelectionModal()" class="w-full bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition duration-200"
+        onclick="openDeviceSelectionModal()" class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition duration-200"
         title="Select Device">
         Select Device
       </button>
