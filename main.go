@@ -72,6 +72,7 @@ func init() {
 		"templates/content/tcp-channels.html",
 		"templates/content/sharing-channel.html",
 		"templates/content/change-password.html",
+		"templates/content/input-selection.html",
 	)
 
 	if err != nil {
@@ -280,7 +281,7 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/control", http.StatusSeeOther)
 }
 
-func devicesHandler(w http.ResponseWriter, r *http.Request) {
+func deviceListHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
@@ -759,6 +760,46 @@ func sharingChannelsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func inputSelectionHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		log.Printf("Received GET request for /input")
+
+		// Read config.json
+		jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+		if err != nil {
+			log.Printf("Error reading config.json: %v", err)
+			jsonContent = []byte("")
+		}
+
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"JsonContent":     string(jsonContent),
+			"Title":           "Community Sharing Settings",
+			"ContentTemplate": "input-selection",
+		}
+
+		errt := templates.ExecuteTemplate(w, "layout.html", data)
+		if errt != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Template execution error: %v", errt)
+		}
+	} else if r.Method == http.MethodPost {
+		// Handle POST request to save JSON data
+		err := saveUDPChannelsConfig(w, r)
+		if err != nil {
+			// Send error response
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// Send success response
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Configuration saved successfully."))
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+}
 func tcpChannelsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		log.Printf("Received GET request for /tcp")
@@ -863,8 +904,9 @@ func main() {
 	http.HandleFunc("/service", authMiddleware(serviceHandler))
 	http.HandleFunc("/editor", authMiddleware(editorHandler))
 	http.HandleFunc("/logs-stream", authMiddleware(logsStreamHandler))
+	http.HandleFunc("/input", authMiddleware(inputSelectionHandler))
 	http.HandleFunc("/logout", authMiddleware(logoutHandler))
-	http.HandleFunc("/device-list", authMiddleware(devicesHandler))
+	http.HandleFunc("/device-list", authMiddleware(deviceListHandler))
 
 	// Redirect root to login or dashboard based on authentication
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

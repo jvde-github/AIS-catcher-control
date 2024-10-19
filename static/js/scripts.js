@@ -476,7 +476,7 @@ function updateStatusMessage(type, message) {
 
   let bgClass, borderClass, textClass;
 
-  switch(type) {
+  switch (type) {
     case 'good':
       bgClass = 'bg-green-100';
       borderClass = 'border-green-400';
@@ -580,7 +580,7 @@ function setupSharingKeyInput() {
 function updateRegisterButtonState() {
   const registerButton = document.getElementById('register-button');
   const sharingKeyInput = document.getElementById('sharing-key');
-  
+
   if (!registerButton || !sharingKeyInput) {
     console.warn('Register button or Sharing Key input not found.');
     return; // Exit if elements are not found
@@ -588,13 +588,13 @@ function updateRegisterButtonState() {
 
   const key = sharingKeyInput.value.trim();
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  
+
   if (uuidRegex.test(key)) {
     // Disable the Register button
     registerButton.disabled = true;
     registerButton.classList.add('opacity-50', 'cursor-not-allowed');
     registerButton.classList.remove('bg-blue-500', 'hover:bg-blue-700');
-    
+
     // Optionally, add a tooltip to inform the user why it's disabled
     registerButton.title = 'Register is disabled because a valid Sharing Key is already entered.';
   } else {
@@ -602,7 +602,7 @@ function updateRegisterButtonState() {
     registerButton.disabled = false;
     registerButton.classList.remove('opacity-50', 'cursor-not-allowed');
     registerButton.classList.add('bg-blue-500', 'hover:bg-blue-700');
-    
+
     // Remove the tooltip
     registerButton.title = '';
   }
@@ -664,6 +664,123 @@ function initializeSharingChannel() {
   isInitializing = false; // End initialization
 }
 
+function openDeviceSelectionModal() {
+  const deviceSelectionModal = document.getElementById('device-selection-modal');
+  deviceSelectionModal.classList.remove('hidden');
+  fetchDeviceList();
+}
+
+// Function to close the device selection modal
+function closeDeviceSelectionModal() {
+  const deviceSelectionModal = document.getElementById('device-selection-modal');
+  deviceSelectionModal.classList.add('hidden');
+}
+
+// Function to fetch the device list from the server
+function fetchDeviceList() {
+  const deviceList = document.getElementById('device-list');
+  fetch('/device-list') // Ensure this endpoint matches your server's route
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to fetch device list.');
+      }
+      return response.json();
+    })
+    .then(data => {
+      populateDeviceList(data.devices);
+    })
+    .catch(error => {
+      console.error('Error fetching device list:', error);
+      deviceList.innerHTML = `<li class="text-red-500">Error fetching device list.</li>`;
+    });
+}
+
+// Function to populate the device list in the modal
+function populateDeviceList(devices) {
+  const deviceList = document.getElementById('device-list');
+  deviceList.innerHTML = ''; // Clear existing list
+
+  if (!Array.isArray(devices) || devices.length === 0) {
+    deviceList.innerHTML = `<li class="text-gray-500">No devices found.</li>`;
+    return;
+  }
+
+  devices.forEach(device => {
+    const listItem = document.createElement('li');
+    listItem.className = 'flex items-center justify-between p-2 border rounded-md hover:bg-gray-100 cursor-pointer';
+    listItem.innerHTML = `
+      <span>${escapeHtml(device.name)}</span>
+      <button type="button" class="select-device-btn bg-blue-500 text-white px-2 py-1 rounded-md hover:bg-blue-600">Select</button>
+    `;
+
+    // Attach event listener to the Select button
+    listItem.querySelector('.select-device-btn').addEventListener('click', () => {
+      selectDevice(device);
+      closeDeviceSelectionModal();
+    });
+
+    deviceList.appendChild(listItem);
+  });
+}
+
+// Function to handle device selection
+function selectDevice(device) {
+  if (!device || typeof device !== 'object') {
+    console.error('Invalid device selected:', device);
+    return;
+  }
+
+  // Populate the device input and serial key fields
+  deviceInput.value = device.input ? capitalizeFirstLetter(device.input.toLowerCase()) : '';
+  serialKeyInput.value = device.serial || '';
+
+  // Update jsonData accordingly
+  // Ensure consistency in JSON keys. Here, assuming 'device_input' and 'serial_key'
+  jsonData.device_input = device.input || '';
+  jsonData.serial_key = device.serial || '';
+
+  // Handle unsaved changes and update JSON display
+  handleUnsavedChanges(true, 'Device selection has been updated. Please save your changes.');
+  updateJsonTextarea();
+}
+
+// Function to initialize the device input and serial key fields
+function initializeInputSelection() {
+  // Initialize the device input and serial key fields
+  const deviceInput = document.getElementById('device-input');
+  const serialKeyInput = document.getElementById('serial-key');
+
+  if (!deviceInput || !serialKeyInput) return;
+
+  // Initialize the input based on jsonData
+  // Ensure consistency in JSON keys. Here, assuming 'device_input' and 'serial_key'
+  if (jsonData.device_input) {
+    deviceInput.value = jsonData.device_input;
+  }
+
+  if (jsonData.serial_key) {
+    serialKeyInput.value = jsonData.serial_key;
+  }
+
+  // Event listener for the device input field
+  deviceInput.addEventListener('change', (e) => {
+    const input = e.target.value.trim();
+    jsonData.device_input = input;
+
+    handleUnsavedChanges(true, 'Device input has been modified. Please save your changes.');
+    updateJsonTextarea();
+  });
+
+  // Event listener for the serial key field
+  serialKeyInput.addEventListener('change', (e) => {
+    const serial = e.target.value.trim();
+    jsonData.serial_key = serial;
+
+    handleUnsavedChanges(true, 'Serial key has been modified. Please save your changes.');
+    updateJsonTextarea();
+  });
+}
+
 // Automatically populate channels on page load
 document.addEventListener('DOMContentLoaded', () => {
   if (jsonTextarea) {
@@ -678,6 +795,7 @@ document.addEventListener('DOMContentLoaded', () => {
     populateChannels('udp');
     populateChannels('tcp');
     initializeSharingChannel();
+    initializeInputSelection();
     updateJsonTextarea();
   }
 });
