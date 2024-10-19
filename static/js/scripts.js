@@ -739,7 +739,6 @@ function selectDevice(device) {
   serialKeyInput.value = device.serial || '';
 
   // Update jsonData accordingly
-  // Ensure consistency in JSON keys. Here, assuming 'device_input' and 'serial_key'
   jsonData.input = device.input || '';
   jsonData.serial = device.serial || '';
 
@@ -758,7 +757,7 @@ function initializeInputSelection() {
 
   // Initialize the input based on jsonData
   if (jsonData.input) {
-    deviceInput.value = jsonData.input;
+    deviceInput.value = jsonData.input.toUpperCase();
   }
 
   if (jsonData.serial) {
@@ -767,7 +766,7 @@ function initializeInputSelection() {
 
   // Event listener for the device input field
   deviceInput.addEventListener('change', (e) => {
-    const input = e.target.value.trim();
+    const input = e.target.value.trim().toUpperCase();
     jsonData.input = input;
 
     handleUnsavedChanges(true, 'Device input has been modified. Please save your changes.');
