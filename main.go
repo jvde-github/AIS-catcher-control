@@ -280,6 +280,36 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/control", http.StatusSeeOther)
 }
 
+func devicesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Execute the AIS-catcher command
+	cmd := exec.Command("/usr/bin/AIS-catcher", "-l", "JSON", "ON")
+	stdout, err := cmd.Output()
+	if err != nil {
+		log.Printf("Error executing AIS-catcher: %v", err)
+		http.Error(w, "Failed to retrieve devices information", http.StatusInternalServerError)
+		return
+	}
+
+	// Validate that the output is valid JSON
+	var jsonData interface{}
+	err = json.Unmarshal(stdout, &jsonData)
+	if err != nil {
+		log.Printf("Invalid JSON from AIS-catcher: %v", err)
+		http.Error(w, "Invalid JSON data received from AIS-catcher", http.StatusInternalServerError)
+		return
+	}
+
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(stdout)
+}
+
 func controlHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -834,6 +864,7 @@ func main() {
 	http.HandleFunc("/editor", authMiddleware(editorHandler))
 	http.HandleFunc("/logs-stream", authMiddleware(logsStreamHandler))
 	http.HandleFunc("/logout", authMiddleware(logoutHandler))
+	http.HandleFunc("/device-list", authMiddleware(devicesHandler))
 
 	// Redirect root to login or dashboard based on authentication
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
