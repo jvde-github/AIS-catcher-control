@@ -735,7 +735,7 @@ function selectDevice(device) {
   const serialKeyInput = document.getElementById('serial-key');
 
   // Populate the device input and serial key fields
-  deviceInput.value = device.input ? capitalizeFirstLetter(device.input.toLowerCase()) : '';
+  deviceInput.value = device.input.toUpperCase() || '';
   serialKeyInput.value = device.serial || '';
 
   // Update jsonData accordingly
