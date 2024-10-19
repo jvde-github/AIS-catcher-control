@@ -739,7 +739,7 @@ function selectDevice(device) {
 
   // Update jsonData accordingly
   // Ensure consistency in JSON keys. Here, assuming 'device_input' and 'serial_key'
-  jsonData.device = device.input || '';
+  jsonData.input = device.input || '';
   jsonData.serial = device.serial || '';
 
   // Handle unsaved changes and update JSON display
@@ -757,8 +757,8 @@ function initializeInputSelection() {
 
   // Initialize the input based on jsonData
   // Ensure consistency in JSON keys. Here, assuming 'device_input' and 'serial_key'
-  if (jsonData.device) {
-    deviceInput.value = jsonData.device;
+  if (jsonData.input) {
+    deviceInput.value = jsonData.input;
   }
 
   if (jsonData.serial) {
@@ -768,7 +768,7 @@ function initializeInputSelection() {
   // Event listener for the device input field
   deviceInput.addEventListener('change', (e) => {
     const input = e.target.value.trim();
-    jsonData.device = input;
+    jsonData.input = input;
 
     handleUnsavedChanges(true, 'Device input has been modified. Please save your changes.');
     updateJsonTextarea();
