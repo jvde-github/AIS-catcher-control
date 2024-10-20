@@ -46,13 +46,27 @@ var (
 
 var templates *template.Template
 
+func Seq(start, end int) []int {
+    if end < start {
+        return []int{}
+    }
+    s := make([]int, end-start+1)
+    for i := range s {
+        s[i] = start + i
+    }
+    return s
+}
+
+
 func init() {
+	// Create a FuncMap with both "dynamicTemplate" and "seq"
 	funcMap := template.FuncMap{
 		"dynamicTemplate": func(name string, data interface{}) (template.HTML, error) {
 			var buf strings.Builder
 			err := templates.ExecuteTemplate(&buf, name, data)
 			return template.HTML(buf.String()), err
 		},
+		"seq": Seq, // Register the seq function
 	}
 
 	// Create a new template with the function map
@@ -73,6 +87,7 @@ func init() {
 		"templates/content/sharing-channel.html",
 		"templates/content/change-password.html",
 		"templates/content/input-selection.html",
+		"templates/content/device-setup.html",
 	)
 
 	if err != nil {
@@ -719,6 +734,47 @@ func udpChannelsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func deviceSetupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		log.Printf("Received GET request for /udp")
+
+		// Read config.json
+		jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+		if err != nil {
+			log.Printf("Error reading config.json: %v", err)
+			jsonContent = []byte("")
+		}
+
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"JsonContent":     string(jsonContent),
+			"Title":           "Device Configuration",
+			"ContentTemplate": "device-setup", // Specify the content template
+		}
+
+		errt := templates.ExecuteTemplate(w, "layout.html", data)
+		if errt != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Template execution error: %v", errt)
+		}
+	} else if r.Method == http.MethodPost {
+		// Handle POST request to save JSON data
+		err := saveUDPChannelsConfig(w, r)
+		if err != nil {
+			// Send error response
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// Send success response
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Configuration saved successfully."))
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+}
+
 func sharingChannelsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		log.Printf("Received GET request for /sharing")
@@ -762,7 +818,7 @@ func sharingChannelsHandler(w http.ResponseWriter, r *http.Request) {
 
 func inputSelectionHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /input")
+		log.Printf("Received GET request for /device")
 
 		// Read config.json
 		jsonContent, err := ioutil.ReadFile(configJSONFilePath)
@@ -883,8 +939,6 @@ func main() {
 	jsVersion = getFileVersion(staticFSys, "js/scripts.js")
 
 	// Handlers
-	//http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFSys))))
-
 	http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, ".css") {
 			w.Header().Set("Content-Type", "text/css")
@@ -904,6 +958,7 @@ func main() {
 	http.HandleFunc("/service", authMiddleware(serviceHandler))
 	http.HandleFunc("/editor", authMiddleware(editorHandler))
 	http.HandleFunc("/logs-stream", authMiddleware(logsStreamHandler))
+	http.HandleFunc("/device", authMiddleware(deviceSetupHandler))
 	http.HandleFunc("/input", authMiddleware(inputSelectionHandler))
 	http.HandleFunc("/logout", authMiddleware(logoutHandler))
 	http.HandleFunc("/device-list", authMiddleware(deviceListHandler))
@@ -923,3 +978,4 @@ func main() {
 	log.Printf("Server started at %s\n", addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
+

@@ -223,7 +223,7 @@ function populateChannels(channelType) {
       container.appendChild(channelDiv);
     });
   } else {
-    alert(`No ${channelType.toUpperCase()} channels found in JSON data.`);
+    //alert(`No ${channelType.toUpperCase()} channels found in JSON data.`);
   }
 
   isInitializing = false; // End initialization
