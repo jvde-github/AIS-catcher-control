@@ -7,8 +7,7 @@
             <label for="sharing-toggle" class="text-gray-700 font-medium">Sharing:</label>
             <label class="ml-4 relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" id="sharing-toggle" class="sr-only peer">
-                <div
-                    class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
                     after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
                     after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
                 </div>
@@ -26,7 +25,8 @@
                     title="Create Sharing Key">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24"
                         stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8L10 14" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 7h8m0 0v8m0-8L10 14" />
                     </svg>
                     Create
                 </button>
@@ -67,4 +67,20 @@
         </div>
     </div>
 </div>
+
+<script>
+    const formToJsonMap = {
+        "sharing-toggle": "sharing",
+        "sharing_key": "sharing_key",
+    };
+
+    function setupSharingToggle() {
+        const sharingToggle = document.getElementById('sharing-toggle');
+
+        sharingToggle.addEventListener('change', (e) => {
+            const isEnabled = e.target.checked;
+            toggleSharingKeyInput(isEnabled);
+        });
+    }
+</script>
 {{ end }}

@@ -1,7 +1,7 @@
 {{ define "input-selection" }}
 <div id="input-selection" class="p-6 bg-white rounded-lg shadow-md">
   <h3 class="text-xl font-medium text-gray-800 mb-6">Input Selection</h3>
-  
+
   <form id="device-form">
     <!-- Device Type and Serial Key on the Same Line -->
     <div class="mb-4 flex flex-col md:flex-row md:space-x-4">
@@ -28,7 +28,7 @@
           <option value="SPYSERVER">SPYSERVER</option>
         </select>
       </div>
-      
+
       <!-- Serial Key Input -->
       <div class="flex-1 mt-4 md:mt-0">
         <label for="serial-key" class="block text-gray-700 text-sm font-medium mb-2">Serial Key:</label>
@@ -36,16 +36,16 @@
           class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500">
       </div>
     </div>
-    
+
     <!-- Select Device Button -->
     <div class="mb-6">
-      <button type="button" id="select-device-btn"
-        onclick="openDeviceSelectionModal()" class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition duration-200"
+      <button type="button" id="select-device-btn" onclick="openDeviceSelectionModal()"
+        class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition duration-200"
         title="Select Device">
         Select Device
       </button>
     </div>
-    
+
     <!-- Save Button -->
     <div class="flex justify-end">
       <button type="button" id="save-button"
@@ -54,11 +54,11 @@
       </button>
     </div>
   </form>
-  
+
   <!-- Status Message -->
   <div id="status-message" class="mt-4 p-2 transition-opacity duration-300 opacity-0" role="alert"
     aria-live="assertive"></div>
-  
+
   <!-- Collapsible JSON Content -->
   <div class="mt-6">
     <!-- Toggle Button -->
@@ -70,7 +70,7 @@
       </svg>
       <span class="ml-2 font-medium">Show JSON Content</span>
     </button>
-    
+
     <!-- Collapsible Content -->
     <div id="json-content-container" class="mt-2 hidden">
       <pre id="json_content" name="json_content"
@@ -78,15 +78,14 @@
         readonly>{{.JsonContent}}</pre>
     </div>
   </div>
-  
+
   <!-- Device Selection Modal -->
   <div id="device-selection-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
     <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-1/2 lg:w-1/3">
       <div class="flex justify-between items-center p-4 border-b">
         <h3 class="text-lg font-medium text-gray-800">Select Device</h3>
         <button type="button" onclick="closeDeviceSelectionModal()" class="text-gray-600 hover:text-gray-800">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-            stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
@@ -105,4 +104,94 @@
     </div>
   </div>
 </div>
+
+<script>
+  const formToJsonMap = {
+    "device-input": "input",
+    "serial-key": "serial",
+  };
+
+  function openDeviceSelectionModal() {
+    const deviceSelectionModal = document.getElementById('device-selection-modal');
+    deviceSelectionModal.classList.remove('hidden');
+    fetchDeviceList();
+  }
+
+  // Function to close the device selection modal
+  function closeDeviceSelectionModal() {
+    const deviceSelectionModal = document.getElementById('device-selection-modal');
+    deviceSelectionModal.classList.add('hidden');
+  }
+
+  // Function to fetch the device list from the server
+  function fetchDeviceList() {
+    const deviceList = document.getElementById('device-list');
+    fetch('/device-list') // Ensure this endpoint matches your server's route
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Failed to fetch device list.');
+        }
+        return response.json();
+      })
+      .then(data => {
+        populateDeviceList(data.devices);
+      })
+      .catch(error => {
+        console.error('Error fetching device list:', error);
+        deviceList.innerHTML = `<li class="text-red-500">Error fetching device list.</li>`;
+      });
+  }
+
+  // Function to populate the device list in the modal
+  function populateDeviceList(devices) {
+    const deviceList = document.getElementById('device-list');
+    deviceList.innerHTML = ''; // Clear existing list
+
+    if (!Array.isArray(devices) || devices.length === 0) {
+      deviceList.innerHTML = `<li class="text-gray-500">No devices found.</li>`;
+      return;
+    }
+
+    devices.forEach(device => {
+      const listItem = document.createElement('li');
+      listItem.className = 'flex items-center justify-between p-2 border rounded-md hover:bg-gray-100 cursor-pointer';
+      listItem.innerHTML = `
+      <span>${escapeHtml(device.name)}</span>
+      <button type="button" class="select-device-btn bg-blue-500 text-white px-2 py-1 rounded-md hover:bg-blue-600">Select</button>
+    `;
+
+      // Attach event listener to the Select button
+      listItem.querySelector('.select-device-btn').addEventListener('click', () => {
+        selectDevice(device);
+        closeDeviceSelectionModal();
+      });
+
+      deviceList.appendChild(listItem);
+    });
+  }
+
+  // Function to handle device selection
+  function selectDevice(device) {
+    if (!device || typeof device !== 'object') {
+      console.error('Invalid device selected:', device);
+      return;
+    }
+
+
+    const deviceInput = document.getElementById('device-input');
+    const serialKeyInput = document.getElementById('serial-key');
+
+    // Populate the device input and serial key fields
+    deviceInput.value = device.input.toUpperCase() || '';
+    serialKeyInput.value = device.serial || '';
+
+    // Update jsonData accordingly
+    jsonData.input = device.input || '';
+    jsonData.serial = device.serial || '';
+
+    // Handle unsaved changes and update JSON display
+    handleUnsavedChanges(true, 'Device selection has been updated. Please save your changes.');
+    updateJsonTextarea();
+  }
+</script>
 {{ end }}

@@ -2,8 +2,11 @@
 <div id="device-setup" class="p-6 bg-white shadow-md rounded-lg">
     <div class="border-b border-gray-200" role="tablist">
         <div class="flex -mb-px space-x-4">
-            <button role="tab" aria-selected="true" data-tab="rtlsdr" class="py-2 px-4 text-gray-700 font-medium border-b-2 border-yellow-500 hover:text-gray-900 transition-colors">RTLSDR</button>
-            <button role="tab" aria-selected="false" data-tab="airspyhf" class="py-2 px-4 text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors">Airspy HF+</button>
+            <button role="tab" aria-selected="true" data-tab="rtlsdr"
+                class="py-2 px-4 text-gray-700 font-medium border-b-2 border-yellow-500 hover:text-gray-900 transition-colors">RTLSDR</button>
+            <button role="tab" aria-selected="false" data-tab="airspyhf"
+                class="py-2 px-4 text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors">Airspy
+                HF+</button>
         </div>
     </div>
 
@@ -12,7 +15,8 @@
         <form id="rtlsdr-form" class="space-y-6">
             <div>
                 <label for="rtlsdr-bandwidth" class="block text-gray-700 font-medium mb-2">Bandwidth:</label>
-                <select id="rtlsdr-bandwidth" name="bandwidth" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                <select id="rtlsdr-bandwidth" name="bandwidth"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="0">Off</option>
                     <option value="192K">192K</option>
                 </select>
@@ -20,25 +24,40 @@
 
             <div>
                 <label for="rtlsdr-sample-rate" class="block text-gray-700 font-medium mb-2">Sample Rate:</label>
-                <select id="rtlsdr-sample-rate" name="sample_rate" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                <select id="rtlsdr-sample-rate" name="sample_rate"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="288K">288K</option>
                     <option value="1536K" selected>1536K</option>
                 </select>
             </div>
 
             <div class="flex items-center justify-between">
-                <label for="biastee-toggle" class="text-gray-700 font-medium">Bias Tee:</label>
-                <button type="button" role="switch" aria-checked="false" id="biastee-toggle" class="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500" onclick="this.setAttribute('aria-checked', this.getAttribute('aria-checked') === 'true' ? 'false' : 'true')">
-                    <span class="inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 ease-in-out" :class="{ 'translate-x-6': this.getAttribute('aria-checked') === 'true', 'translate-x-1': this.getAttribute('aria-checked') === 'false' }"></span>
-                </button>
+
+                <div class="flex items-center mb-6">
+                    <label for="biastee-toggle" class="text-gray-700 font-medium">Bias tee:</label>
+                    <label class="ml-4 relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="biastee-toggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                            after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                            after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                        </div>
+                    </label>
+                </div>
             </div>
 
             <div class="flex items-center justify-between">
-                <label for="rtlagc-toggle" class="text-gray-700 font-medium">RTLAGC:</label>
-                <button type="button" role="switch" aria-checked="false" id="rtlagc-toggle" class="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500" onclick="this.setAttribute('aria-checked', this.getAttribute('aria-checked') === 'true' ? 'false' : 'true')">
-                    <span class="inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 ease-in-out" :class="{ 'translate-x-6': this.getAttribute('aria-checked') === 'true', 'translate-x-1': this.getAttribute('aria-checked') === 'false' }"></span>
-                </button>
+                <div class="flex items-center mb-6">
+                    <label for="rtlagc-toggle" class="text-gray-700 font-medium">RTLAGC:</label>
+                    <label class="ml-4 relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="rtlagc-toggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                            after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                            after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                        </div>
+                    </label>
+                </div>
             </div>
+
         </form>
     </div>
 
@@ -47,88 +66,114 @@
         <form id="airspyhf-form" class="space-y-6">
             <div>
                 <label for="airspyhf-sample-rate" class="block text-gray-700 font-medium mb-2">Sample Rate:</label>
-                <select id="airspyhf-sample-rate" name="sample_rate" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                <select id="airspyhf-sample-rate" name="sample_rate"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="192K">192K</option>
                 </select>
             </div>
 
             <div>
                 <label for="airspyhf-threshold" class="block text-gray-700 font-medium mb-2">Threshold:</label>
-                <select id="airspyhf-threshold" name="threshold" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                <select id="airspyhf-threshold" name="threshold"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="low" selected>Low</option>
                     <option value="high">High</option>
                 </select>
             </div>
 
             <div class="flex items-center justify-between">
-                <label for="preamp-toggle" class="text-gray-700 font-medium">Preamp:</label>
-                <button type="button" role="switch" aria-checked="false" id="preamp-toggle" class="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500" onclick="this.setAttribute('aria-checked', this.getAttribute('aria-checked') === 'true' ? 'false' : 'true')">
-                    <span class="inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 ease-in-out" :class="{ 'translate-x-6': this.getAttribute('aria-checked') === 'true', 'translate-x-1': this.getAttribute('aria-checked') === 'false' }"></span>
-                </button>
+                <div class="flex items-center mb-6">
+                    <label for="preamp-toggle" class="text-gray-700 font-medium">Preamp:</label>
+                    <label class="ml-4 relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="preamp-toggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                            after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                            after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                        </div>
+                    </label>
+                </div>
             </div>
+
         </form>
     </div>
 
     <div class="flex justify-end mt-6">
-        <button id="save-button" class="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition-colors">Save</button>
+        <button id="save-button"
+            class="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition-colors">Save</button>
     </div>
 
     <hr class="my-6 border-gray-300">
 
-    <button type="button" id="toggle-json" class="flex items-center text-gray-800 focus:outline-none">
-        <svg class="h-5 w-5 transform transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
-        <span class="ml-2 font-medium">Show JSON Content</span>
+  <!-- Collapsible JSON Content -->
+  <div class="mt-6">
+    <!-- Toggle Button -->
+    <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-800 focus:outline-none">
+      <!-- Chevron Icon -->
+      <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
+        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+      <span class="ml-2 font-medium">Show JSON Content</span>
     </button>
-
-    <div id="json-content" class="mt-2 hidden">
-        <textarea readonly rows="10" class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 focus:ring-2 focus:ring-yellow-500 focus:outline-none">{{.JsonContent}}</textarea>
+    
+    <!-- Collapsible Content -->
+    <div id="json-content-container" class="mt-2 hidden">
+      <pre id="json_content" name="json_content"
+        class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 overflow-auto focus:outline-none focus:ring-2 focus:ring-yellow-500"
+        readonly>{{.JsonContent}}</pre>
     </div>
+  </div>
+  
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const tabs = document.querySelectorAll('[role="tab"]');
-    const panels = document.querySelectorAll('[role="tabpanel"]');
-    const jsonToggle = document.getElementById('toggle-json');
-    const jsonContent = document.getElementById('json-content');
-    const toggleIcon = jsonToggle.querySelector('svg');
 
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            tabs.forEach(t => {
-                t.setAttribute('aria-selected', 'false');
-                t.classList.remove('text-gray-700', 'border-yellow-500');
-                t.classList.add('text-gray-500', 'border-transparent');
+    const formToJsonMap = {
+        "rtlsdr-bandwidth": "rtlsdr.bandwidth",
+        "rtlsdr-sample-rate": "rtlsdr.sample_rate",
+        "biastee-toggle": "rtlsdr.bias_tee",
+        "rtlagc-toggle": "rtlsdr.rtl_agc",
+        "airspyhf-sample-rate": "airspyhf.sample_rate",
+        "airspyhf-threshold": "airspyhf.threshold",
+        "preamp-toggle": "airspyhf.preamp",
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const tabs = document.querySelectorAll('[role="tab"]');
+        const panels = document.querySelectorAll('[role="tabpanel"]');
+
+        // Tab switching logic
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Deselect all tabs and hide all panels
+                tabs.forEach(t => {
+                    t.setAttribute('aria-selected', 'false');
+                    t.classList.remove('text-gray-700', 'border-yellow-500');
+                    t.classList.add('text-gray-500', 'border-transparent');
+                });
+
+                panels.forEach(panel => {
+                    panel.classList.add('hidden');
+                });
+
+                // Select the clicked tab and show the corresponding panel
+                tab.setAttribute('aria-selected', 'true');
+                tab.classList.remove('text-gray-500', 'border-transparent');
+                tab.classList.add('text-gray-700', 'border-yellow-500');
+                document.getElementById(`${tab.dataset.tab}-panel`).classList.remove('hidden');
             });
+        });
 
-            tab.setAttribute('aria-selected', 'true');
-            tab.classList.remove('text-gray-500', 'border-transparent');
-            tab.classList.add('text-gray-700', 'border-yellow-500');
-
-            panels.forEach(panel => {
-                panel.classList.add('hidden');
+        // Handle switch toggles
+        document.querySelectorAll('[role="switch"]').forEach(toggle => {
+            toggle.addEventListener('click', function () {
+                const isChecked = this.getAttribute('aria-checked') === 'true';
+                this.setAttribute('aria-checked', !isChecked);
+                this.classList.toggle('bg-yellow-500', !isChecked);
+                const knob = this.querySelector('span');
+                knob.style.transform = !isChecked ? 'translateX(1.5rem)' : 'translateX(0.25rem)';
             });
-
-            document.getElementById(`${tab.dataset.tab}-panel`).classList.remove('hidden');
         });
     });
-
-    jsonToggle.addEventListener('click', () => {
-        const isHidden = jsonContent.classList.contains('hidden');
-        jsonContent.classList.toggle('hidden');
-        toggleIcon.style.transform = isHidden ? 'rotate(180deg)' : '';
-    });
-
-    document.querySelectorAll('[role="switch"]').forEach(toggle => {
-        toggle.addEventListener('click', function() {
-            const checked = this.getAttribute('aria-checked') === 'true';
-            const knob = this.querySelector('span');
-            this.classList.toggle('bg-yellow-500');
-            knob.style.transform = checked ? 'translateX(1.5rem)' : '';
-        });
-    });
-});
 </script>
 {{ end }}

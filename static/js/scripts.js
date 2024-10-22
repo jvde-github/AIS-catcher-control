@@ -608,31 +608,6 @@ function updateRegisterButtonState() {
   }
 }
 
-function setupSharingToggle() {
-  const sharingToggle = document.getElementById('sharing-toggle');
-  const sharingKeyContainer = document.getElementById('sharing-key-container');
-
-  // Initialize the visibility based on the current state in jsonData
-  if (jsonData && typeof jsonData.sharing !== 'undefined') {
-    sharingToggle.checked = jsonData.sharing || false;
-    toggleSharingKeyInput(sharingToggle.checked);
-  }
-
-  // Event listener for the toggle
-  sharingToggle.addEventListener('change', (e) => {
-    const isEnabled = e.target.checked;
-    toggleSharingKeyInput(isEnabled);
-
-    // Update jsonData
-    if (!jsonData.sharing) {
-      jsonData.sharing = {};
-    }
-    jsonData.sharing = isEnabled;
-
-    handleUnsavedChanges(true, 'Sharing settings have been modified. Please save your changes.');
-    updateJsonTextarea();
-  });
-}
 
 /**
  * Initializes the Sharing Channel section.
@@ -646,15 +621,6 @@ function initializeSharingChannel() {
 
   isInitializing = true; // Start initialization
 
-  // Parse JSON content
-  try {
-    jsonData = JSON.parse(jsonTextarea.innerText);
-  } catch (e) {
-    alert("Invalid JSON format. Please check the JSON content.");
-    console.error("JSON Parse Error:", e);
-    return;
-  }
-
   setupSharingToggle();
   setupSharingKeyInput();
 
@@ -664,127 +630,116 @@ function initializeSharingChannel() {
   isInitializing = false; // End initialization
 }
 
-function openDeviceSelectionModal() {
-  const deviceSelectionModal = document.getElementById('device-selection-modal');
-  deviceSelectionModal.classList.remove('hidden');
-  fetchDeviceList();
-}
+function updateFormFromJson(json, map) {
+  for (const [elementId, jsonPath] of Object.entries(map)) {
+    const element = document.getElementById(elementId);
+    if (!element) continue;
 
-// Function to close the device selection modal
-function closeDeviceSelectionModal() {
-  const deviceSelectionModal = document.getElementById('device-selection-modal');
-  deviceSelectionModal.classList.add('hidden');
-}
-
-// Function to fetch the device list from the server
-function fetchDeviceList() {
-  const deviceList = document.getElementById('device-list');
-  fetch('/device-list') // Ensure this endpoint matches your server's route
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Failed to fetch device list.');
+    const value = getValueFromJsonPath(json, jsonPath);
+    if (value !== undefined) {
+      if (element.type === "checkbox") {
+        element.checked = Boolean(value);
+        element.dispatchEvent(new Event('change'));
+      } else if (element.type === "button" && element.getAttribute("role") === "switch") {
+        element.setAttribute("aria-checked", value ? "true" : "false");
+        toggleSwitchStyle(element, value);
+      } else {
+        element.value = value;
       }
-      return response.json();
-    })
-    .then(data => {
-      populateDeviceList(data.devices);
-    })
-    .catch(error => {
-      console.error('Error fetching device list:', error);
-      deviceList.innerHTML = `<li class="text-red-500">Error fetching device list.</li>`;
+    }
+  }
+}
+
+function updateJsonFromForm(json, map, elementId = null) {
+  if (elementId) {
+    const jsonPath = map[elementId];
+    const element = document.getElementById(elementId);
+    if (element) {
+      let value;
+      if (element.type === "checkbox") {
+        value = element.checked;
+      } else if (element.type === "button" && element.getAttribute("role") === "switch") {
+        value = element.getAttribute("aria-checked") === "true";
+      } else {
+        value = element.value;
+      }
+      setValueInJsonPath(json, jsonPath, value);
+    }
+  } else {
+    for (const [elementId, jsonPath] of Object.entries(map)) {
+      const element = document.getElementById(elementId);
+      if (!element) continue;
+
+      let value;
+      if (element.type === "checkbox") {
+        value = element.checked;
+      } else if (element.type === "button" && element.getAttribute("role") === "switch") {
+        value = element.getAttribute("aria-checked") === "true";
+      } else {
+        value = element.value;
+      }
+
+      setValueInJsonPath(json, jsonPath, value);
+    }
+  }
+}
+
+function getValueFromJsonPath(obj, path) {
+  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+}
+
+function setValueInJsonPath(obj, path, value) {
+  const parts = path.split('.');
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (!current[part]) {
+      current[part] = {}; // Create nested structure if it doesn't exist
+    }
+    current = current[part];
+  }
+  current[parts[parts.length - 1]] = value;
+}
+
+function toggleSwitchStyle(element, isChecked) {
+  const knob = element.querySelector('span');
+  element.classList.toggle('bg-yellow-500', isChecked);
+  knob.style.transform = isChecked ? 'translateX(1.5rem)' : 'translateX(0.25rem)';
+}
+
+function addFormEventListeners(json, map) {
+  for (const [elementId, jsonPath] of Object.entries(map)) {
+    const element = document.getElementById(elementId);
+    if (!element) continue;
+
+    // Determine the appropriate event type
+    const eventType = (element.type === "button" && element.getAttribute("role") === "switch") ? "click" : "input";
+
+    element.addEventListener(eventType, () => {
+      // Update only the specific field that changed
+      updateJsonFromForm(json, map, elementId);
+      handleUnsavedChanges(true, 'You have unsaved changes. Please save your changes.');
+      updateJsonTextarea(); // Update JSON textarea display
     });
+
+    // If the element is a switch, handle the toggle separately for visual updates
+    if (element.getAttribute("role") === "switch") {
+      element.addEventListener('click', () => {
+        const isChecked = element.getAttribute('aria-checked') === 'true';
+        const newState = !isChecked;
+        element.setAttribute('aria-checked', newState);
+        toggleSwitchStyle(element, newState);
+        updateJsonFromForm(json, map, elementId);
+        updateJsonTextarea();
+      });
+    }
+  }
 }
 
-// Function to populate the device list in the modal
-function populateDeviceList(devices) {
-  const deviceList = document.getElementById('device-list');
-  deviceList.innerHTML = ''; // Clear existing list
-
-  if (!Array.isArray(devices) || devices.length === 0) {
-    deviceList.innerHTML = `<li class="text-gray-500">No devices found.</li>`;
-    return;
-  }
-
-  devices.forEach(device => {
-    const listItem = document.createElement('li');
-    listItem.className = 'flex items-center justify-between p-2 border rounded-md hover:bg-gray-100 cursor-pointer';
-    listItem.innerHTML = `
-      <span>${escapeHtml(device.name)}</span>
-      <button type="button" class="select-device-btn bg-blue-500 text-white px-2 py-1 rounded-md hover:bg-blue-600">Select</button>
-    `;
-
-    // Attach event listener to the Select button
-    listItem.querySelector('.select-device-btn').addEventListener('click', () => {
-      selectDevice(device);
-      closeDeviceSelectionModal();
-    });
-
-    deviceList.appendChild(listItem);
-  });
-}
-
-// Function to handle device selection
-function selectDevice(device) {
-  if (!device || typeof device !== 'object') {
-    console.error('Invalid device selected:', device);
-    return;
-  }
-
-
-  const deviceInput = document.getElementById('device-input');
-  const serialKeyInput = document.getElementById('serial-key');
-
-  // Populate the device input and serial key fields
-  deviceInput.value = device.input.toUpperCase() || '';
-  serialKeyInput.value = device.serial || '';
-
-  // Update jsonData accordingly
-  jsonData.input = device.input || '';
-  jsonData.serial = device.serial || '';
-
-  // Handle unsaved changes and update JSON display
-  handleUnsavedChanges(true, 'Device selection has been updated. Please save your changes.');
-  updateJsonTextarea();
-}
-
-// Function to initialize the device input and serial key fields
-function initializeInputSelection() {
-  // Initialize the device input and serial key fields
-  const deviceInput = document.getElementById('device-input');
-  const serialKeyInput = document.getElementById('serial-key');
-
-  if (!deviceInput || !serialKeyInput) return;
-
-  // Initialize the input based on jsonData
-  if (jsonData.input) {
-    deviceInput.value = jsonData.input.toUpperCase();
-  }
-
-  if (jsonData.serial) {
-    serialKeyInput.value = jsonData.serial;
-  }
-
-  // Event listener for the device input field
-  deviceInput.addEventListener('change', (e) => {
-    const input = e.target.value.trim().toUpperCase();
-    jsonData.input = input;
-
-    handleUnsavedChanges(true, 'Device input has been modified. Please save your changes.');
-    updateJsonTextarea();
-  });
-
-  // Event listener for the serial key field
-  serialKeyInput.addEventListener('change', (e) => {
-    const serial = e.target.value.trim();
-    jsonData.serial = serial;
-
-    handleUnsavedChanges(true, 'Serial key has been modified. Please save your changes.');
-    updateJsonTextarea();
-  });
-}
 
 // Automatically populate channels on page load
 document.addEventListener('DOMContentLoaded', () => {
+
   if (jsonTextarea) {
     try {
       jsonData = JSON.parse(jsonTextarea.innerText);
@@ -797,17 +752,22 @@ document.addEventListener('DOMContentLoaded', () => {
     populateChannels('udp');
     populateChannels('tcp');
     initializeSharingChannel();
-    initializeInputSelection();
     updateJsonTextarea();
+
+
+    if (typeof formToJsonMap !== 'undefined' && typeof jsonData !== 'undefined') {
+      updateFormFromJson(jsonData, formToJsonMap);
+      addFormEventListeners(jsonData, formToJsonMap);
+
+    }
   }
 });
-
 
 // Check if the save button exists
 if (saveButton) {
   // Add event listener to the save button
   saveButton.addEventListener('click', function (e) {
-    e.preventDefault(); // Prevents default action, if any
+    e.preventDefault(); 
     saveData();
   });
 } else {

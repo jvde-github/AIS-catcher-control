@@ -1,0 +1,198 @@
+{{ define "server-setup" }}
+<div id="input-selection" class="p-6 bg-white rounded-lg shadow-md">
+    <h3 class="text-2xl font-semibold text-gray-800 mb-4">Server Configuration</h3>
+    <form id="server-form" class="space-y-6">
+
+        <!-- Active Toggle -->
+        <div class="flex items-center mb-6">
+            <label for="server-active" class="text-gray-700 font-medium">Active:</label>
+            <label class="ml-4 relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="server-active" name="active" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                        after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                        after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                </div>
+            </label>
+        </div>
+
+        <!-- Port -->
+        <div>
+            <label for="server-port" class="block text-gray-700 font-medium mb-2">Port:</label>
+            <input type="number" id="server-port" name="port" value="8100" min="1" max="65535"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md">
+        </div>
+
+        <!-- Station -->
+        <div>
+            <label for="server-station" class="block text-gray-700 font-medium mb-2">Station:</label>
+            <input type="text" id="server-station" name="station" value="My Station"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md">
+        </div>
+
+        <!-- Station Link -->
+        <div>
+            <label for="server-station-link" class="block text-gray-700 font-medium mb-2">Station Link:</label>
+            <input type="url" id="server-station-link" name="station_link" value="http://example.com/"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md">
+        </div>
+
+
+        <!-- Share Location Toggle -->
+        <div class="flex items-center mb-6">
+            <label for="server-share-loc" class="text-gray-700 font-medium">Show Location:</label>
+            <label class="ml-4 relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="server-share-loc" name="share_loc" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                </div>
+            </label>
+        </div>
+
+        <!-- Latitude, Longitude, and Share Location on One Line -->
+        <div class="flex flex-col md:flex-row md:space-x-4 items-center">
+            <!-- Latitude -->
+            <div class="flex-1 w-full">
+                <label for="server-lat" class="block text-gray-700 font-medium mb-2">Latitude:</label>
+                <input type="number" id="server-lat" name="lat" step="0.0001" value="0.0000"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md" min="-90" max="90">
+            </div>
+
+            <!-- Longitude -->
+            <div class="flex-1 w-full">
+                <label for="server-lon" class="block text-gray-700 font-medium mb-2">Longitude:</label>
+                <input type="number" id="server-lon" name="lon" step="0.0001" value="0.0000"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md" min="-180" max="180">
+            </div>
+
+        </div>
+
+
+        <!-- Plugin Directory -->
+        <div>
+            <label for="server-plugin-dir" class="block text-gray-700 font-medium mb-2">Plugin Directory:</label>
+            <input type="text" id="server-plugin-dir" name="plugin_dir" value="/path/to/plugins"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md">
+        </div>
+
+        <!-- CDN -->
+        <div>
+            <label for="server-cdn" class="block text-gray-700 font-medium mb-2">CDN URL:</label>
+            <input type="url" id="server-cdn" name="cdn" value="https://cdn.example.com/"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md">
+        </div>
+
+        <!-- File -->
+        <div>
+            <label for="server-file" class="block text-gray-700 font-medium mb-2">File:</label>
+            <input type="text" id="server-file" name="file" value="stat.bin"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md" required>
+        </div>
+
+        <!-- Backup -->
+        <div>
+            <label for="server-backup" class="block text-gray-700 font-medium mb-2">Backup:</label>
+            <input type="number" id="server-backup" name="backup" value="10" min="0"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md">
+        </div>
+
+        <!-- Realtime Toggle -->
+        <div class="flex items-center mb-6">
+            <label for="server-realtime" class="text-gray-700 font-medium">Realtime:</label>
+            <label class="ml-4 relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="server-realtime" name="realtime" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                </div>
+            </label>
+        </div>
+
+        <!-- Preamp Toggle -->
+        <div class="flex items-center mb-6">
+            <label for="preamp-toggle" class="text-gray-700 font-medium">Preamp:</label>
+            <label class="ml-4 relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="preamp-toggle" name="preamp" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                </div>
+            </label>
+        </div>
+
+        <!-- Prometheus Toggle -->
+        <div class="flex items-center mb-6">
+            <label for="server-prome" class="text-gray-700 font-medium">Prometheus:</label>
+            <label class="ml-4 relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="server-prome" name="prome" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                </div>
+            </label>
+        </div>
+
+        <!-- Context -->
+        <div>
+            <label for="server-context" class="block text-gray-700 font-medium mb-2">Context:</label>
+            <input type="text" id="server-context" name="context" value="settings"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md">
+        </div>
+    </form>
+
+    <hr class="my-6 border-gray-300">
+
+    <!-- Submit Button -->
+    <div class="flex justify-end">
+        <button id="save-button"
+            class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-200"
+            onclick="saveData()">Save</button>
+    </div>
+
+    <!-- Status Message -->
+    <div id="status-message" class="mt-2 mb-4 p-2 transition-opacity duration-300 opacity-0" role="alert"
+        aria-live="assertive"></div>
+
+    <!-- Collapsible JSON Content -->
+    <div class="mt-6">
+        <!-- Toggle Button -->
+        <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-800 focus:outline-none">
+            <!-- Chevron Icon -->
+            <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
+                xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+            <span class="ml-2 font-medium">Show JSON Content</span>
+        </button>
+
+        <!-- Collapsible Content -->
+        <div id="json-content-container" class="mt-2 hidden">
+            <pre id="json_content" name="json_content"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 overflow-auto focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                readonly>{{.JsonContent}}</pre>
+        </div>
+    </div>
+
+
+</div>
+
+<script>
+    const formToJsonMap = {
+        "server-file": "server.file",
+        "server-backup": "server.backup",
+        "server-realtime": "server.realtime",
+        "server-active": "server.active",
+        "preamp-toggle": "server.preamp",
+        "server-port": "server.port",
+        "server-station": "server.station",
+        "server-station-link": "server.station_link",
+        "server-share-loc": "server.share_loc",
+        "server-lat": "server.lat",
+        "server-lon": "server.lon",
+        "server-plugin-dir": "server.plugin_dir",
+        "server-cdn": "server.cdn",
+        "server-prome": "server.prome",
+        "server-context": "server.context"
+    };
+</script>
+{{ end }}

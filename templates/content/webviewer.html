@@ -1,0 +1,40 @@
+{{ define "webviewer" }}
+<div id="webviewer" class="p-0 bg-white shadow-md rounded-lg">
+    <!-- The iframe will be inserted here -->
+    <iframe id="modifiedFrame" src="" class="w-full h-[750px] border border-gray-300 rounded"
+        sandbox="allow-scripts allow-same-origin" title="Modified URL Viewer">
+        Your browser does not support iframes.
+    </iframe>
+</div>
+
+<script>
+    (function () {
+        // Get the current URL
+        var currentUrl = window.location.href;
+
+        try {
+            var url = new URL(currentUrl);
+            url.port = '8100';
+
+            url.pathname = '/';
+
+            url.search = '';
+            url.hash = '';
+
+            var newUrl = url.toString() + '?android=true';
+
+            var iframe = document.getElementById('modifiedFrame');
+            iframe.src = newUrl;
+
+            // Optional: Handle iframe load errors
+            iframe.onerror = function () {
+                document.getElementById('webviewer').innerHTML = '<p class="text-red-500">Failed to load the frame. Please check the URL and port.</p>';
+            };
+        } catch (e) {
+            // Handle invalid URLs or other errors
+            console.error('Invalid URL:', e);
+            document.getElementById('webviewer').innerHTML = '<p class="text-red-500">Error processing URL.</p>';
+        }
+    })();
+</script>
+{{ end }}

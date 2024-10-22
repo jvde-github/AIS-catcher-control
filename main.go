@@ -91,6 +91,8 @@ func init() {
 		"templates/content/input-selection.html",
 		"templates/content/device-setup.html",
 		"templates/content/integrity-error.html",
+		"templates/content/server-setup.html",
+		"templates/content/webviewer.html",
 	)
 
 	if err != nil {
@@ -772,6 +774,47 @@ func inputSelectionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func webviewerHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		log.Printf("Received GET request for /input")
+		renderTemplateWithConfig(w, "Webviewer", "webviewer")
+
+	} else if r.Method == http.MethodPost {
+		err := saveConfigJSON(w, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// Send success response
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Configuration saved successfully."))
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+}
+
+func serverSetupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		log.Printf("Received GET request for /webviewer")
+		renderTemplateWithConfig(w, "Webviewer Setup", "server-setup")
+
+	} else if r.Method == http.MethodPost {
+		err := saveConfigJSON(w, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// Send success response
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Configuration saved successfully."))
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+}
+
 func tcpChannelsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		log.Printf("Received GET request for /tcp")
@@ -857,7 +900,9 @@ func main() {
 	http.HandleFunc("/service", authMiddleware(serviceHandler))
 	http.HandleFunc("/logs-stream", authMiddleware(logsStreamHandler))
 	http.HandleFunc("/device", authMiddleware(deviceSetupHandler))
+	http.HandleFunc("/server", authMiddleware(serverSetupHandler))
 	http.HandleFunc("/input", authMiddleware(inputSelectionHandler))
+	http.HandleFunc("/webviewer", authMiddleware(webviewerHandler))
 	http.HandleFunc("/logout", authMiddleware(logoutHandler))
 	http.HandleFunc("/device-list", authMiddleware(deviceListHandler))
 
