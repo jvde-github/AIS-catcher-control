@@ -68,20 +68,8 @@
         <span class="ml-2 text-xl font-semibold">AIS-catcher</span>
       </div>
 
-      <!-- Logout Button for Desktop -->
-      <nav class="hidden md:flex space-x-6 items-center">
-        <a href="/logout" class="hover:underline flex items-center">
-          <!-- Logout Icon (Adjusted for White Color) -->
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px"
-            fill="currentColor" class="h-5 w-5 mr-2 fill-current">
-            <path
-              d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h280v80H200Zm440-160-55-58 102-102H360v-80h327L624-624l56-56 200 200-200 200Z" />
-          </svg>
-        </a>
-      </nav>
-
       <!-- Mobile Menu Button -->
-      <div class="md:hidden">
+      <div class="">
         <button class="text-white focus:outline-none" aria-label="Toggle Menu" id="mobile-menu-button">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 fill-current" fill="none" viewBox="0 0 24 24"
             stroke="currentColor">
@@ -92,7 +80,7 @@
     </div>
 
     <!-- Mobile Navigation Menu (Hidden by Default) -->
-    <nav class="md:hidden hidden" id="mobile-menu">
+    <nav class="hidden" id="mobile-menu">
       <ul class="px-4 pt-2 pb-4 space-y-1">
         <!-- Control Link -->
         <li>
@@ -262,16 +250,6 @@
         const chevron = document.getElementById('mobile-output-chevron');
         if (chevron.classList.contains('rotate-180')) {
           chevron.classList.remove('rotate-180');
-        }
-      });
-    });
-
-    // Add confirmation to Logout
-    document.querySelectorAll('#mobile-menu a[href="/logout"], nav.md\\:flex a[href="/logout"]').forEach(link => {
-      link.addEventListener('click', (e) => {
-        const confirmLogout = confirm('Are you sure you want to logout?');
-        if (!confirmLogout) {
-          e.preventDefault();
         }
       });
     });
