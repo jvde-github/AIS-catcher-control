@@ -10,13 +10,13 @@
   <link rel="stylesheet" href="/static/css/styles.css?v={{ .CssVersion }}">
 </head>
 
-<body class="bg-gray-100">
+<body class="bg-gray-100 flex flex-col min-h-screen">
 
   <!-- Include Header -->
   {{ template "header.html" . }}
 
   <!-- Main Container -->
-  <div class="min-h-screen flex items-start justify-center p-4">
+  <div class="flex-grow flex items-start justify-center p-4">
     <div class="bg-white shadow-lg rounded-lg w-full max-w-5xl">
       <!-- Flex Container: Navigation and Main Content -->
       <div class="flex flex-col md:flex-row">
