@@ -1,0 +1,4 @@
+#!/bin/bash
+
+/etc/AIS-catcher/scripts/stop
+/etc/AIS-catcher/scripts/start

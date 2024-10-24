@@ -66,6 +66,7 @@ type Control struct {
 	Logs            []string `json:"logs"`         // journalctl logs
 	LogTxtLogs      []string `json:"log_txt_logs"` // log.txt logs
 	ServiceEnabled  bool     `json:"service_enabled"`
+	Docker		  	bool     `json:"docker"`
 	ContentTemplate string   `json:"content_template"`
 }
 
@@ -123,11 +124,13 @@ var sessions = map[string]string{}
 
 // Configuration struct
 type Config struct {
-	PasswordHash   string `json:"password_hash"`
-	Port           string `json:"port"`
-	ConfigCmdHash  int    `json:"config_cmd_hash"`
-	ConfigJSONHash int    `json:"config_json_hash"`
+    PasswordHash   string `json:"password_hash"`
+    Port           string `json:"port"`
+    ConfigCmdHash  int    `json:"config_cmd_hash"`
+    ConfigJSONHash int    `json:"config_json_hash"`
+    Docker         bool   `json:"docker"` 
 }
+
 
 var config Config
 var execDir string
@@ -146,25 +149,6 @@ func initPaths() error {
 	return nil
 }
 
-func getServiceStartTime() (time.Time, error) {
-	cmd := exec.Command("systemctl", "show", "ais-catcher.service", "--property=ActiveEnterTimestamp")
-	output, err := cmd.Output()
-	if err != nil {
-		return time.Time{}, err
-	}
-	line := strings.TrimSpace(string(output))
-	parts := strings.SplitN(line, "=", 2)
-	if len(parts) != 2 {
-		return time.Time{}, fmt.Errorf("Unexpected output from systemctl")
-	}
-	timestamp := parts[1]
-	t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", timestamp)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return t, nil
-}
-
 func hashPassword(password string) string {
 	h := sha256.New()
 	h.Write([]byte(password))
@@ -172,33 +156,35 @@ func hashPassword(password string) string {
 }
 
 func loadControlSettings() error {
-	data, err := ioutil.ReadFile(settingsFilePath)
-	if os.IsNotExist(err) {
-		config = Config{
-			PasswordHash:   hashPassword(defaultPassword),
-			Port:           "8110",
-			ConfigCmdHash:  1,
-			ConfigJSONHash: 1,
-		}
-		return saveControlSettings()
-	} else if err != nil {
-		return err
-	} else {
-		err = json.Unmarshal(data, &config)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+    data, err := ioutil.ReadFile(settingsFilePath)
+    if os.IsNotExist(err) {
+        config = Config{
+            PasswordHash:   hashPassword(defaultPassword),
+            Port:           "8110",
+            ConfigCmdHash:  1,
+            ConfigJSONHash: 1,
+            Docker:         false, 
+        }
+        return saveControlSettings()
+    } else if err != nil {
+        return err
+    } else {
+        err = json.Unmarshal(data, &config)
+        if err != nil {
+            return err
+        }
+    }
+    return nil
 }
 
 func saveControlSettings() error {
-	data, err := json.MarshalIndent(config, "", "    ")
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(settingsFilePath, data, 0644)
+    data, err := json.MarshalIndent(config, "", "    ")
+    if err != nil {
+        return err
+    }
+    return ioutil.WriteFile(settingsFilePath, data, 0644)
 }
+
 
 func calculate32BitHash(input string) uint32 {
 	h := fnv.New32a()
@@ -365,82 +351,118 @@ func deviceListHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func controlHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
+    if r.Method != http.MethodGet {
+        http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+        return
+    }
 
-	// Gather necessary data
-	status := getServiceStatus()
-	uptime := getServiceUptime()
-	journalctlLogs := getServiceLogs(50) // Adjust the number of logs as needed
-	logTxtLogs := getLogTxtLogs(10)
-	enabled, err := getServiceEnabled()
-	if err != nil {
-		enabled = false // Default to false if there's an error
-		log.Println("Error fetching service enabled status:", err)
-	}
+    // Gather necessary data
+    status := getServiceStatus() // This function now supports Docker mode
+    uptime := getServiceUptime() // This function now supports Docker mode
+    journalctlLogs := getServiceLogs(50) // Adjust the number of logs as needed
+    logTxtLogs := getLogTxtLogs(10)
+    enabled, err := getServiceEnabled()
+    if err != nil {
+        enabled = false // Default to false if there's an error
+        log.Println("Error fetching service enabled status:", err)
+    }
 
-	controlData := Control{
-		CssVersion:      cssVersion,
-		JsVersion:       jsVersion,
-		Title:           "Control Dashboard",
-		Status:          status,
-		Uptime:          uptime,
-		Logs:            journalctlLogs,
-		LogTxtLogs:      logTxtLogs,
-		ServiceEnabled:  enabled,
-		ContentTemplate: "control",
-	}
+    controlData := Control{
+        CssVersion:      cssVersion,
+        JsVersion:       jsVersion,
+        Title:           "Control Dashboard",
+        Status:          status,
+        Uptime:          uptime,
+        Logs:            journalctlLogs,
+        LogTxtLogs:      logTxtLogs,
+        ServiceEnabled:  enabled,
+		Docker:   		 config.Docker,
+        ContentTemplate: "control",
+    }
 
-	err = templates.ExecuteTemplate(w, "layout.html", controlData)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		log.Printf("Template execution error: %v", err)
-	}
+    // Render the template with the control data
+    err = templates.ExecuteTemplate(w, "layout.html", controlData)
+    if err != nil {
+        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        log.Printf("Template execution error: %v", err)
+    }
 }
+
 
 // Function to get the service status
 func getServiceStatus() string {
-	cmd := exec.Command("systemctl", "is-active", "ais-catcher.service")
-	output, err := cmd.Output()
+    if config.Docker {
 
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if exitErr.ExitCode() == 3 {
-				return "inactive (stopped)"
-			}
+		cmd := exec.Command("/app/status")
+		output, err := cmd.Output()
+		fmt.Println("Output:", string(output))
+		fmt.Println("Error:", err)
+		
+		exitCode := cmd.ProcessState.ExitCode()
+		fmt.Println("Exit Code:", exitCode)
+		
+		if exitCode == 3 {
+			return "inactive (stopped)"
+		} else if exitCode == 0 {
+			return "active (running)"
+		} else {
+			return "unknown"
 		}
-		return "unknown"
-	}
+		return strings.TrimSpace(string(output))
+    }
 
-	status := strings.TrimSpace(string(output))
-	if status == "active" {
-		return "active (running)"
-	}
-	return status
+    // Fallback to systemctl if not in Docker mode
+    cmd := exec.Command("systemctl", "is-active", "ais-catcher.service")
+    output, err := cmd.Output()
+    if err != nil {
+        if exitErr, ok := err.(*exec.ExitError); ok {
+            if exitErr.ExitCode() == 3 {
+                return "inactive (stopped)"
+            }
+        }
+        return "unknown"
+    }
+
+    status := strings.TrimSpace(string(output))
+    if status == "active" {
+        return "active (running)"
+    }
+    return status
 }
+
 
 // Function to get the service uptime
 func getServiceUptime() string {
-	cmd := exec.Command("systemctl", "show", "ais-catcher.service", "--property=ActiveEnterTimestamp")
-	output, err := cmd.Output()
-	if err != nil {
-		return "Unknown"
-	}
-	line := strings.TrimSpace(string(output))
-	parts := strings.SplitN(line, "=", 2)
-	if len(parts) != 2 {
-		return "Unknown"
-	}
-	timestamp := parts[1]
-	t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", timestamp)
-	if err != nil {
-		return "Unknown"
-	}
-	duration := time.Since(t)
-	return fmt.Sprintf("%s (since %s)", formatDuration(duration), t.Format("Jan 2, 2006 15:04:05"))
+    if config.Docker {
+        // Use the custom script for uptime
+        cmd := exec.Command("/app/uptime")
+        output, err := cmd.Output()
+        if err != nil {
+            return "Unknown"
+        }
+        return strings.TrimSpace(string(output))
+    }
+
+    // Fallback to systemctl if not in Docker mode
+    cmd := exec.Command("systemctl", "show", "ais-catcher.service", "--property=ActiveEnterTimestamp")
+    output, err := cmd.Output()
+    if err != nil {
+        return "Unknown"
+    }
+    line := strings.TrimSpace(string(output))
+    parts := strings.SplitN(line, "=", 2)
+    if len(parts) != 2 {
+        return "Unknown"
+    }
+    timestamp := parts[1]
+    t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", timestamp)
+    if err != nil {
+        return "Unknown"
+    }
+    duration := time.Since(t)
+    return fmt.Sprintf("%s (since %s)", formatDuration(duration), t.Format("Jan 2, 2006 15:04:05"))
 }
+
 
 // Helper function to format duration
 func formatDuration(d time.Duration) string {
@@ -513,9 +535,19 @@ func getLogTxtLogs(lines int) []string {
 }
 
 func controlService(action string) error {
-	cmd := exec.Command("systemctl", action, "ais-catcher.service")
-	return cmd.Run()
+    if config.Docker {
+        // Use custom scripts for control if in Docker mode
+        script := fmt.Sprintf("/app/%s", action)
+		fmt.Println("Running script:", script)
+        cmd := exec.Command(script)
+        return cmd.Run()
+    }
+
+    // Fallback to systemctl if not in Docker mode
+    cmd := exec.Command("systemctl", action, "ais-catcher.service")
+    return cmd.Run()
 }
+
 
 func getServiceEnabled() (bool, error) {
 	cmd := exec.Command("systemctl", "is-enabled", "ais-catcher.service")
@@ -1059,6 +1091,11 @@ func main() {
 	err = loadControlSettings()
 	if err != nil {
 		log.Fatal("Failed to load configuration:", err)
+	}
+
+	// message if running in Docker mode
+	if config.Docker {
+		log.Println("Running in Docker mode")
 	}
 
 	staticFSys, err := fs.Sub(staticFS, "static")

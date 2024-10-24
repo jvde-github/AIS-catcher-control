@@ -122,6 +122,7 @@
     </div>
 
     <!-- Service Configuration Section -->
+    {{ if not .Docker }}
     <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
             <div class="mb-4 md:mb-0">
@@ -151,6 +152,7 @@
             </div>
         </div>
     </div>
+    {{ end }}
 
     <!-- Recent Logs Section -->
     <div class="mb-8 p-4">
