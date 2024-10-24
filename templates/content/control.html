@@ -1,105 +1,181 @@
 {{ define "control" }}
-<div id="control-dashboard">
+<div id="input-selection" class="p-6 bg-white rounded-lg shadow-md">
+    <!-- Styles for Log Lines and Spinner -->
+    <style>
+        .log-line {
+            white-space: pre-wrap;
+            /* Preserve whitespace and wrap text */
+            padding: 2px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
 
-    <!-- Service Status and Actions Section -->
-    <div class="mb-8">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-start">
-            <!-- Service Status with Actions -->
-            <div class="w-full md:w-2/3">
-                <h2 class="text-xl font-semibold mb-6 text-gray-800">Service Status</h2>
-                
-                <!-- Status Section -->
-                <div class="mb-6">
-                    <div class="mb-2">
-                        <span class="block text-sm font-medium text-gray-700">Status</span>
-                        {{if eq .Status "active (running)"}}
-                        <span
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-                            Active (Running)
-                        </span>
-                        {{else if eq .Status "inactive (stopped)"}}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
-                            Inactive (Stopped)
-                        </span>
-                        {{else if eq .Status "failed"}}
-                        <span
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
-                            Failed
-                        </span>
-                        {{else}}
-                        <span
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">
-                            {{.Status}}
-                        </span>
-                        {{end}}
-                    </div>
-                    
-                    <!-- Action Buttons for Status -->
-                    <div>
-                        <span class="block text-sm font-medium text-gray-700 mb-1">Action</span>
-                        <div class="flex flex-wrap gap-2">
-                            <a href="/service?action=start"
-                                class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-200 action-button text-sm">Start</a>
-                            <a href="/service?action=stop"
-                                class="bg-red-500 hover:bg-red-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-200 action-button text-sm">Stop</a>
-                            <a href="/service?action=restart"
-                                class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-200 action-button text-sm">Restart</a>
-                        </div>
-                    </div>
-                </div>
+        /* Style error logs in red */
+        .log-line.error {
+            color: #FF4C4C;
+            /* Bright Red for errors */
+            background-color: rgba(255, 76, 76, 0.1);
+            border-left: 4px solid #FF4C4C;
+            padding-left: 8px;
+        }
 
-                <!-- Uptime Section -->
-                <div class="mb-6">
-                    <span class="block text-sm font-medium text-gray-700 mb-1">Uptime</span>
-                    <span class="text-gray-800">{{.Uptime}}</span>
-                </div>
+        /* Style warning logs in orange */
+        .log-line.warning {
+            color: #FFA500;
+            /* Orange for warnings */
+            background-color: rgba(255, 165, 0, 0.1);
+            border-left: 4px solid #FFA500;
+            padding-left: 8px;
+        }
 
-                <!-- Enabled Section -->
-                <div>
-                    <div class="mb-2">
-                        <span class="block text-sm font-medium text-gray-700">Enabled</span>
-                        {{if .ServiceEnabled}}
-                        <span
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-                            Yes
-                        </span>
-                        {{else}}
-                        <span
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
-                            No
-                        </span>
-                        {{end}}
-                    </div>
-                    
-                    <!-- Action Buttons for Enabled -->
-                    <div>
-                        <span class="block text-sm font-medium text-gray-700 mb-1">Action</span>
-                        <div class="flex flex-wrap gap-2">
-                            {{if .ServiceEnabled}}
-                            <a href="/service?action=disable"
-                                class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-200 action-button text-sm">Disable</a>
-                            {{else}}
-                            <a href="/service?action=enable"
-                                class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-1 px-3 rounded-lg transition duration-200 action-button text-sm">Enable</a>
-                            {{end}}
-                        </div>
-                    </div>
+        /* Style info logs in blue */
+        .log-line.info {
+            color: #1E90FF;
+            /* Dodger Blue for info */
+            background-color: rgba(30, 144, 255, 0.1);
+            border-left: 4px solid #1E90FF;
+            padding-left: 8px;
+        }
+
+        /* Spinner Styles */
+        .spinner {
+            border: 6px solid rgba(0, 0, 0, 0.1);
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border-left-color: #09f;
+            animation: spin 1s linear infinite;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .hidden-spinner {
+            display: none;
+        }
+
+        #output-container,
+        #journalctl-container {
+            scroll-behavior: smooth;
+        }
+    </style>
+
+    <!-- Status and Control Section -->
+    <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+            <div class="mb-4 md:mb-0">
+                <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Status</h2>
+                <div class="flex items-center">
+                    <span class="text-gray-700 mr-2">Status:</span>
+                    {{if eq .Status "active (running)"}}
+                    <span
+                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        Active (Running)
+                    </span>
+                    {{else if eq .Status "inactive (stopped)"}}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                        Inactive (Stopped)
+                    </span>
+                    {{else if eq .Status "failed"}}
+                    <span
+                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                        Failed
+                    </span>
+                    {{else}}
+                    <span
+                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                        {{.Status}}
+                    </span>
+                    {{end}}
                 </div>
             </div>
+            <div class="flex flex-wrap gap-2">
+                {{if ne .Status "active (running)"}}
+                <a href="/service?action=start"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Start</a>
+                {{end}}
+                {{if eq .Status "active (running)"}}
+                <a href="/service?action=stop"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Stop</a>
+                <a href="/service?action=restart"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Restart</a>
+                {{end}}
+            </div>
         </div>
-        <!-- Spinner for Service Actions -->
-        <div id="action-spinner" class="spinner mt-4"></div>
+    </div>
+
+    <!-- Uptime Section -->
+    <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
+        <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Uptime</h2>
+        <div class="flex items-center">
+            <span class="text-gray-700 mr-2">Running for:</span>
+            <span class="text-gray-800 font-medium">{{.Uptime}}</span>
+        </div>
+    </div>
+
+    <!-- Service Configuration Section -->
+    <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+            <div class="mb-4 md:mb-0">
+                <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Configuration</h2>
+                <div class="flex items-center">
+                    <span class="text-gray-700 mr-2">Enabled:</span>
+                    {{if .ServiceEnabled}}
+                    <span
+                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        Yes
+                    </span>
+                    {{else}}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                        No
+                    </span>
+                    {{end}}
+                </div>
+            </div>
+            <div class="flex gap-2">
+                {{if not .ServiceEnabled}}
+                <a href="/service?action=enable"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Enable</a>
+                {{else}}
+                <a href="/service?action=disable"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Disable</a>
+                {{end}}
+            </div>
+        </div>
     </div>
 
     <!-- Recent Logs Section -->
-    <div class="mb-8">
-        <h2 class="text-xl font-semibold mb-4 text-gray-800">Recent Logs</h2>
-        <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-64 overflow-y-auto">
-            <div id="logs">
+    <div class="mb-8 p-4">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">Messages</h2>
+
+        <!-- Output Logs (log.txt) -->
+        <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-80 w-full overflow-y-auto mb-4" id="output-container">
+            <div id="output-logs" class="text-sm leading-relaxed">
+                {{if .LogTxtLogs}}
+                {{range .LogTxtLogs}}<div class="log-line">{{.}}</div>
+                {{end}}
+                {{else}}
+                <p class="text-gray-400">No logs available.</p>
+                {{end}}
+            </div>
+        </div>
+
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">System Log</h2>
+
+        <!-- Journalctl Logs -->
+        <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-64 w-full overflow-y-auto" id="journalctl-container">
+            <div id="journalctl-logs" class="text-sm leading-relaxed">
                 {{if .Logs}}
-                <pre class="text-sm leading-relaxed">
-{{range .Logs}}{{.}}
-{{end}}</pre>
+                {{range .Logs}}<div class="log-line">{{.}}</div>
+                {{end}}
                 {{else}}
                 <p class="text-gray-400">No logs available.</p>
                 {{end}}
@@ -107,12 +183,74 @@
         </div>
     </div>
 
+    <!-- Action Spinner -->
+    <div id="action-spinner" class="spinner hidden-spinner"></div>
 
-    <!-- JavaScript for Spinner and SSE -->
+    <!-- Scripts -->
     <script>
-
         document.addEventListener('DOMContentLoaded', function () {
-            // Action Buttons and Spinner
+            let eventSource = null;
+
+            function initializeSSE() {
+                if (eventSource) {
+                    eventSource.close();
+                }
+
+                const outputLogsDiv = document.getElementById('output-logs');
+                const journalctlLogsDiv = document.getElementById('journalctl-logs');
+                const outputContainer = document.getElementById('output-container');
+                const journalctlContainer = document.getElementById('journalctl-container');
+                const actionSpinner = document.getElementById('action-spinner');
+                eventSource = new EventSource('/logs-stream');
+
+                eventSource.onmessage = function (event) {
+                    try {
+                        const logMsg = JSON.parse(event.data);
+                        const source = logMsg.source;
+                        const message = logMsg.message;
+
+                        const newLog = document.createElement('div');
+                        newLog.classList.add('log-line');
+
+                        // Determine log level based on prefix in message
+                        if (message.startsWith('[ERROR]')) {
+                            newLog.classList.add('error');
+                            newLog.textContent = message.substring(7).trim(); // Remove the prefix
+                        } else if (message.startsWith('[WARNING]')) {
+                            newLog.classList.add('warning');
+                            newLog.textContent = message.substring(9).trim(); // Remove the prefix
+                        } else if (message.startsWith('[INFO]')) {
+                            newLog.classList.add('info');
+                            newLog.textContent = message.substring(6).trim(); // Remove the prefix
+                        } else {
+                            // Default styling for unrecognized log levels
+                            newLog.textContent = message;
+                        }
+
+                        // Append to the correct container based on source
+                        if (source === "journalctl") {
+                            journalctlLogsDiv.appendChild(newLog);
+                            // Always scroll to the bottom
+                            journalctlContainer.scrollTop = journalctlContainer.scrollHeight;
+                        } else if (source === "log.txt") {
+                            outputLogsDiv.appendChild(newLog);
+                            // Always scroll to the bottom
+                            outputContainer.scrollTop = outputContainer.scrollHeight;
+                        }
+                    } catch (e) {
+                        console.error('Error processing log message:', e);
+                    }
+                };
+
+                eventSource.onerror = function () {
+                    console.error('Error with SSE connection');
+                    eventSource.close();
+                    setTimeout(initializeSSE, 5000);
+                };
+            }
+
+            initializeSSE();
+
             const actionButtons = document.querySelectorAll('.action-button');
             const actionSpinner = document.getElementById('action-spinner');
 
@@ -120,38 +258,60 @@
                 button.addEventListener('click', function (e) {
                     e.preventDefault();
                     const href = this.getAttribute('href');
-                    actionSpinner.style.display = 'inline-block';
+                    actionSpinner.classList.remove('hidden-spinner');
 
                     fetch(href)
                         .then(response => {
-                            actionSpinner.style.display = 'none';
+                            actionSpinner.classList.add('hidden-spinner');
                             if (response.redirected) {
                                 window.location.href = response.url;
                             }
                         })
                         .catch(error => {
-                            actionSpinner.style.display = 'none';
+                            actionSpinner.classList.add('hidden-spinner');
                             alert('An error occurred: ' + error);
                         });
                 });
             });
 
-            // SSE for real-time logs
-            const logsDiv = document.getElementById('logs');
-            const eventSource = new EventSource('/logs-stream');
+            window.addEventListener('beforeunload', function () {
+                if (eventSource) {
+                    eventSource.close();
+                }
+            });
 
-            eventSource.onmessage = function (event) {
-                const newLog = document.createElement('div');
-                newLog.textContent = event.data;
-                logsDiv.appendChild(newLog);
-                logsDiv.scrollTop = logsDiv.scrollHeight;
-            };
+            document.addEventListener('visibilitychange', function () {
+                if (document.hidden) {
+                    if (eventSource) {
+                        eventSource.close();
+                    }
+                } else {
+                    initializeSSE();
+                }
+            });
 
-            eventSource.onerror = function () {
-                console.error('Error with SSE');
-                eventSource.close();
-            };
+            // Scroll to bottom on initial load
+            const outputContainerInitial = document.getElementById('output-container');
+            const journalctlContainerInitial = document.getElementById('journalctl-container');
+            outputContainerInitial.scrollTop = outputContainerInitial.scrollHeight;
+            journalctlContainerInitial.scrollTop = journalctlContainerInitial.scrollHeight;
+
+            const logLines = document.querySelectorAll('#output-logs .log-line');
+            logLines.forEach(function (line) {
+                if (line.textContent.startsWith('[ERROR]')) {
+                    line.classList.add('error');
+                    line.textContent = line.textContent.substring(7).trim(); // Remove prefix
+                } else if (line.textContent.startsWith('[WARNING]')) {
+                    line.classList.add('warning');
+                    line.textContent = line.textContent.substring(9).trim(); // Remove prefix
+                } else if (line.textContent.startsWith('[INFO]')) {
+                    line.classList.add('info');
+                    line.textContent = line.textContent.substring(6).trim(); // Remove prefix
+                }
+                // You can add more conditions if there are other log levels
+            });
         });
     </script>
+
 </div>
 {{ end }}

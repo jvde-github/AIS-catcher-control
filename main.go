@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"embed"
@@ -19,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
@@ -38,6 +40,7 @@ const (
 	configJSONFilePath = "/etc/AIS-catcher/config.json"
 	configCmdFilePath  = "/etc/AIS-catcher/config.cmd"
 	settingsFilePath   = "/etc/AIS-catcher/control.json"
+	logTxtFilePath     = "/etc/AIS-catcher/log.txt"
 )
 
 var (
@@ -48,6 +51,23 @@ var (
 var configIntegrityError = false
 
 var templates *template.Template
+
+type LogMessage struct {
+	Source  string `json:"source"`
+	Message string `json:"message"`
+}
+
+type Control struct {
+	CssVersion      string   `json:"css_version"`
+	JsVersion       string   `json:"js_version"`
+	Title           string   `json:"title"`
+	Status          string   `json:"status"`
+	Uptime          string   `json:"uptime"`
+	Logs            []string `json:"logs"`         // journalctl logs
+	LogTxtLogs      []string `json:"log_txt_logs"` // log.txt logs
+	ServiceEnabled  bool     `json:"service_enabled"`
+	ContentTemplate string   `json:"content_template"`
+}
 
 func Seq(start, end int) []int {
 	if end < start {
@@ -94,7 +114,6 @@ func init() {
 		"templates/content/server-setup.html",
 		"templates/content/webviewer.html",
 	)
-
 	if err != nil {
 		log.Fatalf("Failed to parse templates: %v", err)
 	}
@@ -285,7 +304,7 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 			"JsVersion":       jsVersion,
 			"Title":           "Change Password",
 			"ContentTemplate": "change-password",
-			"message":         "Password do not match",
+			"message":         "Passwords do not match",
 		}
 
 		templates.ExecuteTemplate(w, "layout.html", data)
@@ -354,25 +373,27 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 	// Gather necessary data
 	status := getServiceStatus()
 	uptime := getServiceUptime()
-	logs := getServiceLogs(50) // Adjust the number of logs as needed
+	journalctlLogs := getServiceLogs(50) // Adjust the number of logs as needed
+	logTxtLogs := getLogTxtLogs(10)
 	enabled, err := getServiceEnabled()
 	if err != nil {
 		enabled = false // Default to false if there's an error
 		log.Println("Error fetching service enabled status:", err)
 	}
 
-	data := map[string]interface{}{
-		"CssVersion":      cssVersion,
-		"JsVersion":       jsVersion,
-		"Title":           "Control Dashboard",
-		"Status":          status,
-		"Uptime":          uptime,
-		"Logs":            logs,
-		"ServiceEnabled":  enabled,
-		"ContentTemplate": "control",
+	controlData := Control{
+		CssVersion:      cssVersion,
+		JsVersion:       jsVersion,
+		Title:           "Control Dashboard",
+		Status:          status,
+		Uptime:          uptime,
+		Logs:            journalctlLogs,
+		LogTxtLogs:      logTxtLogs,
+		ServiceEnabled:  enabled,
+		ContentTemplate: "control",
 	}
 
-	err = templates.ExecuteTemplate(w, "layout.html", data)
+	err = templates.ExecuteTemplate(w, "layout.html", controlData)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Printf("Template execution error: %v", err)
@@ -447,7 +468,7 @@ func formatDuration(d time.Duration) string {
 	return strings.Join(parts, " ")
 }
 
-// Function to get recent service logs
+// Function to get recent service logs from journalctl
 func getServiceLogs(lines int) []string {
 	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", fmt.Sprintf("%d", lines), "--no-pager", "--output=short-iso")
 	output, err := cmd.Output()
@@ -457,6 +478,37 @@ func getServiceLogs(lines int) []string {
 	}
 
 	logLines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	return logLines
+}
+
+func getLogTxtLogs(lines int) []string {
+	// Prepare the tail command with the desired number of lines
+	cmd := exec.Command("tail", "-n", fmt.Sprintf("%d", lines), logTxtFilePath)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		if strings.Contains(stderr.String(), "No such file or directory") {
+			return []string{""}
+		}
+		log.Printf("Error executing tail command: %v, %s", err, stderr.String())
+		return []string{"Error reading %s.", logTxtFilePath}
+	}
+
+	// Get the command output as a string
+	output := stdout.String()
+
+	// Handle the case where the file is empty
+	if strings.TrimSpace(output) == "" {
+		return []string{"%s is empty.", logTxtFilePath}
+	}
+
+	// Split the output into individual lines
+	logLines := strings.Split(strings.TrimSpace(output), "\n")
 	return logLines
 }
 
@@ -509,56 +561,6 @@ func sanitizeFileContent(content string) string {
 	// Implement any necessary sanitization here
 	// For example, remove unwanted characters or validate JSON if editing config.json
 	return content
-}
-
-func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	// Create a context with cancellation
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Ensure the journalctl process is terminated when the context is canceled
-	cmd := exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher.service", "-f", "--no-pager", "--output=short-iso")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		http.Error(w, "Failed to get stdout", http.StatusInternalServerError)
-		return
-	}
-
-	if err := cmd.Start(); err != nil {
-		http.Error(w, "Failed to start journalctl", http.StatusInternalServerError)
-		return
-	}
-
-	defer cmd.Wait()
-
-	// Handle client disconnection
-	notify := w.(http.CloseNotifier).CloseNotify()
-	go func() {
-		<-notify
-		cancel()
-	}()
-
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		sanitizedLine := sanitizeLogLine(line)
-		fmt.Fprintf(w, "data: %s\n\n", sanitizedLine)
-		flusher.Flush()
-	}
-
-	if err := scanner.Err(); err != nil && err != io.EOF {
-		log.Println("Error reading logs:", err)
-	}
 }
 
 func sanitizeLogLine(line string) string {
@@ -658,6 +660,196 @@ func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func sendSSE(w http.ResponseWriter, msg LogMessage) {
+	jsonData, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("Error marshaling log message: %v", err)
+		return
+	}
+	fmt.Fprintf(w, "data: %s\n\n", jsonData)
+}
+
+func sendHeartbeat(w http.ResponseWriter, flusher http.Flusher, ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
+		}
+	}
+}
+
+// Broadcaster manages log collection and client subscriptions
+type Broadcaster struct {
+	journalChan chan string
+	logtxtChan  chan string
+	clients     map[chan LogMessage]bool
+	mu          sync.Mutex
+}
+
+func NewBroadcaster() *Broadcaster {
+	return &Broadcaster{
+		journalChan: make(chan string, 100),
+		logtxtChan:  make(chan string, 100),
+		clients:     make(map[chan LogMessage]bool),
+	}
+}
+
+func (b *Broadcaster) Run() {
+	go b.collectJournalctlLogs()
+	go b.collectLogTxtLogs()
+
+	for {
+		select {
+		case journalLine := <-b.journalChan:
+			msg := LogMessage{
+				Source:  "journalctl",
+				Message: sanitizeLogLine(journalLine),
+			}
+			b.broadcast(msg)
+		case logtxtLine := <-b.logtxtChan:
+			msg := LogMessage{
+				Source:  "log.txt",
+				Message: sanitizeLogLine(logtxtLine),
+			}
+			b.broadcast(msg)
+		}
+	}
+}
+
+func (b *Broadcaster) collectJournalctlLogs() {
+	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", "0", "-f", "--no-pager", "--output=short-iso")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Printf("Error obtaining stdout pipe for journalctl: %v", err)
+		return
+	}
+
+	if err := cmd.Start(); err != nil {
+		log.Printf("Error starting journalctl command: %v", err)
+		return
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		b.journalChan <- line
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Printf("Error reading journalctl output: %v", err)
+	}
+}
+
+func (b *Broadcaster) collectLogTxtLogs() {
+	cmd := exec.Command("tail", "-F", logTxtFilePath)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Printf("Error obtaining stdout pipe for tail: %v", err)
+		return
+	}
+
+	if err := cmd.Start(); err != nil {
+		log.Printf("Error starting tail command: %v", err)
+		return
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		b.logtxtChan <- line
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Printf("Error reading tail output: %v", err)
+	}
+}
+
+func (b *Broadcaster) broadcast(msg LogMessage) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for clientChan := range b.clients {
+		select {
+		case clientChan <- msg:
+		default:
+			// If the client's channel is full, remove the client
+			close(clientChan)
+			delete(b.clients, clientChan)
+		}
+	}
+}
+
+func (b *Broadcaster) Subscribe() chan LogMessage {
+	clientChan := make(chan LogMessage, 100)
+	b.mu.Lock()
+	b.clients[clientChan] = true
+	b.mu.Unlock()
+	return clientChan
+}
+
+func (b *Broadcaster) Unsubscribe(clientChan chan LogMessage) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if _, exists := b.clients[clientChan]; exists {
+		close(clientChan)
+		delete(b.clients, clientChan)
+	}
+}
+
+func logsStreamHandler(w http.ResponseWriter, r *http.Request, broadcaster *Broadcaster) {
+	// Set headers for SSE
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	ctx := r.Context()
+
+	// Subscribe to the broadcaster
+	clientChan := broadcaster.Subscribe()
+	defer broadcaster.Unsubscribe(clientChan)
+
+	// Start sending heartbeats
+	go sendHeartbeat(w, flusher, ctx)
+
+	// Listen for log messages and send them to the client
+	for {
+		select {
+		case <-ctx.Done():
+			// Client disconnected
+			return
+		case msg, ok := <-clientChan:
+			if !ok {
+				return
+			}
+			jsonData, err := json.Marshal(msg)
+			if err != nil {
+				log.Printf("Error marshaling log message: %v", err)
+				continue
+			}
+			fmt.Fprintf(w, "data: %s\n\n", jsonData)
+			flusher.Flush()
+		}
+	}
+}
+
+func checkTailCommand() error {
+	_, err := exec.LookPath("tail")
+	if err != nil {
+		return fmt.Errorf("tail command not found in PATH")
+	}
+	return nil
+}
+
 func udpChannelsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		log.Printf("Received GET request for /udp")
@@ -680,7 +872,7 @@ func udpChannelsHandler(w http.ResponseWriter, r *http.Request) {
 
 func deviceSetupHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /udp")
+		log.Printf("Received GET request for /device")
 		renderTemplateWithConfig(w, "Device Configuration", "device-setup")
 	} else if r.Method == http.MethodPost {
 		// Handle POST request to save JSON data
@@ -777,7 +969,7 @@ func inputSelectionHandler(w http.ResponseWriter, r *http.Request) {
 
 func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /input")
+		log.Printf("Received GET request for /webviewer")
 		renderTemplateWithConfig(w, "Webviewer", "webviewer")
 
 	} else if r.Method == http.MethodPost {
@@ -797,7 +989,7 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 
 func serverSetupHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /webviewer")
+		log.Printf("Received GET request for /server")
 		renderTemplateWithConfig(w, "Webviewer Setup", "server-setup")
 
 	} else if r.Method == http.MethodPost {
@@ -854,6 +1046,11 @@ func getFileVersion(staticFSys fs.FS, filepath string) string {
 }
 
 func main() {
+
+	if err := checkTailCommand(); err != nil {
+		log.Fatalf("Required command not found: %v", err)
+	}
+
 	err := initPaths()
 	if err != nil {
 		log.Fatal("Failed to initialize paths:", err)
@@ -869,7 +1066,7 @@ func main() {
 		log.Fatal("Failed to create sub filesystem:", err)
 	}
 
-	cssVersion = getFileVersion(staticFSys, "css/styles.css")
+	cssVersion = getFileVersion(staticFSys, "css/tailwind.css")
 	jsVersion = getFileVersion(staticFSys, "js/scripts.js")
 
 	_, err = readConfigJSON()
@@ -881,6 +1078,10 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to read config.cmd:", err)
 	}
+
+	// Initialize the broadcaster
+	broadcaster := NewBroadcaster()
+	go broadcaster.Run()
 
 	http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, ".css") {
@@ -898,7 +1099,9 @@ func main() {
 	http.HandleFunc("/control", authMiddleware(controlHandler))
 	http.HandleFunc("/change-password", authMiddleware(changePasswordHandler))
 	http.HandleFunc("/service", authMiddleware(serviceHandler))
-	http.HandleFunc("/logs-stream", authMiddleware(logsStreamHandler))
+	http.HandleFunc("/logs-stream", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		logsStreamHandler(w, r, broadcaster)
+	}))
 	http.HandleFunc("/device", authMiddleware(deviceSetupHandler))
 	http.HandleFunc("/server", authMiddleware(serverSetupHandler))
 	http.HandleFunc("/input", authMiddleware(inputSelectionHandler))
