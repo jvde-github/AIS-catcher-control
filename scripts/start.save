@@ -1,0 +1,21 @@
+
+
+#!/bin/bash
+
+# Configuration
+PROGRAM="/usr/bin/AIS-catcher -r txt . -C /etc/AIS-catcher/config.json"
+PIDFILE="/etc/AIS-catcher/aiscatcher.pid"
+
+start() {
+    if [ -f "$PIDFILE" ] && kill -0 $(cat "$PIDFILE") 2>/dev/null; then
+        echo "Program is already running with PID $(cat "$PIDFILE")."
+        exit 1
+    fi
+
+    echo "Starting program..."
+    nohup bash -c "$PROGRAM" &
+    echo $! > "$PIDFILE"
+    echo "Program started with PID $(cat "$PIDFILE")."
+}
+
+start "$@"

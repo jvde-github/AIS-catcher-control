@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Configuration
+PIDFILE="/etc/AIS-catcher/aiscatcher.pid"
+
+# Check if a process is running based on its PID
+if [ ! -f "$PIDFILE" ]; then
+    # PID file does not exist
+    exit 3
+fi
+
+PID=$(cat "$PIDFILE")
+
+if ! kill -0 "$PID" 2>/dev/null; then
+    # Process is not running
+    exit 3
+fi
+
+# Process is running
+exit 0
