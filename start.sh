@@ -17,7 +17,7 @@ date +%s > $START_TIME_FILE
 # Function to start AIS-catcher
 start_ais_catcher() {
     echo "Starting AIS-catcher..."
-    /usr/local/bin/AIS-catcher "$@" &
+    /usr/local/bin/AIS-catcher -r txt . -N 8100 -v -G /etc/AIS-catcher/log.txt "$@" &
     AIS_CATCHER_PID=$!
 }
 

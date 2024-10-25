@@ -24,7 +24,8 @@ RUN cd NMEA2000/src && \
     g++ -O3 -c N2kMsg.cpp N2kStream.cpp N2kMessages.cpp N2kTimer.cpp NMEA2000.cpp N2kGroupFunctionDefaultHandlers.cpp N2kGroupFunction.cpp -I. && \
     ar rcs libnmea2000.a *.o
 
-RUN mkdir build && cd build && cmake .. -DNMEA2000_PATH=/root/AIS-catcher/NMEA2000/src && make && make install
+RUN git clone https://github.com/jvde-github/AIS-catcher.git
+RUN cd AIS-catcher && mkdir build && cd build && cmake .. -DNMEA2000_PATH=/root/AIS-catcher/NMEA2000/src && make && make install
 
 # -------------------
 # Build Stage for AIS-catcher-control
