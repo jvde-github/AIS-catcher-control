@@ -23,7 +23,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=v0.1,branch=main
+            type=edge,branch=main
             type=ref,event=tag
 
       - name: Setup QEMU
