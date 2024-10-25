@@ -64,10 +64,12 @@ COPY --from=build-ais-catcher /usr/local/bin/AIS-catcher /usr/local/bin/AIS-catc
 COPY --from=build-ais-control /go/bin/AIS-catcher-control /usr/local/bin/AIS-catcher-control
 
 # Copy the start, restart, is_running, and uptime scripts
+COPY main.sh /usr/local/bin/main.sh
 COPY start.sh /usr/local/bin/start.sh
+COPY stop.sh /usr/local/bin/stop.sh
 COPY restart.sh /usr/local/bin/restart.sh
 COPY is_running.sh /usr/local/bin/is_running.sh
 COPY uptime.sh /usr/local/bin/uptime.sh
 RUN chmod +x /usr/local/bin/*.sh
 
-ENTRYPOINT ["/usr/local/bin/start.sh"]
+ENTRYPOINT ["/usr/local/bin/main.sh"]
