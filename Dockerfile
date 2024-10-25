@@ -10,7 +10,7 @@ RUN apt-get install libusb-1.0.0-dev libairspy-dev libhackrf-dev libairspyhf-dev
 WORKDIR /root/AIS-catcher
 COPY . .
 
-RUN git clone https://gitea.osmocom.org/sdr/rtl-sdr.git
+RUN git clone https://gitea.osmocom.org/sdr/rtl-sdr.git --depth 1
 RUN cd rtl-sdr && \
     mkdir build && \
     cd build && \
@@ -19,12 +19,12 @@ RUN cd rtl-sdr && \
 RUN cp rtl-sdr/rtl-sdr.rules /etc/udev/rules.d/
 RUN ldconfig
 
-RUN git clone https://github.com/ttlappalainen/NMEA2000.git
+RUN git clone https://github.com/ttlappalainen/NMEA2000.git --depth 1
 RUN cd NMEA2000/src && \
     g++ -O3 -c N2kMsg.cpp N2kStream.cpp N2kMessages.cpp N2kTimer.cpp NMEA2000.cpp N2kGroupFunctionDefaultHandlers.cpp N2kGroupFunction.cpp -I. && \
     ar rcs libnmea2000.a *.o
 
-RUN git clone https://github.com/jvde-github/AIS-catcher.git
+RUN git clone https://github.com/jvde-github/AIS-catcher.git --depth 1
 RUN cd AIS-catcher && mkdir build && cd build && cmake .. -DNMEA2000_PATH=/root/AIS-catcher/NMEA2000/src && make && make install
 
 # -------------------

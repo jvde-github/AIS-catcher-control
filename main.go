@@ -401,7 +401,7 @@ func getServiceStatus() string {
 		exitCode := cmd.ProcessState.ExitCode()
 		fmt.Println("Exit Code:", exitCode)
 		
-		if exitCode == 3 {
+		if exitCode == 1 {
 			return "inactive (stopped)"
 		} else if exitCode == 0 {
 			return "active (running)"
