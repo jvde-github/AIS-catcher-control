@@ -42,7 +42,7 @@ RUN go build -ldflags="-s -w" -o /go/bin/AIS-catcher-control
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get upgrade -y
-RUN apt-get install git make gcc g++ cmake pkg-config libusb-1.0-0-dev -y
+RUN apt-get install git make gcc g++ cmake pkg-config libusb-1.0-0-dev procps -y
 RUN apt-get install libusb-1.0-0 libairspy0 libhackrf0 libairspyhf1 libzmq5 libsoxr0 libpq5 zlib1g libssl3 -y
 
 RUN cd /root && git clone https://gitea.osmocom.org/sdr/rtl-sdr.git

@@ -19,4 +19,4 @@ HOURS=$(( (UPTIME % 86400) / 3600 ))
 MINUTES=$(( (UPTIME % 3600) / 60 ))
 SECONDS=$(( UPTIME % 60 ))
 
-echo "Uptime: ${DAYS}d ${HOURS}h ${MINUTES}m ${SECONDS}s"
+echo "${DAYS}d ${HOURS}h ${MINUTES}m ${SECONDS}s"
