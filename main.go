@@ -393,7 +393,7 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 func getServiceStatus() string {
     if config.Docker {
 
-		cmd := exec.Command("/app/status")
+		cmd := exec.Command("usr/local/bin/is_running.sh")
 		output, err := cmd.Output()
 		fmt.Println("Output:", string(output))
 		fmt.Println("Error:", err)
@@ -435,7 +435,7 @@ func getServiceStatus() string {
 func getServiceUptime() string {
     if config.Docker {
         // Use the custom script for uptime
-        cmd := exec.Command("/app/uptime")
+        cmd := exec.Command("/usr/local/bin/uptime.sh")
         output, err := cmd.Output()
         if err != nil {
             return "Unknown"
@@ -537,7 +537,7 @@ func getLogTxtLogs(lines int) []string {
 func controlService(action string) error {
     if config.Docker {
         // Use custom scripts for control if in Docker mode
-        script := fmt.Sprintf("/app/%s", action)
+        script := fmt.Sprintf("/usr/local/bin/%s.sh", action)
 		fmt.Println("Running script:", script)
         cmd := exec.Command(script)
         return cmd.Run()
