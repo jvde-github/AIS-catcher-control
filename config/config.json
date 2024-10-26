@@ -1,0 +1,1 @@
+{"config":"aiscatcher","version":1,"server":{"port":"8100","realtime":false,"geojson":false,"prome":false,"backup":"10","cdn":"","file":"/etc/AIS-catcher.stat.bin","plugin_dir":"","share_loc":false,"station_link":"http://example.com/","station":"My Station","active":false},"input":"","rtlsdr":{"bandwidth":"192K","sample_rate":"1536K","rtlagc":true}}
