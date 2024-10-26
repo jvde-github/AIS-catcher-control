@@ -392,11 +392,8 @@ func getServiceStatus() string {
 
 		cmd := exec.Command("usr/local/bin/is_running.sh")
 		output, err := cmd.Output()
-		fmt.Println("Output:", string(output))
-		fmt.Println("Error:", err)
 
 		exitCode := cmd.ProcessState.ExitCode()
-		fmt.Println("Exit Code:", exitCode)
 
 		if exitCode == 1 {
 			return "inactive (stopped)"
