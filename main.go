@@ -772,26 +772,36 @@ func (b *Broadcaster) collectJournalctlLogs() {
 }
 
 func (b *Broadcaster) collectLogTxtLogs() {
-	cmd := exec.Command("tail", "-F", logTxtFilePath)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Printf("Error obtaining stdout pipe for tail: %v", err)
-		return
-	}
+	for {
+		cmd := exec.Command("tail", "-F", logTxtFilePath)
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Printf("Error obtaining stdout pipe for tail: %v", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
 
-	if err := cmd.Start(); err != nil {
-		log.Printf("Error starting tail command: %v", err)
-		return
-	}
+		if err := cmd.Start(); err != nil {
+			log.Printf("Error starting tail command: %v", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
 
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		b.logtxtChan <- line
-	}
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			b.logtxtChan <- line
+		}
 
-	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading tail output: %v", err)
+		if err := scanner.Err(); err != nil {
+			log.Printf("Error reading tail output: %v", err)
+		}
+
+		cmd.Wait()
+
+		log.Println("Restarting tail command for log.txt")
+
+		time.Sleep(1 * time.Second)
 	}
 }
 

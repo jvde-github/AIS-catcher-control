@@ -99,7 +99,7 @@
     {{ if not .Docker }}
     <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
-            
+
             <div class="mb-4 md:mb-0">
                 <h2 class="text-xl font-semibold mb-2 text-gray-800">Auto-Start Service</h2>
                 <div class="flex items-center">
@@ -131,7 +131,7 @@
 
     <!-- Recent Logs Section -->
     <div class="mb-8 p-4">
-        
+
         <h2 class="text-xl font-semibold mb-4 text-gray-800">Log</h2>
 
         <!-- Output Logs (log.txt) -->
@@ -148,7 +148,7 @@
 
         {{ if not .Docker }}
         <!-- Journalctl Logs -->
-        <h2 class="text-xl font-semibold mb-4 text-gray-800">System Log</h2>        
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">System Log</h2>
         <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-64 w-full overflow-y-auto" id="journalctl-container">
             <div id="journalctl-logs" class="text-sm leading-relaxed">
                 {{if .Logs}}
@@ -340,7 +340,9 @@
             const outputContainerInitial = document.getElementById('output-container');
             const journalctlContainerInitial = document.getElementById('journalctl-container');
             outputContainerInitial.scrollTop = outputContainerInitial.scrollHeight;
-            journalctlContainerInitial.scrollTop = journalctlContainerInitial.scrollHeight;
+
+            if (journalctlContainerInitial)
+                journalctlContainerInitial.scrollTop = journalctlContainerInitial.scrollHeight;
 
             const logLines = document.querySelectorAll('#output-logs .log-line');
             logLines.forEach(function (line) {
