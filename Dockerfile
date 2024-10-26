@@ -19,6 +19,9 @@ RUN cd rtl-sdr && \
 RUN cp rtl-sdr/rtl-sdr.rules /etc/udev/rules.d/
 RUN ldconfig
 
+RUN git clone https://github.com/airspy/airspyhf.git --depth 1
+RUN cd airspyhf && mkdir build && cd build && cmake ../ -DINSTALL_UDEV_RULES=ON && make && make install && ldconfig
+
 RUN git clone https://github.com/ttlappalainen/NMEA2000.git --depth 1
 RUN cd NMEA2000/src && \
     g++ -O3 -c N2kMsg.cpp N2kStream.cpp N2kMessages.cpp N2kTimer.cpp NMEA2000.cpp N2kGroupFunctionDefaultHandlers.cpp N2kGroupFunction.cpp -I. && \
@@ -53,6 +56,9 @@ RUN cd /root/rtl-sdr && \
     make && make install
 RUN cp /root/rtl-sdr/rtl-sdr.rules /etc/udev/rules.d/
 RUN ldconfig
+
+RUN git clone https://github.com/airspy/airspyhf.git --depth 1
+RUN cd airspyhf && mkdir build && cd build && cmake ../ -DINSTALL_UDEV_RULES=ON && make && make install && ldconfig
 
 RUN apt-get remove git make gcc g++ cmake pkg-config libusb-1.0-0-dev -y
 RUN apt-get autoremove -y

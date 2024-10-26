@@ -498,36 +498,43 @@ func getServiceLogs(lines int) []string {
 	return logLines
 }
 
-func getLogTxtLogs(lines int) []string {
-	// Prepare the tail command with the desired number of lines
-	cmd := exec.Command("tail", "-n", fmt.Sprintf("%d", lines), logTxtFilePath)
+func (b *Broadcaster) getLogTxtLogs() {
+    for {
+        cmd := exec.Command("tail", "-F", logTxtFilePath)
+        stdout, err := cmd.StdoutPipe()
+        if err != nil {
+            log.Printf("Error obtaining stdout pipe for tail: %v", err)
+            time.Sleep(1 * time.Second)
+            continue
+        }
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+        if err := cmd.Start(); err != nil {
+            log.Printf("Error starting tail command: %v", err)
+            time.Sleep(1 * time.Second)
+            continue
+        }
 
-	err := cmd.Run()
-	if err != nil {
-		if strings.Contains(stderr.String(), "No such file or directory") {
-			return []string{""}
-		}
-		log.Printf("Error executing tail command: %v, %s", err, stderr.String())
-		return []string{"Error reading %s.", logTxtFilePath}
-	}
+        scanner := bufio.NewScanner(stdout)
+        for scanner.Scan() {
+            line := scanner.Text()
+            b.logtxtChan <- line
+        }
 
-	// Get the command output as a string
-	output := stdout.String()
+        if err := scanner.Err(); err != nil {
+            log.Printf("Error reading tail output: %v", err)
+        }
 
-	// Handle the case where the file is empty
-	if strings.TrimSpace(output) == "" {
-		return []string{"%s is empty.", logTxtFilePath}
-	}
+        // Wait for the command to exit
+        cmd.Wait()
 
-	// Split the output into individual lines
-	logLines := strings.Split(strings.TrimSpace(output), "\n")
-	return logLines
+        // Log that we're restarting tail
+        log.Println("Tail command exited. Restarting tail for log.txt")
+
+        // Small delay before restarting to prevent tight loop in case of persistent error
+        time.Sleep(1 * time.Second)
+    }
 }
+
 
 func controlService(action string) error {
 	if config.Docker {
