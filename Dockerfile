@@ -5,7 +5,7 @@ FROM debian:bookworm-slim AS build-ais-catcher
 
 RUN apt-get update && apt-get upgrade -y
 RUN apt-get install git make gcc g++ cmake pkg-config -y
-RUN apt-get install libusb-1.0.0-dev libairspy-dev libhackrf-dev libairspyhf-dev libzmq3-dev libsoxr-dev zlib1g-dev libpq-dev libssl-dev -y
+RUN apt-get install libusb-1.0.0-dev libairspy-dev libhackrf-dev libzmq3-dev libsoxr-dev zlib1g-dev libpq-dev libssl-dev -y
 
 WORKDIR /root/AIS-catcher
 COPY . .
@@ -46,7 +46,7 @@ FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get upgrade -y
 RUN apt-get install git make gcc g++ cmake pkg-config libusb-1.0-0-dev procps -y
-RUN apt-get install libusb-1.0-0 libairspy0 libhackrf0 libairspyhf1 libzmq5 libsoxr0 libpq5 zlib1g libssl3 -y
+RUN apt-get install libusb-1.0-0 libairspy0 libhackrf0 libzmq5 libsoxr0 libpq5 zlib1g libssl3 -y
 
 RUN cd /root && git clone https://gitea.osmocom.org/sdr/rtl-sdr.git
 RUN cd /root/rtl-sdr && \
