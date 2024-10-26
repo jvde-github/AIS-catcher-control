@@ -13,15 +13,9 @@ if [ ! -f "$TARGET_DIR/control.json" ] && [ ! -f "$TARGET_DIR/config.json" ] && 
     cp "$CONFIG_DIR/control.json" "$TARGET_DIR/control.json"
     cp "$CONFIG_DIR/config.json" "$TARGET_DIR/config.json"
     cp "$CONFIG_DIR/config.cmd" "$TARGET_DIR/config.cmd"
-
-    chmod 644 "$TARGET_DIR/control.json" "$TARGET_DIR/config.json" "$TARGET_DIR/config.cmd"
-    chown root:root "$TARGET_DIR/control.json" "$TARGET_DIR/config.json" "$TARGET_DIR/control.cmd"
 else
     echo "One or more configuration files already exist. Skipping copy."
 fi
-
-chmod 755 "$TARGET_DIR"
-chown -R root:root "$TARGET_DIR"
 
 start_ais_catcher() {
     if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
