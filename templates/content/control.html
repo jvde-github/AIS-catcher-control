@@ -68,56 +68,30 @@
         }
     </style>
 
-    <!-- Status and Control Section -->
     <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
             <div class="mb-4 md:mb-0">
                 <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Status</h2>
                 <div class="flex items-center">
                     <span class="text-gray-700 mr-2">Status:</span>
-                    {{if eq .Status "active (running)"}}
-                    <span
-                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                        Active (Running)
+                    <!-- Placeholder for dynamic status -->
+                    <span id="service-status">
+                        <!-- Initial placeholder text, will be updated by JavaScript -->
+                        Checking status...
                     </span>
-                    {{else if eq .Status "inactive (stopped)"}}
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                        Inactive (Stopped)
-                    </span>
-                    {{else if eq .Status "failed"}}
-                    <span
-                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                        Failed
-                    </span>
-                    {{else}}
-                    <span
-                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                        {{.Status}}
-                    </span>
-                    {{end}}
                 </div>
             </div>
-            <div class="flex flex-wrap gap-2">
-                {{if ne .Status "active (running)"}}
-                <a href="/service?action=start"
-                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Start</a>
-                {{end}}
-                {{if eq .Status "active (running)"}}
-                <a href="/service?action=stop"
-                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Stop</a>
-                <a href="/service?action=restart"
-                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Restart</a>
-                {{end}}
-            </div>
+            <!-- Placeholder for action buttons -->
+            <div id="action-buttons" class="flex flex-wrap gap-2"></div>
         </div>
     </div>
 
-    <!-- Uptime Section -->
     <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
         <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Uptime</h2>
         <div class="flex items-center">
             <span class="text-gray-700 mr-2">Running for:</span>
-            <span class="text-gray-800 font-medium">{{.Uptime}}</span>
+            <!-- Placeholder for dynamic uptime -->
+            <span id="service-uptime" class="text-gray-800 font-medium">Calculating uptime...</span>
         </div>
     </div>
 
@@ -125,8 +99,9 @@
     {{ if not .Docker }}
     <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+            
             <div class="mb-4 md:mb-0">
-                <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Configuration</h2>
+                <h2 class="text-xl font-semibold mb-2 text-gray-800">Auto-Start Service</h2>
                 <div class="flex items-center">
                     <span class="text-gray-700 mr-2">Enabled:</span>
                     {{if .ServiceEnabled}}
@@ -156,7 +131,8 @@
 
     <!-- Recent Logs Section -->
     <div class="mb-8 p-4">
-        <h2 class="text-xl font-semibold mb-4 text-gray-800">Messages</h2>
+        
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">Log</h2>
 
         <!-- Output Logs (log.txt) -->
         <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-80 w-full overflow-y-auto mb-4" id="output-container">
@@ -170,9 +146,9 @@
             </div>
         </div>
 
-        <h2 class="text-xl font-semibold mb-4 text-gray-800">System Log</h2>
-
+        {{ if not .Docker }}
         <!-- Journalctl Logs -->
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">System Log</h2>        
         <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-64 w-full overflow-y-auto" id="journalctl-container">
             <div id="journalctl-logs" class="text-sm leading-relaxed">
                 {{if .Logs}}
@@ -183,6 +159,7 @@
                 {{end}}
             </div>
         </div>
+        {{ end }}
     </div>
 
     <!-- Action Spinner -->
@@ -192,6 +169,73 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             let eventSource = null;
+            function updateStatus() {
+                fetch('/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Update status text
+                        const statusSpan = document.getElementById('service-status');
+                        let statusHTML = '';
+                        if (data.status === 'active (running)') {
+                            statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Active (Running)</span>';
+                        } else if (data.status === 'inactive (stopped)') {
+                            statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Inactive (Stopped)</span>';
+                        } else if (data.status === 'failed') {
+                            statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Failed</span>';
+                        } else {
+                            statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">' + data.status + '</span>';
+                        }
+                        statusSpan.innerHTML = statusHTML;
+
+                        // Update uptime text
+                        const uptimeSpan = document.getElementById('service-uptime');
+                        uptimeSpan.textContent = data.uptime;
+
+                        // Update action buttons based on status
+                        const actionButtonsDiv = document.getElementById('action-buttons');
+                        let buttonsHTML = '';
+                        if (data.status === 'active (running)') {
+                            buttonsHTML += `
+                        <a href="/service?action=stop" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Stop</a>
+                        <a href="/service?action=restart" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Restart</a>
+                    `;
+                        } else {
+                            buttonsHTML += `
+                        <a href="/service?action=start" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Start</a>
+                    `;
+                        }
+                        actionButtonsDiv.innerHTML = buttonsHTML;
+
+                        // Reattach event listeners to action buttons
+                        const actionButtons = document.querySelectorAll('.action-button');
+                        const actionSpinner = document.getElementById('action-spinner');
+                        actionButtons.forEach(button => {
+                            button.addEventListener('click', function (e) {
+                                e.preventDefault();
+                                const href = this.getAttribute('href');
+                                actionSpinner.classList.remove('hidden-spinner');
+
+                                fetch(href)
+                                    .then(response => {
+                                        actionSpinner.classList.add('hidden-spinner');
+                                        if (response.redirected) {
+                                            window.location.href = response.url;
+                                        }
+                                    })
+                                    .catch(error => {
+                                        actionSpinner.classList.add('hidden-spinner');
+                                        alert('An error occurred: ' + error);
+                                    });
+                            });
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error fetching status:', error);
+                    });
+            }
+
+            updateStatus();
+            setInterval(updateStatus, 2000);
 
             function initializeSSE() {
                 if (eventSource) {
