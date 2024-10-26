@@ -391,7 +391,7 @@ func getServiceStatus() string {
 	if config.Docker {
 
 		cmd := exec.Command("usr/local/bin/is_running.sh")
-		output, err := cmd.Output()
+		output, _ := cmd.Output()
 
 		exitCode := cmd.ProcessState.ExitCode()
 
