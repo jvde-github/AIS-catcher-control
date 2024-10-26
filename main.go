@@ -327,7 +327,7 @@ func deviceListHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute the AIS-catcher command
-	cmd := exec.Command("/usr/bin/AIS-catcher", "-l", "JSON", "ON")
+	cmd := exec.Command("/usr/local/bin/AIS-catcher", "-l", "JSON", "ON")
 	stdout, err := cmd.Output()
 	if err != nil {
 		log.Printf("Error executing AIS-catcher: %v", err)
