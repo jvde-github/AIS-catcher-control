@@ -64,21 +64,21 @@ RUN apt-get remove git make gcc g++ cmake pkg-config libusb-1.0-0-dev -y
 RUN apt-get autoremove -y
 
 # Copy the AIS-catcher binary from build stage
-COPY --from=build-ais-catcher /usr/local/bin/AIS-catcher /usr/local/bin/AIS-catcher
+COPY --from=build-ais-catcher /usr/bin/AIS-catcher /usr/bin/AIS-catcher
 
 # Copy the AIS-catcher-control binary from build stage
-COPY --from=build-ais-control /go/bin/AIS-catcher-control /usr/local/bin/AIS-catcher-control
+COPY --from=build-ais-control /go/bin/AIS-catcher-control /usr/bin/AIS-catcher-control
 
 # Copy the start, restart, is_running, and uptime scripts
-COPY scripts/main.sh /usr/local/bin/main.sh
-COPY scripts/start.sh /usr/local/bin/start.sh
-COPY scripts/stop.sh /usr/local/bin/stop.sh
-COPY scripts/restart.sh /usr/local/bin/restart.sh
-COPY scripts/is_running.sh /usr/local/bin/is_running.sh
-COPY scripts/uptime.sh /usr/local/bin/uptime.sh
+COPY scripts/main.sh /usr/bin/main.sh
+COPY scripts/start.sh /usr/bin/start.sh
+COPY scripts/stop.sh /usr/bin/stop.sh
+COPY scripts/restart.sh /usr/bin/restart.sh
+COPY scripts/is_running.sh /usr/bin/is_running.sh
+COPY scripts/uptime.sh /usr/bin/uptime.sh
 
 COPY config /config
 
-RUN chmod +x /usr/local/bin/*.sh
+RUN chmod +x /usr/bin/*.sh
 
-ENTRYPOINT ["/usr/local/bin/main.sh"]
+ENTRYPOINT ["/usr/bin/main.sh"]

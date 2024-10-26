@@ -325,7 +325,7 @@ func deviceListHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute the AIS-catcher command
-	cmd := exec.Command("/usr/local/bin/AIS-catcher", "-l", "JSON", "ON")
+	cmd := exec.Command("/usr/bin/AIS-catcher", "-l", "JSON", "ON")
 	stdout, err := cmd.Output()
 	if err != nil {
 		log.Printf("Error executing AIS-catcher: %v", err)
@@ -390,7 +390,7 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 func getServiceStatus() string {
 	if config.Docker {
 
-		cmd := exec.Command("usr/local/bin/is_running.sh")
+		cmd := exec.Command("/usr/bin/is_running.sh")
 		output, _ := cmd.Output()
 
 		exitCode := cmd.ProcessState.ExitCode()
@@ -428,7 +428,7 @@ func getServiceStatus() string {
 func getServiceUptime() string {
 	if config.Docker {
 		// Use the custom script for uptime
-		cmd := exec.Command("/usr/local/bin/uptime.sh")
+		cmd := exec.Command("/usr/bin/uptime.sh")
 		output, err := cmd.Output()
 		if err != nil {
 			return "Unknown"
@@ -531,7 +531,7 @@ func getLogTxtLogs(lines int) []string {
 func controlService(action string) error {
 	if config.Docker {
 		// Use custom scripts for control if in Docker mode
-		script := fmt.Sprintf("/usr/local/bin/%s.sh", action)
+		script := fmt.Sprintf("/usr/bin/%s.sh", action)
 		fmt.Println("Running script:", script)
 		cmd := exec.Command(script)
 		return cmd.Run()
