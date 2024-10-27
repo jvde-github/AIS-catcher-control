@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Process path to look for
-PROCESS_PATH="/usr/local/bin/AIS-catcher"
+PROCESS_PATH="/usr/bin/AIS-catcher"
 
 # Get the elapsed time for the specified process
 ELAPSED_TIME=$(ps -eo etimes,cmd | awk -v path="$PROCESS_PATH" '$2 == path {print $1; exit}')

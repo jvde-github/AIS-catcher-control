@@ -1,88 +1,180 @@
 #!/bin/bash
-# start.sh - Main Docker entrypoint script
+# start.sh - Final Docker entrypoint script with systemd-like auto-restart behavior
 
-PID_FILE="/tmp/ais_catcher.pid"
-COMMAND_FILE="/tmp/command"
 CONFIG_DIR="/config"
 TARGET_DIR="/etc/AIS-catcher"
+COMMAND_FILE="/tmp/command"
+AUTO_RESTART_FILE="$TARGET_DIR/auto_restart_enabled"
+MANUAL_STOP_FILE="$TARGET_DIR/manual_stop"
+
+log() {
+    echo "[WARNING] $*" >> /etc/AIS-catcher/log.txt
+}
 
 mkdir -p "$TARGET_DIR"
 
-if [ ! -f "$TARGET_DIR/control.json" ] && [ ! -f "$TARGET_DIR/config.json" ] && [ ! -f "$TARGET_DIR/control.cmd" ]; then
-    echo "Configuration files not found in $TARGET_DIR. Copying from $CONFIG_DIR."
-    cp "$CONFIG_DIR/control.json" "$TARGET_DIR/control.json"
-    cp "$CONFIG_DIR/config.json" "$TARGET_DIR/config.json"
-    cp "$CONFIG_DIR/config.cmd" "$TARGET_DIR/config.cmd"
-else
-    echo "One or more configuration files already exist. Skipping copy."
+if [ ! -f "$AUTO_RESTART_FILE" ]; then
+    echo "true" > "$AUTO_RESTART_FILE"  # Enable auto-restart by default
+    log "Auto-restart enabled by default."
 fi
 
+# Set default manual_stop state if the file doesn't exist
+if [ ! -f "$MANUAL_STOP_FILE" ]; then
+    echo "false" > "$MANUAL_STOP_FILE"  # Not stopped manually by default
+    log "Manual stop flag set to false by default."
+fi
+
+# Copy configuration files if they don't exist
+if [ ! -f "$TARGET_DIR/control.json" ] && [ ! -f "$TARGET_DIR/config.json" ] && [ ! -f "$TARGET_DIR/config.cmd" ]; then
+    log "Configuration files not found in $TARGET_DIR. Copying from $CONFIG_DIR."
+    cp "$CONFIG_DIR/"*.json "$TARGET_DIR/" 2>/dev/null
+    cp "$CONFIG_DIR/"*.cmd "$TARGET_DIR/" 2>/dev/null
+    log "Configuration files copied."
+else
+    log "One or more configuration files already exist. Skipping copy."
+fi
+
+# Function to check if AIS-catcher is running
+is_ais_catcher_running() {
+    pgrep -f "/usr/bin/AIS-catcher " >/dev/null 2>&1
+}
+
+# Function to start AIS-catcher
 start_ais_catcher() {
-    if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
-        echo "AIS-catcher is already running"
+    if is_ais_catcher_running; then
+        log "AIS-catcher is already running."
         return
     fi
 
-    echo "Starting AIS-catcher..."
-    /usr/bin/AIS-catcher -C /etc/AIS-catcher/config.json -q -v 60 -G /etc/AIS-catcher/log.txt "$@" &
-    echo $! > "$PID_FILE"
-}
+    log "Starting AIS-catcher..."
+    #/usr/bin/AIS-catcher -C /etc/AIS-catcher/config.json -q -v 60 -G /etc/AIS-catcher/log.txt "$@" &
+    /usr/bin/AIS-catcher -C /etc/AIS-catcher/config.json -q -v 60 -G /etc/AIS-catcher/log.txt  &
 
-stop_ais_catcher() {
-    if [ -f "$PID_FILE" ]; then
-        PID=$(cat "$PID_FILE")
-        if kill -0 "$PID" 2>/dev/null; then
-            echo "Stopping AIS-catcher..."
-            kill "$PID"
-            rm "$PID_FILE"
-        fi
+    sleep 1  # Allow some time to start
+    if is_ais_catcher_running; then
+        log "AIS-catcher started successfully."
+        echo "false" > "$MANUAL_STOP_FILE"  # Reset manual_stop flag
+        log "Manual stop flag set to false."
+    else
+        log "Failed to start AIS-catcher."
     fi
 }
 
+# Function to stop AIS-catcher
+stop_ais_catcher() {
+    if is_ais_catcher_running; then
+        log "Stopping AIS-catcher..."
+        pkill -f "/usr/bin/AIS-catcher "
+        sleep 1  # Allow some time to stop
+        if ! is_ais_catcher_running; then
+            log "AIS-catcher stopped successfully."
+            echo "true" > "$MANUAL_STOP_FILE"  # Indicate manual stop
+            log "Manual stop flag set to true."
+        else
+            log "Failed to stop AIS-catcher."
+        fi
+    else
+        log "AIS-catcher is not running."
+    fi
+}
+
+# Function to restart AIS-catcher
 restart_ais_catcher() {
+    log "Restarting AIS-catcher..."
     stop_ais_catcher
     sleep 1
     start_ais_catcher "$@"
 }
 
-# Start AIS-catcher initially
+# Function to enable auto-restart
+enable_auto_restart() {
+    echo "true" > "$AUTO_RESTART_FILE"
+    log "Auto-restart enabled."
+}
+
+# Function to disable auto-restart
+disable_auto_restart() {
+    echo "false" > "$AUTO_RESTART_FILE"
+    log "Auto-restart disabled."
+}
+
+# Function to handle commands from COMMAND_FILE
+handle_command() {
+    local COMMAND="$1"
+    case "$COMMAND" in
+        "start")
+            start_ais_catcher "$@"
+            ;;
+        "stop")
+            stop_ais_catcher
+            ;;
+        "restart")
+            restart_ais_catcher "$@"
+            ;;
+        "enable")
+            enable_auto_restart
+            ;;
+        "disable")
+            disable_auto_restart
+            ;;
+        *)
+            log "Unknown command: $COMMAND"
+            ;;
+    esac
+}
+
+# Initialize: Start AIS-catcher and AIS-catcher-control
 start_ais_catcher "$@"
 
-# Start AIS-catcher-control
-echo "Starting AIS-catcher-control..."
-/usr/local/bin/AIS-catcher-control &
+log "Starting AIS-catcher-control..."
+/usr/bin/AIS-catcher-control &
 AIS_CONTROL_PID=$!
+log "AIS-catcher-control started with PID $AIS_CONTROL_PID."
 
 # Trap SIGTERM and SIGINT to clean up
-trap "stop_ais_catcher; kill $AIS_CONTROL_PID 2>/dev/null; exit 0" SIGTERM SIGINT
+cleanup() {
+    log "Received termination signal. Shutting down..."
+    stop_ais_catcher
+    if [ -n "$AIS_CONTROL_PID" ] && kill -0 "$AIS_CONTROL_PID" 2>/dev/null; then
+        kill "$AIS_CONTROL_PID"
+        wait "$AIS_CONTROL_PID" 2>/dev/null
+        log "AIS-catcher-control stopped."
+    fi
+    exit 0
+}
+trap cleanup SIGTERM SIGINT
 
-# Monitor command file for control commands
+# Main loop to monitor processes and handle commands
 while true; do
+    # Check for control commands
     if [ -f "$COMMAND_FILE" ]; then
         COMMAND=$(cat "$COMMAND_FILE")
         rm "$COMMAND_FILE"
+        log "Received command: $COMMAND"
+        handle_command "$COMMAND"
+    fi
 
-        case "$COMMAND" in
-            "start")
-                start_ais_catcher "$@"
-                ;;
-            "stop")
-                stop_ais_catcher
-                ;;
-            "restart")
-                restart_ais_catcher "$@"
-                ;;
-        esac
+    # Check if AIS-catcher has exited
+    if ! is_ais_catcher_running; then
+        # Check if AIS-catcher was stopped manually
+        MANUAL_STOP_STATUS=$(cat "$MANUAL_STOP_FILE")
+        # Check if auto-restart is enabled
+        AUTO_RESTART_STATUS=$(cat "$AUTO_RESTART_FILE")
+        if [ "$AUTO_RESTART_STATUS" = "true" ] && [ "$MANUAL_STOP_STATUS" = "false" ]; then
+            log "AIS-catcher has exited unexpectedly. Auto-restarting..."
+            start_ais_catcher "$@"
+        elif [ "$AUTO_RESTART_STATUS" = "false" ]; then
+            log "AIS-catcher has stopped and auto-restart is disabled."
+        fi
     fi
 
     # Check if AIS-catcher-control is still running
-    if ! kill -0 $AIS_CONTROL_PID 2>/dev/null; then
-        echo "AIS-catcher-control has exited. Stopping container..."
+    if [ -n "$AIS_CONTROL_PID" ] && ! kill -0 "$AIS_CONTROL_PID" 2>/dev/null; then
+        log "AIS-catcher-control with PID $AIS_CONTROL_PID has exited. Stopping container..."
         stop_ais_catcher
         exit 1
     fi
 
-    # Make sleep interruptible
-    sleep 1 &
-    wait $!
+    # Sleep for a short duration before the next check
+    sleep 1
 done

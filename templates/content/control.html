@@ -96,7 +96,6 @@
     </div>
 
     <!-- Service Configuration Section -->
-    {{ if not .Docker }}
     <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
 
@@ -104,30 +103,24 @@
                 <h2 class="text-xl font-semibold mb-2 text-gray-800">Auto-Start Service</h2>
                 <div class="flex items-center">
                     <span class="text-gray-700 mr-2">Enabled:</span>
-                    {{if .ServiceEnabled}}
-                    <span
-                        class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                    <span id="enabled-true"
+                        class="hidden px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                         Yes
                     </span>
-                    {{else}}
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                    <span id="enabled-false"
+                        class="hidden px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
                         No
                     </span>
-                    {{end}}
                 </div>
             </div>
             <div class="flex gap-2">
-                {{if not .ServiceEnabled}}
-                <a href="/service?action=enable"
-                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Enable</a>
-                {{else}}
-                <a href="/service?action=disable"
-                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Disable</a>
-                {{end}}
+                <span onclick="serviceAction('enable')" id = "enable-button"
+                    class="hidden bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Enable</span>
+                <span onclick="serviceAction('disable')" id = "disable-button"
+                    class="hidden bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Disable</span>
             </div>
         </div>
     </div>
-    {{ end }}
 
     <!-- Recent Logs Section -->
     <div class="mb-8 p-4">
@@ -167,12 +160,36 @@
 
     <!-- Scripts -->
     <script>
+
+        async function serviceAction(s) {
+            fetch('service?action='+s)
+                    .then(response => response.json())
+                    .then(data => {
+                    })
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             let eventSource = null;
             function updateStatus() {
                 fetch('/status')
                     .then(response => response.json())
                     .then(data => {
+
+                        if (data.enabled) {
+                            document.getElementById('enabled-true').classList.remove('hidden')
+                            document.getElementById('enabled-false').classList.add('hidden')
+
+                            document.getElementById('enable-button').classList.add('hidden')
+                            document.getElementById('disable-button').classList.remove('hidden')
+
+                        } else {
+                            document.getElementById('enabled-true').classList.add('hidden')
+                            document.getElementById('enabled-false').classList.remove('hidden')
+
+                            document.getElementById('enable-button').classList.remove('hidden')
+                            document.getElementById('disable-button').classList.add('hidden')
+                        }
+                        
                         // Update status text
                         const statusSpan = document.getElementById('service-status');
                         let statusHTML = '';
@@ -196,12 +213,12 @@
                         let buttonsHTML = '';
                         if (data.status === 'active (running)') {
                             buttonsHTML += `
-                        <a href="/service?action=stop" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Stop</a>
-                        <a href="/service?action=restart" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Restart</a>
+                        <span onclick="serviceAction('stop')" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Stop</span>
+                        <span onclick="serviceAction('restart')" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Restart</span>
                     `;
                         } else {
                             buttonsHTML += `
-                        <a href="/service?action=start" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Start</a>
+                        <span onclick="serviceAction('start')" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Start</span>
                     `;
                         }
                         actionButtonsDiv.innerHTML = buttonsHTML;

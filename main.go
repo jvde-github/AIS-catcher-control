@@ -63,8 +63,8 @@ type Control struct {
 	Title           string   `json:"title"`
 	Status          string   `json:"status"`
 	Uptime          string   `json:"uptime"`
-	Logs            []string `json:"logs"`         // journalctl logs
-	LogTxtLogs      []string `json:"log_txt_logs"` // log.txt logs
+	Logs            []string `json:"logs"`        
+	LogTxtLogs      []string `json:"log_txt_logs"`
 	ServiceEnabled  bool     `json:"service_enabled"`
 	Docker          bool     `json:"docker"`
 	ContentTemplate string   `json:"content_template"`
@@ -82,7 +82,6 @@ func Seq(start, end int) []int {
 }
 
 func init() {
-	// Create a FuncMap with both "dynamicTemplate" and "seq"
 	funcMap := template.FuncMap{
 		"dynamicTemplate": func(name string, data interface{}) (template.HTML, error) {
 			var buf strings.Builder
@@ -92,10 +91,8 @@ func init() {
 		"seq": Seq,
 	}
 
-	// Create a new template with the function map
 	templates = template.New("").Funcs(funcMap)
 
-	// Parse all templates including partials and content from the embedded filesystem
 	var err error
 	templates, err = templates.ParseFS(templatesFS,
 		"templates/layout.html",
@@ -122,7 +119,6 @@ func init() {
 
 var sessions = map[string]string{}
 
-// Configuration struct
 type Config struct {
 	PasswordHash   string `json:"password_hash"`
 	Port           string `json:"port"`
@@ -230,7 +226,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		})
 
 		if false && password == defaultPassword && hashPassword(password) == config.PasswordHash {
-			// Prompt to change default password
 			http.Redirect(w, r, "/change-password", http.StatusSeeOther)
 		} else {
 			http.Redirect(w, r, "/control", http.StatusSeeOther)
@@ -333,7 +328,6 @@ func deviceListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate that the output is valid JSON
 	var jsonData interface{}
 	err = json.Unmarshal(stdout, &jsonData)
 	if err != nil {
@@ -342,55 +336,41 @@ func deviceListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set the Content-Type header to application/json
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(stdout)
 }
 
 func controlHandler(w http.ResponseWriter, r *http.Request) {
+	
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	// Gather necessary data
-	status := getServiceStatus()         // This function now supports Docker mode
-	uptime := getServiceUptime()         // This function now supports Docker mode
-	journalctlLogs := getServiceLogs(50) // Adjust the number of logs as needed
+	journalctlLogs := getServiceLogs(50) 
 	logTxtLogs := getLogTxtLogs(10)
-	enabled, err := getServiceEnabled()
-	if err != nil {
-		enabled = false // Default to false if there's an error
-		log.Println("Error fetching service enabled status:", err)
-	}
 
 	controlData := Control{
 		CssVersion:      cssVersion,
 		JsVersion:       jsVersion,
 		Title:           "Control Dashboard",
-		Status:          status,
-		Uptime:          uptime,
 		Logs:            journalctlLogs,
 		LogTxtLogs:      logTxtLogs,
-		ServiceEnabled:  enabled,
 		Docker:          config.Docker,
 		ContentTemplate: "control",
 	}
 
-	// Render the template with the control data
-	err = templates.ExecuteTemplate(w, "layout.html", controlData)
+	err := templates.ExecuteTemplate(w, "layout.html", controlData)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Printf("Template execution error: %v", err)
 	}
 }
 
-// Function to get the service status
 func getServiceStatus() string {
 	if config.Docker {
 
-		cmd := exec.Command("/usr/bin/is_running.sh")
+		cmd := exec.Command("/usr/bin/is-running.sh")
 		output, _ := cmd.Output()
 
 		exitCode := cmd.ProcessState.ExitCode()
@@ -405,7 +385,6 @@ func getServiceStatus() string {
 		return strings.TrimSpace(string(output))
 	}
 
-	// Fallback to systemctl if not in Docker mode
 	cmd := exec.Command("systemctl", "is-active", "ais-catcher.service")
 	output, err := cmd.Output()
 	if err != nil {
@@ -424,10 +403,8 @@ func getServiceStatus() string {
 	return status
 }
 
-// Function to get the service uptime
 func getServiceUptime() string {
 	if config.Docker {
-		// Use the custom script for uptime
 		cmd := exec.Command("/usr/bin/uptime.sh")
 		output, err := cmd.Output()
 		if err != nil {
@@ -436,7 +413,6 @@ func getServiceUptime() string {
 		return strings.TrimSpace(string(output))
 	}
 
-	// Fallback to systemctl if not in Docker mode
 	cmd := exec.Command("systemctl", "show", "ais-catcher.service", "--property=ActiveEnterTimestamp")
 	output, err := cmd.Output()
 	if err != nil {
@@ -456,7 +432,6 @@ func getServiceUptime() string {
 	return fmt.Sprintf("%s (since %s)", formatDuration(duration), t.Format("Jan 2, 2006 15:04:05"))
 }
 
-// Helper function to format duration
 func formatDuration(d time.Duration) string {
 	days := d / (24 * time.Hour)
 	d -= days * 24 * time.Hour
@@ -482,8 +457,12 @@ func formatDuration(d time.Duration) string {
 	return strings.Join(parts, " ")
 }
 
-// Function to get recent service logs from journalctl
 func getServiceLogs(lines int) []string {
+
+	if config.Docker {
+		return []string{""}
+	}
+
 	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", fmt.Sprintf("%d", lines), "--no-pager", "--output=short-iso")
 	output, err := cmd.Output()
 
@@ -496,7 +475,7 @@ func getServiceLogs(lines int) []string {
 }
 
 func getLogTxtLogs(lines int) []string {
-	// Prepare the tail command with the desired number of lines
+
 	cmd := exec.Command("tail", "-n", fmt.Sprintf("%d", lines), logTxtFilePath)
 
 	var stdout bytes.Buffer
@@ -543,6 +522,13 @@ func controlService(action string) error {
 }
 
 func getServiceEnabled() (bool, error) {
+	if config.Docker {
+		// Use custom scripts for control if in Docker mode
+		cmd := exec.Command("/usr/bin/is-enabled.sh")
+		output, _ := cmd.Output()
+		status := strings.TrimSpace(string(output))
+		return status == "enabled", nil
+	}
 	cmd := exec.Command("systemctl", "is-enabled", "ais-catcher.service")
 	output, err := cmd.Output()
 	status := strings.TrimSpace(string(output))
@@ -557,29 +543,6 @@ func getServiceEnabled() (bool, error) {
 	}
 
 	return status == "enabled", nil
-}
-
-func serviceHandler(w http.ResponseWriter, r *http.Request) {
-	action := r.URL.Query().Get("action")
-	validActions := map[string]bool{
-		"start":   true,
-		"stop":    true,
-		"restart": true,
-		"enable":  true,
-		"disable": true,
-	}
-
-	if !validActions[action] {
-		http.Redirect(w, r, "/control", http.StatusSeeOther)
-		return
-	}
-
-	err := controlService(action)
-	if err != nil {
-		log.Println("Service control error:", err)
-	}
-
-	http.Redirect(w, r, "/control", http.StatusSeeOther)
 }
 
 func sanitizeFileContent(content string) string {
@@ -1003,22 +966,25 @@ func inputSelectionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func webviewerHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /webviewer")
-		renderTemplateWithConfig(w, "Webviewer", "webviewer")
+	jsonContent, err := readConfigJSON()
+	if err != nil {
+		log.Printf("Error reading config.json: %v", err)
+		jsonContent = []byte("")
+	}
 
-	} else if r.Method == http.MethodPost {
-		err := saveConfigJSON(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		// Send success response
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Configuration saved successfully."))
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
+	data := map[string]interface{}{
+		"CssVersion":      cssVersion,
+		"JsVersion":       jsVersion,
+		"JsonContent":     string(jsonContent),
+		"Title":           "Webviewer",
+		"ContentTemplate": "webviewer",
+		"port": 8100,
+	}
+
+	err = templates.ExecuteTemplate(w, "layout.html", data)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Printf("Template execution error: %v", err)
 	}
 }
 
@@ -1083,9 +1049,46 @@ func getFileVersion(staticFSys fs.FS, filepath string) string {
 func statusHandler(w http.ResponseWriter, r *http.Request) {
 	status := getServiceStatus()
 	uptime := getServiceUptime()
-	data := map[string]string{
+	enabled, _ := getServiceEnabled()
+
+	data := map[string]interface{}{
 		"status": status,
 		"uptime": uptime,
+		"enabled": enabled,
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonData)
+}
+
+func serviceHandler(w http.ResponseWriter, r *http.Request) {
+
+	action := r.URL.Query().Get("action")
+	
+	validActions := map[string]bool{
+		"start":   true,
+		"stop":    true,
+		"restart": true,
+		"enable":  true,
+		"disable": true,
+	}
+
+	if !validActions[action] {
+		http.Redirect(w, r, "/control", http.StatusSeeOther)
+		return
+	}
+
+	err := controlService(action)
+	if err != nil {
+		log.Println("Service control error:", err)
+	}
+
+	data := map[string]interface{}{
+		"status": true,
 	}
 	jsonData, err := json.Marshal(data)
 	if err != nil {

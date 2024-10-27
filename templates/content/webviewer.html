@@ -14,7 +14,7 @@
 
         try {
             var url = new URL(currentUrl);
-            url.port = '8100';
+            url.port = "{{.port }}";
             url.pathname = '/';
             url.search = '';
             url.hash = '';
