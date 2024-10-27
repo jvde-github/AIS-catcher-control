@@ -24,7 +24,7 @@ start_ais_catcher() {
     fi
 
     echo "Starting AIS-catcher..."
-    /usr/local/bin/AIS-catcher -C /etc/AIS-catcher/config.json -q -v 60 -G /etc/AIS-catcher/log.txt "$@" &
+    /usr/bin/AIS-catcher -C /etc/AIS-catcher/config.json -q -v 60 -G /etc/AIS-catcher/log.txt "$@" &
     echo $! > "$PID_FILE"
 }
 
