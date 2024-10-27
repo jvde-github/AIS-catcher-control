@@ -64,7 +64,7 @@ RUN apt-get remove git make gcc g++ cmake pkg-config libusb-1.0-0-dev -y
 RUN apt-get autoremove -y
 
 # Copy the AIS-catcher binary from build stage
-COPY --from=build-ais-catcher /usr/bin/AIS-catcher /usr/bin/AIS-catcher
+COPY --from=build-ais-catcher /usr/local/bin/AIS-catcher /usr/bin/AIS-catcher
 
 # Copy the AIS-catcher-control binary from build stage
 COPY --from=build-ais-control /go/bin/AIS-catcher-control /usr/bin/AIS-catcher-control
