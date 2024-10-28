@@ -70,6 +70,15 @@ type Control struct {
 	ContentTemplate string   `json:"content_template"`
 }
 
+type ConfigJSON struct {
+	Service ServiceConfig `json:"server"`
+}
+
+type ServiceConfig struct {
+	Port string `json:"port"`
+}
+
+
 func Seq(start, end int) []int {
 	if end < start {
 		return []int{}
@@ -635,14 +644,6 @@ func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("Failed to save config.json: %v", err)
 	}
-	fmt.Println("Saved control.json content:")
-
-	configJSON, err := json.MarshalIndent(config, "", "    ")
-	if err != nil {
-		fmt.Printf("Failed to marshal config to JSON: %v\n", err)
-		return nil
-	}
-	fmt.Println(string(configJSON))
 
 	return nil
 }
@@ -971,13 +972,26 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 		jsonContent = []byte("")
 	}
 
+	port := "8000"
+
+	if len(jsonContent) > 0 {
+		var cfg ConfigJSON 
+		err = json.Unmarshal(jsonContent, &cfg)
+		if err != nil {
+			log.Printf("Error parsing config.json: %v", err)
+		} else {
+			port = cfg.Service.Port
+			} 
+	}
+	
+
 	data := map[string]interface{}{
 		"CssVersion":      cssVersion,
 		"JsVersion":       jsVersion,
 		"JsonContent":     string(jsonContent),
 		"Title":           "Webviewer",
 		"ContentTemplate": "webviewer",
-		"port": 8100,
+		"port": port,
 	}
 
 	err = templates.ExecuteTemplate(w, "layout.html", data)
