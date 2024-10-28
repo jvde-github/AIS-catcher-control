@@ -100,7 +100,6 @@ func init() {
 		"templates/header.html",
 		"templates/navigation.html",
 		"templates/footer.html",
-		"templates/modal/modal.html",
 		"templates/content/control.html",
 		"templates/content/udp-channels.html",
 		"templates/content/tcp-channels.html",

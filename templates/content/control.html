@@ -37,31 +37,6 @@
             padding-left: 8px;
         }
 
-        /* Spinner Styles */
-        .spinner {
-            border: 6px solid rgba(0, 0, 0, 0.1);
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            border-left-color: #09f;
-            animation: spin 1s linear infinite;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 1000;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .hidden-spinner {
-            display: none;
-        }
-
         #output-container,
         #journalctl-container {
             scroll-behavior: smooth;
@@ -74,14 +49,11 @@
                 <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Status</h2>
                 <div class="flex items-center">
                     <span class="text-gray-700 mr-2">Status:</span>
-                    <!-- Placeholder for dynamic status -->
                     <span id="service-status">
-                        <!-- Initial placeholder text, will be updated by JavaScript -->
                         Checking status...
                     </span>
                 </div>
             </div>
-            <!-- Placeholder for action buttons -->
             <div id="action-buttons" class="flex flex-wrap gap-2"></div>
         </div>
     </div>
@@ -90,7 +62,6 @@
         <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Uptime</h2>
         <div class="flex items-center">
             <span class="text-gray-700 mr-2">Running for:</span>
-            <!-- Placeholder for dynamic uptime -->
             <span id="service-uptime" class="text-gray-800 font-medium">Calculating uptime...</span>
         </div>
     </div>
@@ -114,9 +85,9 @@
                 </div>
             </div>
             <div class="flex gap-2">
-                <span onclick="serviceAction('enable')" id = "enable-button"
+                <span id="enable-button" data-action="enable"
                     class="hidden bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Enable</span>
-                <span onclick="serviceAction('disable')" id = "disable-button"
+                <span id="disable-button" data-action="disable"
                     class="hidden bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Disable</span>
             </div>
         </div>
@@ -155,104 +126,103 @@
         {{ end }}
     </div>
 
-    <!-- Action Spinner -->
-    <div id="action-spinner" class="spinner hidden-spinner"></div>
 
-    <!-- Scripts -->
     <script>
 
-        async function serviceAction(s) {
-            fetch('service?action='+s)
-                    .then(response => response.json())
-                    .then(data => {
-                    })
+
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+
+                    if (data.enabled) {
+                        document.getElementById('enabled-true').classList.remove('hidden')
+                        document.getElementById('enabled-false').classList.add('hidden')
+
+                        document.getElementById('enable-button').classList.add('hidden')
+                        document.getElementById('disable-button').classList.remove('hidden')
+
+                    } else {
+                        document.getElementById('enabled-true').classList.add('hidden')
+                        document.getElementById('enabled-false').classList.remove('hidden')
+
+                        document.getElementById('enable-button').classList.remove('hidden')
+                        document.getElementById('disable-button').classList.add('hidden')
+                    }
+
+                    // Update status text
+                    const statusSpan = document.getElementById('service-status');
+                    let statusHTML = '';
+                    if (data.status === 'active (running)') {
+                        statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Active (Running)</span>';
+                    } else if (data.status === 'inactive (stopped)') {
+                        statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Inactive (Stopped)</span>';
+                    } else if (data.status === 'failed') {
+                        statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Failed</span>';
+                    } else {
+                        statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">' + data.status + '</span>';
+                    }
+                    statusSpan.innerHTML = statusHTML;
+
+                    // Update uptime text
+                    const uptimeSpan = document.getElementById('service-uptime');
+                    uptimeSpan.textContent = data.uptime;
+
+                    // Update action buttons based on status
+                    const actionButtonsDiv = document.getElementById('action-buttons');
+                    let buttonsHTML = '';
+                    if (data.status === 'active (running)') {
+                        buttonsHTML += `
+                <span data-action="stop" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Stop</span>
+                <span data-action="restart" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Restart</span>
+            `;
+                    } else {
+                        buttonsHTML += `
+                <span data-action="start" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Start</span>
+            `;
+                    }
+
+                    // **Insert the buttonsHTML into the action-buttons div**
+                    actionButtonsDiv.innerHTML = buttonsHTML;
+
+                    // **Re-attach event listeners to the new buttons**
+                    const newActionButtons = actionButtonsDiv.querySelectorAll('.action-button');
+                    newActionButtons.forEach(button => {
+                        button.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            const action = this.getAttribute('data-action');
+                            if (!action) {
+                                console.error('No data-action attribute found on button.');
+                                return;
+                            }
+
+                            fetch(`/service?action=${action}`)
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.status) {
+                                        updateStatus();
+                                    } else {
+                                        alert('Action failed.');
+                                    }
+                                })
+                                .catch(error => {
+                                    alert('An error occurred: ' + error);
+                                });
+                        });
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching status:', error);
+                });
         }
+
 
         document.addEventListener('DOMContentLoaded', function () {
             let eventSource = null;
-            function updateStatus() {
-                fetch('/status')
-                    .then(response => response.json())
-                    .then(data => {
 
-                        if (data.enabled) {
-                            document.getElementById('enabled-true').classList.remove('hidden')
-                            document.getElementById('enabled-false').classList.add('hidden')
-
-                            document.getElementById('enable-button').classList.add('hidden')
-                            document.getElementById('disable-button').classList.remove('hidden')
-
-                        } else {
-                            document.getElementById('enabled-true').classList.add('hidden')
-                            document.getElementById('enabled-false').classList.remove('hidden')
-
-                            document.getElementById('enable-button').classList.remove('hidden')
-                            document.getElementById('disable-button').classList.add('hidden')
-                        }
-                        
-                        // Update status text
-                        const statusSpan = document.getElementById('service-status');
-                        let statusHTML = '';
-                        if (data.status === 'active (running)') {
-                            statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Active (Running)</span>';
-                        } else if (data.status === 'inactive (stopped)') {
-                            statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Inactive (Stopped)</span>';
-                        } else if (data.status === 'failed') {
-                            statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Failed</span>';
-                        } else {
-                            statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">' + data.status + '</span>';
-                        }
-                        statusSpan.innerHTML = statusHTML;
-
-                        // Update uptime text
-                        const uptimeSpan = document.getElementById('service-uptime');
-                        uptimeSpan.textContent = data.uptime;
-
-                        // Update action buttons based on status
-                        const actionButtonsDiv = document.getElementById('action-buttons');
-                        let buttonsHTML = '';
-                        if (data.status === 'active (running)') {
-                            buttonsHTML += `
-                        <span onclick="serviceAction('stop')" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Stop</span>
-                        <span onclick="serviceAction('restart')" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Restart</span>
-                    `;
-                        } else {
-                            buttonsHTML += `
-                        <span onclick="serviceAction('start')" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Start</span>
-                    `;
-                        }
-                        actionButtonsDiv.innerHTML = buttonsHTML;
-
-                        // Reattach event listeners to action buttons
-                        const actionButtons = document.querySelectorAll('.action-button');
-                        const actionSpinner = document.getElementById('action-spinner');
-                        actionButtons.forEach(button => {
-                            button.addEventListener('click', function (e) {
-                                e.preventDefault();
-                                const href = this.getAttribute('href');
-                                actionSpinner.classList.remove('hidden-spinner');
-
-                                fetch(href)
-                                    .then(response => {
-                                        actionSpinner.classList.add('hidden-spinner');
-                                        if (response.redirected) {
-                                            window.location.href = response.url;
-                                        }
-                                    })
-                                    .catch(error => {
-                                        actionSpinner.classList.add('hidden-spinner');
-                                        alert('An error occurred: ' + error);
-                                    });
-                            });
-                        });
-                    })
-                    .catch(error => {
-                        console.error('Error fetching status:', error);
-                    });
-            }
 
             updateStatus();
-            setInterval(updateStatus, 2000);
+            setInterval(updateStatus, 3000);
 
             function initializeSSE() {
                 if (eventSource) {
@@ -263,7 +233,6 @@
                 const journalctlLogsDiv = document.getElementById('journalctl-logs');
                 const outputContainer = document.getElementById('output-container');
                 const journalctlContainer = document.getElementById('journalctl-container');
-                const actionSpinner = document.getElementById('action-spinner');
                 eventSource = new EventSource('/logs-stream');
 
                 eventSource.onmessage = function (event) {
@@ -315,23 +284,26 @@
             initializeSSE();
 
             const actionButtons = document.querySelectorAll('.action-button');
-            const actionSpinner = document.getElementById('action-spinner');
 
             actionButtons.forEach(button => {
                 button.addEventListener('click', function (e) {
                     e.preventDefault();
-                    const href = this.getAttribute('href');
-                    actionSpinner.classList.remove('hidden-spinner');
+                    const action = this.getAttribute('data-action');
+                    if (!action) {
+                        console.error('No data-action attribute found on button.');
+                        return;
+                    }
 
-                    fetch(href)
-                        .then(response => {
-                            actionSpinner.classList.add('hidden-spinner');
-                            if (response.redirected) {
-                                window.location.href = response.url;
+                    fetch(`/service?action=${action}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status) {
+                                updateStatus();
+                            } else {
+                                alert('Action failed.');
                             }
                         })
                         .catch(error => {
-                            actionSpinner.classList.add('hidden-spinner');
                             alert('An error occurred: ' + error);
                         });
                 });
