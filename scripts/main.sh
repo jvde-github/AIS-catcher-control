@@ -14,17 +14,15 @@ log() {
 mkdir -p "$TARGET_DIR"
 
 if [ ! -f "$AUTO_RESTART_FILE" ]; then
-    echo "true" > "$AUTO_RESTART_FILE"  # Enable auto-restart by default
+    echo "true" > "$AUTO_RESTART_FILE"  
     log "Auto-restart enabled by default."
 fi
 
-# Set default manual_stop state if the file doesn't exist
 if [ ! -f "$MANUAL_STOP_FILE" ]; then
-    echo "false" > "$MANUAL_STOP_FILE"  # Not stopped manually by default
+    echo "false" > "$MANUAL_STOP_FILE"  
     log "Manual stop flag set to false by default."
 fi
 
-# Copy configuration files if they don't exist
 if [ ! -f "$TARGET_DIR/control.json" ] && [ ! -f "$TARGET_DIR/config.json" ] && [ ! -f "$TARGET_DIR/config.cmd" ]; then
     log "Configuration files not found in $TARGET_DIR. Copying from $CONFIG_DIR."
     cp "$CONFIG_DIR/"*.json "$TARGET_DIR/" 2>/dev/null
@@ -34,12 +32,10 @@ else
     log "One or more configuration files already exist. Skipping copy."
 fi
 
-# Function to check if AIS-catcher is running
 is_ais_catcher_running() {
     pgrep -f "/usr/bin/AIS-catcher " >/dev/null 2>&1
 }
 
-# Function to start AIS-catcher
 start_ais_catcher() {
     if is_ais_catcher_running; then
         log "AIS-catcher is already running."
@@ -47,7 +43,6 @@ start_ais_catcher() {
     fi
 
     log "Starting AIS-catcher..."
-    #/usr/bin/AIS-catcher -C /etc/AIS-catcher/config.json -q -v 60 -G /etc/AIS-catcher/log.txt "$@" &
     /usr/bin/AIS-catcher -C /etc/AIS-catcher/config.json -q -v 60 -G /etc/AIS-catcher/log.txt  &
 
     sleep 1  # Allow some time to start
@@ -150,7 +145,6 @@ while true; do
     if [ -f "$COMMAND_FILE" ]; then
         COMMAND=$(cat "$COMMAND_FILE")
         rm "$COMMAND_FILE"
-        log "Received command: $COMMAND"
         handle_command "$COMMAND"
     fi
 
@@ -158,13 +152,11 @@ while true; do
     if ! is_ais_catcher_running; then
         # Check if AIS-catcher was stopped manually
         MANUAL_STOP_STATUS=$(cat "$MANUAL_STOP_FILE")
-        # Check if auto-restart is enabled
+
         AUTO_RESTART_STATUS=$(cat "$AUTO_RESTART_FILE")
         if [ "$AUTO_RESTART_STATUS" = "true" ] && [ "$MANUAL_STOP_STATUS" = "false" ]; then
             log "AIS-catcher has exited unexpectedly. Auto-restarting..."
             start_ais_catcher "$@"
-        elif [ "$AUTO_RESTART_STATUS" = "false" ]; then
-            log "AIS-catcher has stopped and auto-restart is disabled."
         fi
     fi
 
@@ -175,6 +167,5 @@ while true; do
         exit 1
     fi
 
-    # Sleep for a short duration before the next check
-    sleep 1
+    sleep 2
 done
