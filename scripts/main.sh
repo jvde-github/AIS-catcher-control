@@ -14,8 +14,7 @@ log() {
 mkdir -p "$TARGET_DIR"
 
 if [ ! -f "$AUTO_RESTART_FILE" ]; then
-    echo "true" > "$AUTO_RESTART_FILE"  
-    log "Auto-restart enabled by default."
+    echo "false" > "$AUTO_RESTART_FILE"  
 fi
 
 if [ ! -f "$MANUAL_STOP_FILE" ]; then

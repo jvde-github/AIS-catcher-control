@@ -1,37 +1,30 @@
 {{ define "control" }}
-<div id="input-selection" class="p-6 bg-white rounded-lg shadow-md">
-    <!-- Styles for Log Lines and Spinner -->
+<div class="p-6 bg-white rounded-lg shadow-md">
+    <!-- Styles for Log Lines -->
     <style>
         .log-line {
             white-space: pre-wrap;
-            /* Preserve whitespace and wrap text */
             padding: 2px 0;
             font-family: monospace;
             font-size: 14px;
         }
 
-        /* Style error logs in red */
         .log-line.error {
             color: #FF4C4C;
-            /* Bright Red for errors */
             background-color: rgba(255, 76, 76, 0.1);
             border-left: 4px solid #FF4C4C;
             padding-left: 8px;
         }
 
-        /* Style warning logs in orange */
         .log-line.warning {
             color: #FFA500;
-            /* Orange for warnings */
             background-color: rgba(255, 165, 0, 0.1);
             border-left: 4px solid #FFA500;
             padding-left: 8px;
         }
 
-        /* Style info logs in blue */
         .log-line.info {
             color: #1E90FF;
-            /* Dodger Blue for info */
             background-color: rgba(30, 144, 255, 0.1);
             border-left: 4px solid #1E90FF;
             padding-left: 8px;
@@ -43,84 +36,86 @@
         }
     </style>
 
-    <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
-            <div class="mb-4 md:mb-0">
-                <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Status</h2>
-                <div class="flex items-center">
-                    <span class="text-gray-700 mr-2">Status:</span>
-                    <span id="service-status">
-                        Checking status...
-                    </span>
+    <!-- Status Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <!-- Service Status Card -->
+        <div class="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Service Status</h2>
+            <div class="flex flex-col space-y-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-600">Status:</span>
+                    <span id="service-status">Checking status...</span>
+                </div>
+                <div class="flex flex-wrap gap-2 justify-end" id="action-buttons"></div>
+            </div>
+        </div>
+
+        <!-- Service Uptime Card -->
+        <div class="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Service Uptime</h2>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-600">Running for:</span>
+                <span id="service-uptime" class="text-gray-800 font-medium">Calculating uptime...</span>
+            </div>
+        </div>
+
+        <!-- Auto-Start Service Card -->
+        <div class="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Auto-Start</h2>
+            <div class="flex flex-col space-y-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-600">Enabled:</span>
+                    <div>
+                        <span id="enabled-true"
+                            class="hidden px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">Yes</span>
+                        <span id="enabled-false"
+                            class="hidden px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">No</span>
+                    </div>
+                </div>
+                <div class="flex gap-2 justify-end">
+                    <button id="enable-button" data-action="enable"
+                        class="hidden px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">
+                        Enable
+                    </button>
+                    <button id="disable-button" data-action="disable"
+                        class="hidden px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">
+                        Disable
+                    </button>
                 </div>
             </div>
-            <div id="action-buttons" class="flex flex-wrap gap-2"></div>
         </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
-        <h2 class="text-xl font-semibold mb-2 text-gray-800">Service Uptime</h2>
-        <div class="flex items-center">
-            <span class="text-gray-700 mr-2">Running for:</span>
-            <span id="service-uptime" class="text-gray-800 font-medium">Calculating uptime...</span>
-        </div>
-    </div>
+    <!-- Logs Section -->
+    <div class="space-y-6">
 
-    <!-- Service Configuration Section -->
-    <div class="bg-white rounded-lg shadow-md p-4 w-full mb-8">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+        {{ if .Docker }}
 
-            <div class="mb-4 md:mb-0">
-                <h2 class="text-xl font-semibold mb-2 text-gray-800">Auto-Start Service</h2>
-                <div class="flex items-center">
-                    <span class="text-gray-700 mr-2">Enabled:</span>
-                    <span id="enabled-true"
-                        class="hidden px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                        Yes
-                    </span>
-                    <span id="enabled-false"
-                        class="hidden px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                        No
-                    </span>
+        <div>
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Log</h2>
+            <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-128 overflow-y-auto" id="output-container">
+                <div id="output-logs" class="text-sm leading-relaxed">
+                    {{if .LogTxtLogs}}
+                    {{range .LogTxtLogs}}<div class="log-line">{{.}}</div>{{end}}
+                    {{else}}
+                    <p class="text-gray-400">No logs available.</p>
+                    {{end}}
                 </div>
             </div>
-            <div class="flex gap-2">
-                <span id="enable-button" data-action="enable"
-                    class="hidden bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Enable</span>
-                <span id="disable-button" data-action="disable"
-                    class="hidden bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Disable</span>
-            </div>
         </div>
-    </div>
-
-    <!-- Recent Logs Section -->
-    <div class="mb-8 p-4">
-
-        <h2 class="text-xl font-semibold mb-4 text-gray-800">Log</h2>
-
-        <!-- Output Logs (log.txt) -->
-        <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-80 w-full overflow-y-auto mb-4" id="output-container">
-            <div id="output-logs" class="text-sm leading-relaxed">
-                {{if .LogTxtLogs}}
-                {{range .LogTxtLogs}}<div class="log-line">{{.}}</div>
-                {{end}}
-                {{else}}
-                <p class="text-gray-400">No logs available.</p>
-                {{end}}
-            </div>
-        </div>
+        {{ end }}
 
         {{ if not .Docker }}
-        <!-- Journalctl Logs -->
-        <h2 class="text-xl font-semibold mb-4 text-gray-800">System Log</h2>
-        <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-64 w-full overflow-y-auto" id="journalctl-container">
-            <div id="journalctl-logs" class="text-sm leading-relaxed">
-                {{if .Logs}}
-                {{range .Logs}}<div class="log-line">{{.}}</div>
-                {{end}}
-                {{else}}
-                <p class="text-gray-400">No logs available.</p>
-                {{end}}
+        <div>
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">System Log</h2>
+            <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-128 overflow-y-auto" id="journalctl-container">
+                <div id="journalctl-logs" class="text-sm leading-relaxed">
+                    {{if .Logs}}
+                    {{range .Logs}}<div class="log-line">{{.}}</div>{{end}}
+                    {{else}}
+                    <p class="text-gray-400">No logs available.</p>
+                    {{end}}
+                </div>
             </div>
         </div>
         {{ end }}
@@ -129,63 +124,52 @@
 
     <script>
 
-
         function updateStatus() {
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
-
                     if (data.enabled) {
                         document.getElementById('enabled-true').classList.remove('hidden')
                         document.getElementById('enabled-false').classList.add('hidden')
-
                         document.getElementById('enable-button').classList.add('hidden')
                         document.getElementById('disable-button').classList.remove('hidden')
-
                     } else {
                         document.getElementById('enabled-true').classList.add('hidden')
                         document.getElementById('enabled-false').classList.remove('hidden')
-
                         document.getElementById('enable-button').classList.remove('hidden')
                         document.getElementById('disable-button').classList.add('hidden')
                     }
 
-                    // Update status text
                     const statusSpan = document.getElementById('service-status');
                     let statusHTML = '';
                     if (data.status === 'active (running)') {
-                        statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Active (Running)</span>';
+                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">Active</span>';
                     } else if (data.status === 'inactive (stopped)') {
-                        statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Inactive (Stopped)</span>';
+                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">Inactive</span>';
                     } else if (data.status === 'failed') {
-                        statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Failed</span>';
+                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">Failed</span>';
                     } else {
-                        statusHTML = '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">' + data.status + '</span>';
+                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">' + data.status + '</span>';
                     }
                     statusSpan.innerHTML = statusHTML;
 
-                    // Update uptime text
                     const uptimeSpan = document.getElementById('service-uptime');
                     uptimeSpan.textContent = data.uptime;
 
-                    // Update action buttons based on status
                     const actionButtonsDiv = document.getElementById('action-buttons');
                     let buttonsHTML = '';
                     if (data.status === 'active (running)') {
                         buttonsHTML += `
-                <span data-action="stop" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Stop</span>
-                <span data-action="restart" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Restart</span>
-            `;
+                            <button data-action="stop" class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Stop</button>
+                            <button data-action="restart" class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Restart</button>
+                        `;
                     } else {
                         buttonsHTML += `
-                <span data-action="start" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 action-button">Start</span>
-            `;
+                            <button data-action="start" class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Start</button>
+                        `;
                     }
-
-                    // **Insert the buttonsHTML into the action-buttons div**
                     actionButtonsDiv.innerHTML = buttonsHTML;
 
-                    // **Re-attach event listeners to the new buttons**
                     const newActionButtons = actionButtonsDiv.querySelectorAll('.action-button');
                     newActionButtons.forEach(button => {
                         button.addEventListener('click', function (e) {
@@ -215,7 +199,6 @@
                     console.error('Error fetching status:', error);
                 });
         }
-
 
         document.addEventListener('DOMContentLoaded', function () {
             let eventSource = null;
