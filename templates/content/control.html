@@ -1,5 +1,5 @@
 {{ define "control" }}
-<div class="p-6 bg-white rounded-lg shadow-md">
+<div class="p-2 sm:p-6 bg-white rounded-lg shadow-md">
     <!-- Styles for Log Lines -->
     <style>
         .log-line {
@@ -7,6 +7,7 @@
             padding: 2px 0;
             font-family: monospace;
             font-size: 14px;
+            overflow-x: auto;
         }
 
         .log-line.error {
@@ -33,68 +34,67 @@
         #output-container,
         #journalctl-container {
             scroll-behavior: smooth;
+            max-width: 100%;
+            overflow-x: auto;
         }
     </style>
 
-    <!-- Status Cards Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Status Cards Grid - Updated for responsive layout -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
         <!-- Service Status Card -->
-        <div class="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-            <h2 class="text-xl font-semibold mb-4 text-gray-800">Service Status</h2>
-            <div class="flex flex-col space-y-4">
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
+            <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">Service Status</h2>
+            <div class="flex flex-col space-y-3 sm:space-y-4">
                 <div class="flex items-center justify-between">
-                    <span class="text-gray-600">Status:</span>
-                    <span id="service-status">Checking status...</span>
+                    <span class="text-sm sm:text-base text-gray-600">Status:</span>
+                    <span id="service-status" class="text-sm sm:text-base">Checking status...</span>
                 </div>
                 <div class="flex flex-wrap gap-2 justify-end" id="action-buttons"></div>
             </div>
         </div>
 
         <!-- Service Uptime Card -->
-        <div class="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-            <h2 class="text-xl font-semibold mb-4 text-gray-800">Service Uptime</h2>
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
+            <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">Service Uptime</h2>
             <div class="flex items-center justify-between">
-                <span class="text-gray-600">Running for:</span>
-                <span id="service-uptime" class="text-gray-800 font-medium">Calculating uptime...</span>
+                <span class="text-sm sm:text-base text-gray-600">Running for:</span>
+                <span id="service-uptime" class="text-sm sm:text-base text-gray-800 font-medium">Calculating
+                    uptime...</span>
             </div>
         </div>
 
         <!-- Auto-Start Service Card -->
-        <div class="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-            <h2 class="text-xl font-semibold mb-4 text-gray-800">Auto-Start</h2>
-            <div class="flex flex-col space-y-4">
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
+            <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">Auto-Start</h2>
+            <div class="flex flex-col space-y-3 sm:space-y-4">
                 <div class="flex items-center justify-between">
-                    <span class="text-gray-600">Enabled:</span>
+                    <span class="text-sm sm:text-base text-gray-600">Enabled:</span>
                     <div>
                         <span id="enabled-true"
-                            class="hidden px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">Yes</span>
+                            class="hidden px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full bg-gray-100 text-gray-800">Yes</span>
                         <span id="enabled-false"
-                            class="hidden px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">No</span>
+                            class="hidden px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full bg-gray-100 text-gray-800">No</span>
                     </div>
                 </div>
                 <div class="flex gap-2 justify-end">
                     <button id="enable-button" data-action="enable"
-                        class="hidden px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">
-                        Enable
-                    </button>
+                        class="hidden px-3 sm:px-4 py-1 sm:py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Enable</button>
                     <button id="disable-button" data-action="disable"
-                        class="hidden px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">
-                        Disable
-                    </button>
+                        class="hidden px-3 sm:px-4 py-1 sm:py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Disable</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Rest of the template remains the same -->
     <!-- Logs Section -->
-    <div class="space-y-6">
-
+    <div class="space-y-4 sm:space-y-6">
         {{ if .Docker }}
-
         <div>
-            <h2 class="text-xl font-semibold mb-4 text-gray-800">Log</h2>
-            <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-128 overflow-y-auto" id="output-container">
-                <div id="output-logs" class="text-sm leading-relaxed">
+            <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">Log</h2>
+            <div class="bg-gray-900 text-gray-100 p-3 sm:p-4 rounded-lg h-48 sm:h-64 overflow-y-auto"
+                id="output-container">
+                <div id="output-logs" class="text-xs sm:text-sm leading-relaxed break-all">
                     {{if .LogTxtLogs}}
                     {{range .LogTxtLogs}}<div class="log-line">{{.}}</div>{{end}}
                     {{else}}
@@ -107,9 +107,10 @@
 
         {{ if not .Docker }}
         <div>
-            <h2 class="text-xl font-semibold mb-4 text-gray-800">System Log</h2>
-            <div class="bg-gray-900 text-gray-100 p-4 rounded-lg h-128 overflow-y-auto" id="journalctl-container">
-                <div id="journalctl-logs" class="text-sm leading-relaxed">
+            <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">System Log</h2>
+            <div class="bg-gray-900 text-gray-100 p-3 sm:p-4 rounded-lg h-48 sm:h-64 overflow-y-auto"
+                id="journalctl-container">
+                <div id="journalctl-logs" class="text-xs sm:text-sm leading-relaxed break-all">
                     {{if .Logs}}
                     {{range .Logs}}<div class="log-line">{{.}}</div>{{end}}
                     {{else}}
@@ -120,7 +121,6 @@
         </div>
         {{ end }}
     </div>
-
 
     <script>
 
@@ -311,7 +311,8 @@
             // Scroll to bottom on initial load
             const outputContainerInitial = document.getElementById('output-container');
             const journalctlContainerInitial = document.getElementById('journalctl-container');
-            outputContainerInitial.scrollTop = outputContainerInitial.scrollHeight;
+            if (outputContainerInitial)
+                outputContainerInitial.scrollTop = outputContainerInitial.scrollHeight;
 
             if (journalctlContainerInitial)
                 journalctlContainerInitial.scrollTop = journalctlContainerInitial.scrollHeight;
@@ -332,6 +333,5 @@
             });
         });
     </script>
-
 </div>
 {{ end }}
