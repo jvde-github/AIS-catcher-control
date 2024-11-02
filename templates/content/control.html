@@ -140,12 +140,12 @@
                     let buttonsHTML = '';
                     if (data.status === 'active (running)') {
                         buttonsHTML += `
-                            <button data-action="stop" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200 action-button">Stop</button>
-                            <button data-action="restart" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition duration-200 action-button">Restart</button>
+                            <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="stop">Stop</button>
+                            <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="restart">Restart</button>
                         `;
                     } else {
                         buttonsHTML += `
-                            <button data-action="start" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition duration-200 action-button">Start</button>
+                            <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="start">Start</button>
                         `;
                     }
                     actionButtonsDiv.innerHTML = buttonsHTML;
@@ -233,6 +233,31 @@
                             alert('An error occurred: ' + error);
                         });
                 });
+            });
+
+            document.getElementById('action-buttons').addEventListener('click', function (e) {
+                const button = e.target.closest('.action-button');
+                if (!button) return; // Exit if click wasn't on an action button
+
+                e.preventDefault();
+                const action = button.getAttribute('data-action');
+                if (!action) {
+                    console.error('No data-action attribute found on button.');
+                    return;
+                }
+
+                fetch(`/service?action=${action}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status) {
+                            updateStatus();
+                        } else {
+                            alert('Action failed.');
+                        }
+                    })
+                    .catch(error => {
+                        alert('An error occurred: ' + error);
+                    });
             });
 
             window.addEventListener('beforeunload', function () {
