@@ -1,6 +1,6 @@
 {{ define "webviewer" }}
-<div id="webviewer" class="flex-1 h-screen overflow-hidden">
-    <!-- Removed padding and adjusted height to fill screen -->
+<div id="webviewer" class="flex-1 h-[calc(100vh-2rem)] overflow-hidden">
+    <!-- Adjusted height calculation to account for potential headers/margins -->
     <iframe 
         id="modifiedFrame" 
         src="" 
