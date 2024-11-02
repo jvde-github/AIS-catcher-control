@@ -162,8 +162,8 @@ func loadControlSettings() error {
 		config = Config{
 			PasswordHash:   hashPassword(defaultPassword),
 			Port:           "8110",
-			ConfigCmdHash:  1,
-			ConfigJSONHash: 1,
+			ConfigCmdHash:  435605018,
+			ConfigJSONHash: 2923753004,
 			Docker:         false,
 		}
 		return saveControlSettings()
@@ -236,7 +236,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			Path:  "/",
 		})
 
-		if false && password == defaultPassword && hashPassword(password) == config.PasswordHash {
+		if password == defaultPassword && hashPassword(password) == config.PasswordHash {
 			http.Redirect(w, r, "/change-password", http.StatusSeeOther)
 		} else {
 			http.Redirect(w, r, "/control", http.StatusSeeOther)
@@ -921,7 +921,7 @@ func renderTemplateWithConfig(w http.ResponseWriter, title string, contentTempla
 		jsonContent = []byte("")
 	}
 
-	if false && configIntegrityError {
+	if true && configIntegrityError {
 		data := map[string]interface{}{
 			"Title":           "Configuration Integrity Error",
 			"ContentTemplate": "integrity-error",
