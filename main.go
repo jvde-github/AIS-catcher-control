@@ -464,20 +464,18 @@ func formatDuration(d time.Duration) string {
 }
 
 func getServiceLogs(lines int) []string {
-
-	if config.Docker {
-		return []string{""}
-	}
-
-	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", fmt.Sprintf("%d", lines), "--no-pager", "--output=short-iso")
-	output, err := cmd.Output()
-
-	if err != nil {
-		return []string{"Unable to retrieve logs"}
-	}
-
-	logLines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	return logLines
+    if config.Docker {
+        return []string{""}
+    }
+    
+    cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", fmt.Sprintf("%d", lines), "--no-pager", "--output=cat")
+    output, err := cmd.Output()
+    if err != nil {
+        return []string{"Unable to retrieve logs"}
+    }
+    
+    logLines := strings.Split(strings.TrimSpace(string(output)), "\n")
+    return logLines
 }
 
 func getLogTxtLogs(lines int) []string {
@@ -708,27 +706,27 @@ func (b *Broadcaster) Run() {
 }
 
 func (b *Broadcaster) collectJournalctlLogs() {
-	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", "0", "-f", "--no-pager", "--output=short-iso")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Printf("Error obtaining stdout pipe for journalctl: %v", err)
-		return
-	}
+    cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", "0", "-f", "--no-pager", "--output=cat")
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+        log.Printf("Error obtaining stdout pipe for journalctl: %v", err)
+        return
+    }
 
-	if err := cmd.Start(); err != nil {
-		log.Printf("Error starting journalctl command: %v", err)
-		return
-	}
+    if err := cmd.Start(); err != nil {
+        log.Printf("Error starting journalctl command: %v", err)
+        return
+    }
 
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		b.journalChan <- line
-	}
+    scanner := bufio.NewScanner(stdout)
+    for scanner.Scan() {
+        line := scanner.Text()
+        b.journalChan <- line
+    }
 
-	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading journalctl output: %v", err)
-	}
+    if err := scanner.Err(); err != nil {
+        log.Printf("Error reading journalctl output: %v", err)
+    }
 }
 
 func (b *Broadcaster) collectLogTxtLogs() {
