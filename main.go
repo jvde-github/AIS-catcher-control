@@ -128,8 +128,8 @@ var sessions = map[string]string{}
 type Config struct {
 	PasswordHash   string `json:"password_hash"`
 	Port           string `json:"port"`
-	ConfigCmdHash  int    `json:"config_cmd_hash"`
-	ConfigJSONHash int    `json:"config_json_hash"`
+	ConfigCmdHash  uint32 `json:"config_cmd_hash"`
+	ConfigJSONHash uint32 `json:"config_json_hash"`
 	Docker         bool   `json:"docker"`
 }
 
@@ -195,7 +195,7 @@ func calculate32BitHash(input string) uint32 {
 func updateConfigJSONHash(input string) error {
 	hashValue := calculate32BitHash(input)
 
-	config.ConfigJSONHash = int(hashValue)
+	config.ConfigJSONHash = uint32(hashValue)
 	err := saveControlSettings()
 	if err != nil {
 		return fmt.Errorf("failed to save control settings: %v", err)
@@ -582,7 +582,7 @@ func readConfigJSON() ([]byte, error) {
 
 	calculatedHash := calculate32BitHash(string(jsonContent))
 
-	if int(calculatedHash) != config.ConfigJSONHash {
+	if uint32(calculatedHash) != config.ConfigJSONHash {
 		fmt.Printf("hash mismatch: config.json content does not match the stored hash (%d != %d)\n", calculatedHash, config.ConfigJSONHash)
 		configIntegrityError = true
 	}
@@ -599,7 +599,7 @@ func readConfigCmd() ([]byte, error) {
 
 	calculatedHash := calculate32BitHash(string(cmdContent))
 
-	if int(calculatedHash) != config.ConfigCmdHash {
+	if uint32(calculatedHash) != config.ConfigCmdHash {
 		fmt.Printf("hash mismatch: config.cmd content does not match the stored hash (%d != %d)\n", calculatedHash, config.ConfigCmdHash)
 		configIntegrityError = true
 	}
@@ -637,7 +637,7 @@ func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("Failed to load control settings: %v", err)
 	}
 
-	config.ConfigJSONHash = int(hashValue)
+	config.ConfigJSONHash = uint32(hashValue)
 	err = saveControlSettings()
 
 	if err != nil {
@@ -1182,7 +1182,7 @@ func editConfigJSONHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Update hash value
-		config.ConfigJSONHash = int(0)
+		config.ConfigJSONHash = uint32(0)
 		err = saveControlSettings()
 		if err != nil {
 			data := map[string]interface{}{
@@ -1271,7 +1271,7 @@ func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Update hash value
-		config.ConfigCmdHash = int(0)
+		config.ConfigCmdHash = uint32(0)
 		err = saveControlSettings()
 		if err != nil {
 			data := map[string]interface{}{
