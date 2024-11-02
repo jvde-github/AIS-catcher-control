@@ -138,12 +138,12 @@ install_binary() {
   print_message "Binary installed successfully at ${INSTALL_PATH}."
 }
 
-# Function to create systemd service
 create_systemd_service() {
   SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
   print_message "Creating systemd service file at ${SERVICE_FILE}..."
 
+  # Always create/overwrite the service file with the new configuration
   cat <<EOF > "$SERVICE_FILE"
 [Unit]
 Description=AIS-catcher Control Service
@@ -151,7 +151,13 @@ After=network.target
 
 [Service]
 ExecStart=${INSTALL_PATH}
+Type=simple
 Restart=always
+# Restart after 10 seconds if the service crashes
+RestartSec=10
+# Limit restart attempts to 3 times per 60 seconds
+StartLimitInterval=60
+StartLimitBurst=3
 User=root
 Environment=GO_ENV=production
 WorkingDirectory=/root
@@ -160,7 +166,10 @@ WorkingDirectory=/root
 WantedBy=multi-user.target
 EOF
 
-  print_message "Systemd service file created."
+  # Set proper permissions for the service file
+  chmod 644 "$SERVICE_FILE"
+
+  print_message "Systemd service file created with restart rate limiting."
 }
 
 # Function to check prerequisites
