@@ -115,6 +115,8 @@ func init() {
 		"templates/content/integrity-error.html",
 		"templates/content/server-setup.html",
 		"templates/content/webviewer.html",
+		"templates/content/edit-config-json.html",
+		"templates/content/edit-config-cmd.html",
 	)
 	if err != nil {
 		log.Fatalf("Failed to parse templates: %v", err)
@@ -919,7 +921,7 @@ func renderTemplateWithConfig(w http.ResponseWriter, title string, contentTempla
 		jsonContent = []byte("")
 	}
 
-	if false /*configIntegrityError*/ {
+	if false && configIntegrityError {
 		data := map[string]interface{}{
 			"Title":           "Configuration Integrity Error",
 			"ContentTemplate": "integrity-error",
@@ -1113,6 +1115,201 @@ func serviceHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonData)
 }
 
+func editConfigJSONHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		// Read config.json
+		jsonContent, err := readConfigJSON()
+		if err != nil {
+			log.Printf("Error reading config.json: %v", err)
+			jsonContent = []byte("")
+		}
+
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"FileContent":     string(jsonContent),
+			"Title":           "Edit config.json",
+			"ContentTemplate": "edit-config-json",
+		}
+
+		err = templates.ExecuteTemplate(w, "layout.html", data)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Template execution error: %v", err)
+		}
+
+	} else if r.Method == http.MethodPost {
+		// Read new content from form
+		newContent := r.FormValue("file_content")
+
+		// Validate JSON
+		var jsonMap map[string]interface{}
+		err := json.Unmarshal([]byte(newContent), &jsonMap)
+		if err != nil {
+			data := map[string]interface{}{
+				"CssVersion":      cssVersion,
+				"JsVersion":       jsVersion,
+				"FileContent":     newContent,
+				"Title":           "Edit config.json",
+				"ContentTemplate": "edit-config-json",
+				"ErrorMessage":    "Invalid JSON: " + err.Error(),
+			}
+			err = templates.ExecuteTemplate(w, "layout.html", data)
+			if err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				log.Printf("Template execution error: %v", err)
+			}
+			return
+		}
+
+		// Save the file
+		err = ioutil.WriteFile(configJSONFilePath, []byte(newContent), 0644)
+		if err != nil {
+			data := map[string]interface{}{
+				"CssVersion":      cssVersion,
+				"JsVersion":       jsVersion,
+				"FileContent":     newContent,
+				"Title":           "Edit config.json",
+				"ContentTemplate": "edit-config-json",
+				"ErrorMessage":    "Failed to save file: " + err.Error(),
+			}
+			err = templates.ExecuteTemplate(w, "layout.html", data)
+			if err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				log.Printf("Template execution error: %v", err)
+			}
+			return
+		}
+
+		// Update hash value
+		config.ConfigJSONHash = int(0)
+		err = saveControlSettings()
+		if err != nil {
+			data := map[string]interface{}{
+				"CssVersion":      cssVersion,
+				"JsVersion":       jsVersion,
+				"FileContent":     newContent,
+				"Title":           "Edit config.json",
+				"ContentTemplate": "edit-config-json",
+				"ErrorMessage":    "Failed to update control settings: " + err.Error(),
+			}
+			err = templates.ExecuteTemplate(w, "layout.html", data)
+			if err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				log.Printf("Template execution error: %v", err)
+			}
+			return
+		}
+
+		// Display success message
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"FileContent":     newContent,
+			"Title":           "Edit config.json",
+			"ContentTemplate": "edit-config-json",
+			"SuccessMessage":  "Configuration saved successfully.",
+		}
+		err = templates.ExecuteTemplate(w, "layout.html", data)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Template execution error: %v", err)
+		}
+
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		// Read config.cmd
+		cmdContent, err := ioutil.ReadFile(configCmdFilePath)
+		if err != nil {
+			log.Printf("Error reading config.cmd: %v", err)
+			cmdContent = []byte("")
+		}
+
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"FileContent":     string(cmdContent),
+			"Title":           "Edit config.cmd",
+			"ContentTemplate": "edit-config-cmd",
+		}
+
+		err = templates.ExecuteTemplate(w, "layout.html", data)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Template execution error: %v", err)
+		}
+
+	} else if r.Method == http.MethodPost {
+		// Read new content from form
+		newContent := r.FormValue("file_content")
+
+		// Optionally sanitize the content
+		sanitizedContent := sanitizeFileContent(newContent)
+
+		// Save the file
+		err := ioutil.WriteFile(configCmdFilePath, []byte(sanitizedContent), 0644)
+		if err != nil {
+			data := map[string]interface{}{
+				"CssVersion":      cssVersion,
+				"JsVersion":       jsVersion,
+				"FileContent":     newContent,
+				"Title":           "Edit config.cmd",
+				"ContentTemplate": "edit-config-cmd",
+				"ErrorMessage":    "Failed to save file: " + err.Error(),
+			}
+			err = templates.ExecuteTemplate(w, "layout.html", data)
+			if err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				log.Printf("Template execution error: %v", err)
+			}
+			return
+		}
+
+		// Update hash value
+		config.ConfigCmdHash = int(0)
+		err = saveControlSettings()
+		if err != nil {
+			data := map[string]interface{}{
+				"CssVersion":      cssVersion,
+				"JsVersion":       jsVersion,
+				"FileContent":     newContent,
+				"Title":           "Edit config.cmd",
+				"ContentTemplate": "edit-config-cmd",
+				"ErrorMessage":    "Failed to update control settings: " + err.Error(),
+			}
+			err = templates.ExecuteTemplate(w, "layout.html", data)
+			if err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				log.Printf("Template execution error: %v", err)
+			}
+			return
+		}
+
+		// Display success message
+		data := map[string]interface{}{
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+			"FileContent":     sanitizedContent,
+			"Title":           "Edit config.cmd",
+			"ContentTemplate": "edit-config-cmd",
+			"SuccessMessage":  "Configuration saved successfully.",
+		}
+		err = templates.ExecuteTemplate(w, "layout.html", data)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Template execution error: %v", err)
+		}
+
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func main() {
 
 	if err := checkTailCommand(); err != nil {
@@ -1180,6 +1377,8 @@ func main() {
 	http.HandleFunc("/webviewer", authMiddleware(webviewerHandler))
 	http.HandleFunc("/logout", authMiddleware(logoutHandler))
 	http.HandleFunc("/device-list", authMiddleware(deviceListHandler))
+	http.HandleFunc("/editjson", authMiddleware(editConfigJSONHandler))
+	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)

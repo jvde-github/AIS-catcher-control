@@ -1,0 +1,37 @@
+{{ define "edit-config-cmd" }}
+<div id="edit-config-cmd" class="max-w-4xl mx-auto">
+    <div class="bg-white shadow-sm rounded-lg border">
+        <div class="p-6">
+            <h3 class="text-xl font-medium text-gray-800 mb-4">Edit config.cmd</h3>
+            <!-- Warning Message -->
+            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4" role="alert">
+                <p class="font-bold">Warning</p>
+                <p>After saving changes here, you will no longer be able to use the standard menus to edit the configuration.</p>
+            </div>
+            <form method="POST">
+                <textarea id="file_content" name="file_content" rows="20"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    spellcheck="false">{{ .FileContent }}</textarea>
+                <!-- Display error or success message -->
+                {{ if .ErrorMessage }}
+                <div class="mt-4 text-red-600">
+                    {{ .ErrorMessage }}
+                </div>
+                {{ end }}
+                {{ if .SuccessMessage }}
+                <div class="mt-4 text-green-600">
+                    {{ .SuccessMessage }}
+                </div>
+                {{ end }}
+                <!-- Submit Button -->
+                <div class="flex justify-end mt-4">
+                    <button type="submit"
+                        class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-200">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{{ end }}
