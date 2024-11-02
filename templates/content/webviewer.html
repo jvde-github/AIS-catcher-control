@@ -1,37 +1,37 @@
 {{ define "webviewer" }}
-<div id="webviewer" class="flex-1 h-[calc(100vh-2rem)] overflow-hidden">
-    <!-- Adjusted height calculation to account for potential headers/margins -->
-    <iframe 
-        id="modifiedFrame" 
-        src="" 
-        class="w-full h-full border-0" 
-        sandbox="allow-scripts allow-same-origin" 
-        title="Modified URL Viewer">
+<div id="webviewer" class="p-0 bg-white shadow-md rounded-lg h-screen overflow-hidden">
+    <!-- The iframe will be inserted here -->
+    <iframe id="modifiedFrame" src="" class="w-full h-full border-none"
+        sandbox="allow-scripts allow-same-origin" title="Modified URL Viewer">
         Your browser does not support iframes.
     </iframe>
 </div>
+
 <script>
     (function () {
         // Get the current URL
         var currentUrl = window.location.href;
+
         try {
             var url = new URL(currentUrl);
             url.port = "{{.port }}";
             url.pathname = '/';
             url.search = '';
             url.hash = '';
+
             var newUrl = url.toString() + '?android=true';
+
             var iframe = document.getElementById('modifiedFrame');
             iframe.src = newUrl;
-            
+
             // Optional: Handle iframe load errors
             iframe.onerror = function () {
-                document.getElementById('webviewer').innerHTML = '<p class="p-4 text-red-500">Failed to load the frame. Please check the URL and port.</p>';
+                document.getElementById('webviewer').innerHTML = '<p class="text-red-500">Failed to load the frame. Please check the URL and port.</p>';
             };
         } catch (e) {
             // Handle invalid URLs or other errors
             console.error('Invalid URL:', e);
-            document.getElementById('webviewer').innerHTML = '<p class="p-4 text-red-500">Error processing URL.</p>';
+            document.getElementById('webviewer').innerHTML = '<p class="text-red-500">Error processing URL.</p>';
         }
     })();
 </script>
