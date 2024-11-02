@@ -19,30 +19,6 @@ let isInitializing = false; // Flag to prevent event handlers during initializat
 let restartRequired = false; // Tracks if a restart is required
 let isSaving = false; // Flag to indicate if a save operation is in progress
 
-function toggleSubmenu(submenuId, chevronId) {
-  const submenu = document.getElementById(submenuId);
-  const chevron = document.getElementById(chevronId);
-  const isOpen = submenu.classList.contains('open');
-
-  // Close all submenus
-  document.querySelectorAll('.submenu').forEach(sm => {
-    sm.classList.remove('open');
-    sm.classList.add('hidden');
-  });
-
-  // Reset all chevrons
-  document.querySelectorAll('svg[id$="-chevron"]').forEach(c => {
-    c.classList.remove('transform', 'rotate-180');
-  });
-
-  // Toggle the clicked submenu
-  if (!isOpen) {
-    submenu.classList.add('open');
-    submenu.classList.remove('hidden');
-    chevron.classList.add('transform', 'rotate-180');
-  }
-}
-
 function populateChannels(channelType) {
   const container = document.getElementById(`${channelType}-channels-list`);
 

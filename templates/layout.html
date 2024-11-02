@@ -28,16 +28,12 @@
       transition: margin-left 0.3s ease-in-out;
     }
 
-    /* Submenu transitions */
     #output-submenu {
-      max-height: 0;
       overflow: hidden;
       transition: max-height 0.3s ease-out;
     }
 
-    #output-submenu.open {
-      max-height: 500px;
-    }
+    #output-submenu.submenu-open {}
 
     /* Tablet styles (md) */
     @media (min-width: 768px) and (max-width: 1023px) {
@@ -196,7 +192,7 @@
                 clip-rule="evenodd" />
             </svg>
           </button>
-          <div id="output-submenu" class="bg-gray-50">
+          <div id="output-submenu" class="bg-gray-50 hidden">
             <a href="/sharing" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
               <span class="menu-text text-sm">Community</span>
             </a>
@@ -221,6 +217,32 @@
           </svg>
           <span class="menu-text ml-3 text-sm font-medium">Devices</span>
         </a>
+
+        <div>
+          <button onclick="toggleSubmenu('advanced-submenu', 'advanced-chevron')"
+            class="w-full flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
+            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
+              class="h-6 w-6">
+              <path
+                d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm0-80q-25 0-42.5-17.5T422-480q0-25 17.5-42.5T482-540q25 0 42.5 17.5T542-480q0 25-17.5 42.5T482-420Zm-2-60Zm-40 320h79-79Z" />
+            </svg>
+            <span class="menu-text ml-3 text-sm font-medium">Advanced</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="ml-auto h-4 w-4 transition-transform duration-200"
+              id="advanced-chevron" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z"
+                clip-rule="evenodd" />
+            </svg>
+          </button>
+          <div id="advanced-submenu" class="hidden bg-gray-50 hidden">
+            <a href="/editcmd" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
+              <span class="menu-text text-sm">Edit Config.cmd</span>
+            </a>
+            <a href="/editjson" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
+              <span class="menu-text text-sm">Edit Config.json</span>
+            </a>
+          </div>
+        </div>
 
         <!-- Password -->
         <a href="/change-password" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
@@ -272,37 +294,86 @@
       overlay.classList.add('hidden');
     });
 
+    // Moved toggleSubmenu outside of any other function to make it globally available
     function toggleSubmenu(submenuId, chevronId) {
+      console.log(submenuId, chevronId);
       const submenu = document.getElementById(submenuId);
       const chevron = document.getElementById(chevronId);
 
-      if (submenu.classList.contains('open')) {
-        chevron.style.transform = 'rotate(0deg)';
-        submenu.classList.remove('open');
-
-        submenu.style.maxHeight = '0px';
-      } else {
-        chevron.style.transform = 'rotate(180deg)';
-        submenu.classList.add('open');
-
-        submenu.style.maxHeight = submenu.scrollHeight + 'px';
+      if (submenu && chevron) {
+        if (submenu.classList.contains('hidden')) {
+          // Opening the submenu
+          submenu.classList.remove('hidden');
+          chevron.style.transform = 'rotate(180deg)';
+        } else {
+          // Closing the submenu
+          submenu.classList.add('hidden');
+          chevron.style.transform = 'rotate(0deg)';
+        }
       }
     }
 
-    // Handle resize events
     function handleResize() {
       if (window.innerWidth >= 768) {
         sidebar.classList.remove('show');
         overlay.classList.add('hidden');
       }
-      const submenu = document.getElementById('output-submenu');
-      if (submenu.classList.contains('open')) {
-        submenu.style.maxHeight = submenu.scrollHeight + 'px';
-      }
     }
 
+    function closeAllSubmenus() {
+      document.querySelectorAll('[id$="-submenu"]').forEach(submenu => {
+        const chevronId = submenu.id.replace('submenu', 'chevron');
+        const chevron = document.getElementById(chevronId);
+        submenu.classList.add('hidden');
+        if (chevron) {
+          chevron.style.transform = 'rotate(0deg)';
+        }
+      });
+    }
+
+    // Add click event listeners for submenu buttons
+    function initializeSubmenuListeners() {
+      const submenuButtons = document.querySelectorAll('button[onclick*="toggleSubmenu"]');
+      submenuButtons.forEach(button => {
+        const submenuId = button.getAttribute('onclick').match(/'([^']+)'/)[1];
+        const chevronId = submenuId.replace('submenu', 'chevron');
+
+        // Remove the inline onclick attribute
+        button.removeAttribute('onclick');
+
+        // Add event listener
+        button.addEventListener('click', () => {
+          toggleSubmenu(submenuId, chevronId);
+        });
+      });
+    }
+
+    // For tablet view, handle hover events
+    if (sidebar) {
+      let hoverTimeout;
+
+      sidebar.addEventListener('mouseenter', () => {
+        if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+          clearTimeout(hoverTimeout);
+        }
+      });
+
+      sidebar.addEventListener('mouseleave', () => {
+        if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+          hoverTimeout = setTimeout(() => {
+            closeAllSubmenus();
+          }, 300);
+        }
+      });
+    }
+
+    // Initialize everything when the DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      initializeSubmenuListeners();
+      handleResize();
+    });
+
     window.addEventListener('resize', handleResize);
-    window.addEventListener('DOMContentLoaded', handleResize);
   </script>
 
   <script src="/static/js/scripts.js?v={{ .JsVersion }}"></script>
