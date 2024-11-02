@@ -6,7 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ .Title }}</title>
   <link rel="stylesheet" href="/static/css/tailwind.css?v={{ .CssVersion }}">
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     /* Mobile-first approach */
     #sidebar {
@@ -41,7 +40,7 @@
     }
 
     /* Tablet styles (md) */
-    @media (min-width: 768px) {
+    @media (min-width: 768px) and (max-width: 1023px) {
       #sidebar {
         transform: translateX(0);
         width: 5rem;
@@ -54,11 +53,25 @@
 
       #sidebar .menu-text {
         opacity: 0;
-        transition: opacity 0.2s;
+        width: 0;
+        visibility: hidden;
+        transition: opacity 0.2s, visibility 0.2s;
       }
 
       #sidebar:hover .menu-text {
         opacity: 1;
+        width: auto;
+        visibility: visible;
+      }
+
+      /* Ensure icons remain visible in collapsed state */
+      #sidebar svg {
+        min-width: 24px;
+        margin-right: 0;
+      }
+
+      #sidebar:hover svg {
+        margin-right: 12px;
       }
 
       .main-content {
@@ -69,11 +82,18 @@
     /* Desktop styles (lg) */
     @media (min-width: 1024px) {
       #sidebar {
+        transform: translateX(0);
         width: 16rem;
       }
 
       #sidebar .menu-text {
         opacity: 1;
+        width: auto;
+        visibility: visible;
+      }
+
+      #sidebar svg {
+        margin-right: 12px;
       }
 
       .main-content {
@@ -252,17 +272,20 @@
       overlay.classList.add('hidden');
     });
 
-    // Submenu Toggle
     function toggleSubmenu(submenuId, chevronId) {
       const submenu = document.getElementById(submenuId);
       const chevron = document.getElementById(chevronId);
 
-      submenu.classList.toggle('open');
-
       if (submenu.classList.contains('open')) {
-        chevron.style.transform = 'rotate(180deg)';
-      } else {
         chevron.style.transform = 'rotate(0deg)';
+        submenu.classList.remove('open');
+
+        submenu.style.maxHeight = '0px';
+      } else {
+        chevron.style.transform = 'rotate(180deg)';
+        submenu.classList.add('open');
+
+        submenu.style.maxHeight = submenu.scrollHeight + 'px';
       }
     }
 
@@ -271,6 +294,10 @@
       if (window.innerWidth >= 768) {
         sidebar.classList.remove('show');
         overlay.classList.add('hidden');
+      }
+      const submenu = document.getElementById('output-submenu');
+      if (submenu.classList.contains('open')) {
+        submenu.style.maxHeight = submenu.scrollHeight + 'px';
       }
     }
 

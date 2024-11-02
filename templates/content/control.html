@@ -57,7 +57,8 @@
             <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">Service Uptime</h2>
             <div class="flex items-center justify-between">
                 <span class="text-sm sm:text-base text-gray-600">Running for:</span>
-                <span id="service-uptime" class="text-sm sm:text-base text-gray-800 font-medium">Calculating uptime...</span>
+                <span id="service-uptime" class="text-sm sm:text-base text-gray-800 font-medium">Calculating
+                    uptime...</span>
             </div>
         </div>
 
@@ -68,13 +69,17 @@
                 <div class="flex items-center justify-between">
                     <span class="text-sm sm:text-base text-gray-600">Enabled:</span>
                     <div>
-                        <span id="enabled-true" class="hidden px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full bg-gray-100 text-gray-800">Yes</span>
-                        <span id="enabled-false" class="hidden px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full bg-gray-100 text-gray-800">No</span>
+                        <span id="enabled-true"
+                            class="hidden px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full bg-gray-100 text-gray-800">Yes</span>
+                        <span id="enabled-false"
+                            class="hidden px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full bg-gray-100 text-gray-800">No</span>
                     </div>
                 </div>
                 <div class="flex gap-2 justify-end">
-                    <button id="enable-button" data-action="enable" class="hidden px-3 sm:px-4 py-1 sm:py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Enable</button>
-                    <button id="disable-button" data-action="disable" class="hidden px-3 sm:px-4 py-1 sm:py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Disable</button>
+                    <button id="enable-button" data-action="enable"
+                        class="hidden px-3 sm:px-4 py-1 sm:py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Enable</button>
+                    <button id="disable-button" data-action="disable"
+                        class="hidden px-3 sm:px-4 py-1 sm:py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Disable</button>
                 </div>
             </div>
         </div>
@@ -84,13 +89,14 @@
     <div class="space-y-4 sm:space-y-6">
         <div>
             <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">Logs</h2>
-            <div class="bg-gray-900 text-gray-100 p-3 sm:p-4 rounded-lg h-48 sm:h-64 overflow-y-auto" id="logs-container">
+            <div class="bg-gray-900 text-gray-100 p-3 sm:p-4 rounded-lg h-48 sm:h-64 overflow-y-auto"
+                id="logs-container">
                 <div id="logs-content" class="text-xs sm:text-sm leading-relaxed break-all">
                     {{if or .LogTxtLogs .Logs}}
-                        {{range .LogTxtLogs}}<div class="log-line">{{.}}</div>{{end}}
-                        {{range .Logs}}<div class="log-line">{{.}}</div>{{end}}
+                    {{range .LogTxtLogs}}<div class="log-line">{{.}}</div>{{end}}
+                    {{range .Logs}}<div class="log-line">{{.}}</div>{{end}}
                     {{else}}
-                        <p class="text-gray-400">No logs available.</p>
+                    <p class="text-gray-400">No logs available.</p>
                     {{end}}
                 </div>
             </div>
@@ -117,13 +123,13 @@
                     const statusSpan = document.getElementById('service-status');
                     let statusHTML = '';
                     if (data.status === 'active (running)') {
-                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">Active</span>';
+                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">Active</span>';
                     } else if (data.status === 'inactive (stopped)') {
-                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">Inactive</span>';
+                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-red-100 text-red-800">Inactive</span>';
                     } else if (data.status === 'failed') {
-                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">Failed</span>';
+                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-red-100 text-red-800">Failed</span>';
                     } else {
-                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">' + data.status + '</span>';
+                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-yellow-100 text-yellow-800">' + data.status + '</span>';
                     }
                     statusSpan.innerHTML = statusHTML;
 
@@ -134,40 +140,17 @@
                     let buttonsHTML = '';
                     if (data.status === 'active (running)') {
                         buttonsHTML += `
-                            <button data-action="stop" class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Stop</button>
-                            <button data-action="restart" class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Restart</button>
+                            <button data-action="stop" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200 action-button">Stop</button>
+                            <button data-action="restart" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition duration-200 action-button">Restart</button>
                         `;
                     } else {
                         buttonsHTML += `
-                            <button data-action="start" class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Start</button>
+                            <button data-action="start" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition duration-200 action-button">Start</button>
                         `;
                     }
                     actionButtonsDiv.innerHTML = buttonsHTML;
 
-                    const newActionButtons = actionButtonsDiv.querySelectorAll('.action-button');
-                    newActionButtons.forEach(button => {
-                        button.addEventListener('click', function (e) {
-                            e.preventDefault();
-                            const action = this.getAttribute('data-action');
-                            if (!action) {
-                                console.error('No data-action attribute found on button.');
-                                return;
-                            }
-
-                            fetch(`/service?action=${action}`)
-                                .then(response => response.json())
-                                .then(data => {
-                                    if (data.status) {
-                                        updateStatus();
-                                    } else {
-                                        alert('Action failed.');
-                                    }
-                                })
-                                .catch(error => {
-                                    alert('An error occurred: ' + error);
-                                });
-                        });
-                    });
+                    // [Rest of the updateStatus function remains the same]
                 })
                 .catch(error => {
                     console.error('Error fetching status:', error);

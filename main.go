@@ -63,7 +63,7 @@ type Control struct {
 	Title           string   `json:"title"`
 	Status          string   `json:"status"`
 	Uptime          string   `json:"uptime"`
-	Logs            []string `json:"logs"`        
+	Logs            []string `json:"logs"`
 	LogTxtLogs      []string `json:"log_txt_logs"`
 	ServiceEnabled  bool     `json:"service_enabled"`
 	Docker          bool     `json:"docker"`
@@ -77,7 +77,6 @@ type ConfigJSON struct {
 type ServiceConfig struct {
 	Port string `json:"port"`
 }
-
 
 func Seq(start, end int) []int {
 	if end < start {
@@ -214,7 +213,12 @@ func authenticate(username, password string) bool {
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		templates.ExecuteTemplate(w, "login.html", nil)
+		data := map[string]interface{}{
+			"CssVersion": cssVersion,
+			"JsVersion":  jsVersion,
+			"message":    "",
+		}
+		templates.ExecuteTemplate(w, "login.html", data)
 		return
 	}
 
@@ -236,7 +240,12 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/control", http.StatusSeeOther)
 		}
 	} else {
-		templates.ExecuteTemplate(w, "login.html", "Invalid credentials")
+		data := map[string]interface{}{
+			"CssVersion": cssVersion,
+			"JsVersion":  jsVersion,
+			"message":    "Invalid credentials",
+		}
+		templates.ExecuteTemplate(w, "login.html", data)
 	}
 }
 
@@ -347,12 +356,12 @@ func deviceListHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func controlHandler(w http.ResponseWriter, r *http.Request) {
-	
+
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	journalctlLogs := getServiceLogs(50) 
+	journalctlLogs := getServiceLogs(50)
 	logTxtLogs := getLogTxtLogs(10)
 
 	controlData := Control{
@@ -463,18 +472,18 @@ func formatDuration(d time.Duration) string {
 }
 
 func getServiceLogs(lines int) []string {
-    if config.Docker {
-        return []string{""}
-    }
-    
-    cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", fmt.Sprintf("%d", lines), "--no-pager", "--output=cat")
-    output, err := cmd.Output()
-    if err != nil {
-        return []string{"Unable to retrieve logs"}
-    }
-    
-    logLines := strings.Split(strings.TrimSpace(string(output)), "\n")
-    return logLines
+	if config.Docker {
+		return []string{""}
+	}
+
+	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", fmt.Sprintf("%d", lines), "--no-pager", "--output=cat")
+	output, err := cmd.Output()
+	if err != nil {
+		return []string{"Unable to retrieve logs"}
+	}
+
+	logLines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	return logLines
 }
 
 func getLogTxtLogs(lines int) []string {
@@ -507,8 +516,6 @@ func getLogTxtLogs(lines int) []string {
 	logLines := strings.Split(strings.TrimSpace(output), "\n")
 	return logLines
 }
-
-
 
 func controlService(action string) error {
 	if config.Docker {
@@ -705,27 +712,27 @@ func (b *Broadcaster) Run() {
 }
 
 func (b *Broadcaster) collectJournalctlLogs() {
-    cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", "0", "-f", "--no-pager", "--output=cat")
-    stdout, err := cmd.StdoutPipe()
-    if err != nil {
-        log.Printf("Error obtaining stdout pipe for journalctl: %v", err)
-        return
-    }
+	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", "0", "-f", "--no-pager", "--output=cat")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Printf("Error obtaining stdout pipe for journalctl: %v", err)
+		return
+	}
 
-    if err := cmd.Start(); err != nil {
-        log.Printf("Error starting journalctl command: %v", err)
-        return
-    }
+	if err := cmd.Start(); err != nil {
+		log.Printf("Error starting journalctl command: %v", err)
+		return
+	}
 
-    scanner := bufio.NewScanner(stdout)
-    for scanner.Scan() {
-        line := scanner.Text()
-        b.journalChan <- line
-    }
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		b.journalChan <- line
+	}
 
-    if err := scanner.Err(); err != nil {
-        log.Printf("Error reading journalctl output: %v", err)
-    }
+	if err := scanner.Err(); err != nil {
+		log.Printf("Error reading journalctl output: %v", err)
+	}
 }
 
 func (b *Broadcaster) collectLogTxtLogs() {
@@ -970,15 +977,14 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 	port := "8000"
 
 	if len(jsonContent) > 0 {
-		var cfg ConfigJSON 
+		var cfg ConfigJSON
 		err = json.Unmarshal(jsonContent, &cfg)
 		if err != nil {
 			log.Printf("Error parsing config.json: %v", err)
 		} else {
 			port = cfg.Service.Port
-			} 
+		}
 	}
-	
 
 	data := map[string]interface{}{
 		"CssVersion":      cssVersion,
@@ -986,7 +992,7 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 		"JsonContent":     string(jsonContent),
 		"Title":           "Webviewer",
 		"ContentTemplate": "webviewer",
-		"port": port,
+		"port":            port,
 	}
 
 	err = templates.ExecuteTemplate(w, "layout.html", data)
@@ -1060,8 +1066,8 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	enabled, _ := getServiceEnabled()
 
 	data := map[string]interface{}{
-		"status": status,
-		"uptime": uptime,
+		"status":  status,
+		"uptime":  uptime,
 		"enabled": enabled,
 	}
 	jsonData, err := json.Marshal(data)
@@ -1076,7 +1082,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 func serviceHandler(w http.ResponseWriter, r *http.Request) {
 
 	action := r.URL.Query().Get("action")
-	
+
 	validActions := map[string]bool{
 		"start":   true,
 		"stop":    true,

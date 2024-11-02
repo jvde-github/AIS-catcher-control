@@ -43,7 +43,6 @@ function toggleSubmenu(submenuId, chevronId) {
   }
 }
 
-// Generic function to populate channels (UDP, TCP, etc.)
 function populateChannels(channelType) {
   const container = document.getElementById(`${channelType}-channels-list`);
 
@@ -51,18 +50,23 @@ function populateChannels(channelType) {
     return;
   }
 
-  isInitializing = true; // Start initialization
+  isInitializing = true;
 
-  // Parse JSON content
   console.log(jsonData);
 
   container.innerHTML = '';
 
   if (Array.isArray(jsonData[channelType])) {
-    jsonData[channelType].forEach((channel, index) => {
-      const channelIndex = index;
+    jsonData[channelType].forEach((channel, channelIndex) => {
       const propertiesListId = `${channelType}-properties-list-${channelIndex}`;
       const toggleButtonId = `${channelType}-toggle-btn-${channelIndex}`;
+      
+      const channelDiv = document.createElement('div');
+      channelDiv.className = `${channelType}-channel border p-4 rounded-md mb-4`;
+      channelDiv.setAttribute('data-index', channelIndex);
+
+      const openChannelKey = `${channelType}-${channelIndex}`;
+      const shouldShowProperties = openPropertiesChannels.has(openChannelKey);
 
       // Determine if the channel is active
       let isActive = true;
@@ -77,16 +81,6 @@ function populateChannels(channelType) {
           isActive = false;
         }
       }
-
-      // Create Channel Container
-      const channelDiv = document.createElement('div');
-      channelDiv.className = `${channelType}-channel border p-4 rounded-md mb-4`;
-      channelDiv.setAttribute('data-index', channelIndex);
-
-      // Determine if properties should be visible
-      const openChannelKey = `${channelType}-${channelIndex}`;
-      const shouldShowProperties = openPropertiesChannels.has(openChannelKey);
-
 
       channelDiv.innerHTML = `
       <div class="flex flex-col space-y-4">
@@ -164,7 +158,7 @@ function populateChannels(channelType) {
       <!-- Properties Badges -->
       <div class="flex flex-wrap items-center space-x-2 mt-2 ${shouldShowProperties ? '' : 'hidden'}" id="${propertiesListId}">
       </div>
-    `;
+      `;
 
       // Get the properties container
       const propertiesContainer = channelDiv.querySelector(`#${propertiesListId}`);
@@ -189,73 +183,116 @@ function populateChannels(channelType) {
         }
       }
 
-      // Attach event listeners to inputs and buttons
-      const hostInput = channelDiv.querySelector(`.${channelType}-host-input`);
+      // Attach event listeners after the channel is added to the DOM
+      setTimeout(() => {
+        // Get both mobile and desktop delete buttons
+        const deleteButtons = channelDiv.querySelectorAll(`.${channelType}-delete-channel-btn`);
+        deleteButtons.forEach(deleteBtn => {
+          deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteChannel(channelType, channelIndex);
+          });
+        });
 
-      hostInput.addEventListener('change', (e) => {
-        console.log('Host input changed:', e.target.value, isInitializing, e.target.value);
-        jsonData[channelType][channelIndex].host = e.target.value;
-        if (!isInitializing) {
-          handleUnsavedChanges(true, 'Host has been modified. Please save your changes.');
-          updateJsonTextarea();
+        // Get both mobile and desktop toggle properties buttons
+        const toggleButtons = channelDiv.querySelectorAll(`.${channelType}-toggle-properties-btn`);
+        const propertiesContainer = channelDiv.querySelector(`#${propertiesListId}`);
+        
+        toggleButtons.forEach(toggleBtn => {
+          toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const chevronIcon = toggleBtn.querySelector('svg');
+            
+            if (propertiesContainer) {
+              // Toggle visibility
+              if (propertiesContainer.classList.contains('hidden')) {
+                propertiesContainer.classList.remove('hidden');
+                // Update all chevron icons in both mobile and desktop views
+                toggleButtons.forEach(btn => {
+                  const btnChevron = btn.querySelector('svg');
+                  if (btnChevron) {
+                    btnChevron.classList.add('transform', 'rotate-180');
+                  }
+                });
+                openPropertiesChannels.add(openChannelKey);
+              } else {
+                propertiesContainer.classList.add('hidden');
+                // Update all chevron icons in both mobile and desktop views
+                toggleButtons.forEach(btn => {
+                  const btnChevron = btn.querySelector('svg');
+                  if (btnChevron) {
+                    btnChevron.classList.remove('transform', 'rotate-180');
+                  }
+                });
+                openPropertiesChannels.delete(openChannelKey);
+              }
+            }
+          });
+        });
+
+        // Input event listeners
+        const hostInput = channelDiv.querySelector(`.${channelType}-host-input`);
+        const portInput = channelDiv.querySelector(`.${channelType}-port-input`);
+        const descriptionInput = channelDiv.querySelector(`.${channelType}-description-input`);
+        const activeCheckbox = channelDiv.querySelector(`.${channelType}-active-checkbox`);
+
+        if (hostInput) {
+          hostInput.addEventListener('change', (e) => {
+            if (!isInitializing) {
+              jsonData[channelType][channelIndex].host = e.target.value;
+              handleUnsavedChanges(true, 'Host has been modified. Please save your changes.');
+              updateJsonTextarea();
+            }
+          });
         }
-      });
 
-      const portInput = channelDiv.querySelector(`.${channelType}-port-input`);
-      portInput.addEventListener('change', (e) => {
-        jsonData[channelType][channelIndex].port = e.target.value;
-        if (!isInitializing) {
-          handleUnsavedChanges(true, 'Port has been modified. Please save your changes.');
-          updateJsonTextarea();
+        if (portInput) {
+          portInput.addEventListener('change', (e) => {
+            if (!isInitializing) {
+              jsonData[channelType][channelIndex].port = e.target.value;
+              handleUnsavedChanges(true, 'Port has been modified. Please save your changes.');
+              updateJsonTextarea();
+            }
+          });
         }
-      });
 
-      const descriptionInput = channelDiv.querySelector(`.${channelType}-description-input`);
-      descriptionInput.addEventListener('change', (e) => {
-        jsonData[channelType][channelIndex].description = e.target.value;
-        if (!isInitializing) {
-          handleUnsavedChanges(true, 'Description has been modified. Please save your changes.');
-          updateJsonTextarea();
+        if (descriptionInput) {
+          descriptionInput.addEventListener('change', (e) => {
+            if (!isInitializing) {
+              jsonData[channelType][channelIndex].description = e.target.value;
+              handleUnsavedChanges(true, 'Description has been modified. Please save your changes.');
+              updateJsonTextarea();
+            }
+          });
         }
-      });
 
-      const activeCheckbox = channelDiv.querySelector(`.${channelType}-active-checkbox`);
-      activeCheckbox.addEventListener('change', (e) => {
-        jsonData[channelType][channelIndex].active = e.target.checked;
-        if (!isInitializing) {
-          handleUnsavedChanges(true, 'Active status has been modified. Please save your changes.');
-          updateJsonTextarea();
+        if (activeCheckbox) {
+          activeCheckbox.addEventListener('change', (e) => {
+            if (!isInitializing) {
+              jsonData[channelType][channelIndex].active = e.target.checked;
+              handleUnsavedChanges(true, 'Active status has been modified. Please save your changes.');
+              updateJsonTextarea();
+            }
+          });
         }
-      });
 
-      const deleteBtn = channelDiv.querySelector(`.${channelType}-delete-channel-btn`);
-      deleteBtn.addEventListener('click', () => {
-        deleteChannel(channelType, channelIndex);
-      });
-
-      // Toggle Properties Button
-      const togglePropertiesBtn = channelDiv.querySelector(`.${channelType}-toggle-properties-btn`);
-      togglePropertiesBtn.addEventListener('click', () => {
-        propertiesContainer.classList.toggle('hidden');
-        const chevronIcon = togglePropertiesBtn.querySelector('svg');
-        // Update the chevron icon rotation based on the visibility
-        if (propertiesContainer.classList.contains('hidden')) {
-          chevronIcon.classList.remove('transform', 'rotate-180');
-          openPropertiesChannels.delete(openChannelKey);
-        } else {
-          chevronIcon.classList.add('transform', 'rotate-180');
-          openPropertiesChannels.add(openChannelKey);
+        // Initialize the visibility state of the properties container
+        if (shouldShowProperties && propertiesContainer) {
+          propertiesContainer.classList.remove('hidden');
+          toggleButtons.forEach(btn => {
+            const btnChevron = btn.querySelector('svg');
+            if (btnChevron) {
+              btnChevron.classList.add('transform', 'rotate-180');
+            }
+          });
         }
-      });
+      }, 0);
 
-      // Append the channel to the container
       container.appendChild(channelDiv);
     });
-  } else {
-    //alert(`No ${channelType.toUpperCase()} channels found in JSON data.`);
   }
 
-  isInitializing = false; // End initialization
+  isInitializing = false;
 }
 
 // Generic function to create property badges for channels

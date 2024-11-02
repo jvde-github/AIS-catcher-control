@@ -1,5 +1,5 @@
 {{ define "sharing-channel" }}
-<div id="sharing-channel" class="p-4 md:p-6 bg-white shadow-md rounded-lg">
+<div id="sharing-channel" class="max-w-2xl mx-auto p-4 md:p-6 bg-white shadow-md rounded-lg">
     <h3 class="text-xl md:text-2xl font-semibold text-gray-800 mb-4">Community Sharing</h3>
     <form id="sharing-form">
         <!-- Sharing Toggle -->
@@ -16,16 +16,15 @@
         </div>
 
         <!-- Sharing Key Input (Visible only when sharing is enabled) -->
-
         <div id="sharing-key-container" class="mb-6 hidden">
             <hr class="my-6 border-gray-200">
 
             <label for="sharing-key" class="block text-gray-700 font-medium mb-2">Sharing Key (UUID):</label>
-            <div class="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <input type="text" id="sharing-key" name="sharing_key" placeholder="Enter UUID"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
+                    class="md:col-span-3 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
                 <button type="button" id="create-sharing-key-btn"
-                    class="inline-flex items-center justify-center whitespace-nowrap bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200"
+                    class="md:col-span-1 inline-flex items-center justify-center whitespace-nowrap bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200"
                     title="Create Sharing Key">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24"
                         stroke="currentColor">
@@ -51,7 +50,6 @@
     <div class="mt-6">
         <!-- Toggle Button -->
         <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-700 focus:outline-none">
-            <!-- Chevron Icon -->
             <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
                 xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
