@@ -1,27 +1,31 @@
 {{ define "sharing-channel" }}
-<div id="sharing-channel" class="p-6 bg-white shadow-md rounded-lg">
-    <h3 class="text-2xl font-semibold text-gray-800 mb-4">Community Sharing</h3>
+<div id="sharing-channel" class="p-4 md:p-6 bg-white shadow-md rounded-lg">
+    <h3 class="text-xl md:text-2xl font-semibold text-gray-800 mb-4">Community Sharing</h3>
     <form id="sharing-form">
         <!-- Sharing Toggle -->
         <div class="flex items-center mb-6">
             <label for="sharing-toggle" class="text-gray-700 font-medium">Sharing:</label>
             <label class="ml-4 relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" id="sharing-toggle" class="sr-only peer">
-                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
-                    after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
-                    after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-gray-400 rounded-full peer 
+                    peer-checked:after:translate-x-full peer-checked:after:border-white 
+                    after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 
+                    after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-600">
                 </div>
             </label>
         </div>
 
         <!-- Sharing Key Input (Visible only when sharing is enabled) -->
+
         <div id="sharing-key-container" class="mb-6 hidden">
+            <hr class="my-6 border-gray-200">
+
             <label for="sharing-key" class="block text-gray-700 font-medium mb-2">Sharing Key (UUID):</label>
-            <div class="flex items-center">
+            <div class="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3">
                 <input type="text" id="sharing-key" name="sharing_key" placeholder="Enter UUID"
-                    class="flex-grow px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
                 <button type="button" id="create-sharing-key-btn"
-                    class="ml-4 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-200 flex items-center"
+                    class="inline-flex items-center justify-center whitespace-nowrap bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200"
                     title="Create Sharing Key">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24"
                         stroke="currentColor">
@@ -34,23 +38,19 @@
         </div>
     </form>
 
-    <hr class="my-6 border-gray-300">
+    <hr class="my-6 border-gray-200">
 
     <!-- Submit Button -->
     <div class="flex justify-end">
         <button id="save-button"
-            class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-200"
+            class="w-full md:w-auto bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition duration-200"
             onclick="saveData()">Save</button>
     </div>
 
-    <!-- Status Message -->
-    <div id="status-message" class="mt-2 mb-4 p-2 transition-opacity duration-300 opacity-0" role="alert"
-        aria-live="assertive"></div>
-
     <!-- Collapsible Section -->
-    <div class="mt-4">
+    <div class="mt-6">
         <!-- Toggle Button -->
-        <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-800 focus:outline-none">
+        <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-700 focus:outline-none">
             <!-- Chevron Icon -->
             <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
                 xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -62,7 +62,7 @@
         <!-- Collapsible Content -->
         <div id="json-content-container" class="mt-2 hidden">
             <textarea id="json_content" name="json_content"
-                class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 overflow-auto focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 overflow-auto focus:outline-none focus:ring-2 focus:ring-gray-400"
                 readonly rows="10">{{.JsonContent}}</textarea>
         </div>
     </div>

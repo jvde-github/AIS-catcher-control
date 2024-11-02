@@ -1,15 +1,15 @@
 {{ define "input-selection" }}
-<div id="input-selection" class="p-6 bg-white rounded-lg shadow-md">
-  <h3 class="text-xl font-medium text-gray-800 mb-6">Input Selection</h3>
+<div id="input-selection" class="p-4 md:p-6 bg-white rounded-lg shadow-md">
+  <h3 class="text-lg md:text-xl font-medium text-gray-800 mb-4 md:mb-6">Input Selection</h3>
 
-  <form id="device-form">
-    <!-- Device Type and Serial Key on the Same Line -->
-    <div class="mb-4 flex flex-col md:flex-row md:space-x-4">
+  <form id="device-form" class="space-y-4">
+    <!-- Device Type and Serial Key - Stack on mobile, side by side on larger screens -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <!-- Device Type Selection -->
-      <div class="flex-1">
+      <div>
         <label for="device-input" class="block text-gray-700 text-sm font-medium mb-2">Device Type:</label>
         <select id="device-input" name="device_input"
-          class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500">
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
           <option value="">None</option>
           <option value="RTLSDR">RTLSDR</option>
           <option value="AIRSPY">AIRSPY</option>
@@ -30,26 +30,22 @@
       </div>
 
       <!-- Serial Key Input -->
-      <div class="flex-1 mt-4 md:mt-0">
+      <div>
         <label for="serial-key" class="block text-gray-700 text-sm font-medium mb-2">Serial Key:</label>
         <input type="text" id="serial-key" name="serial_key" placeholder="Enter Serial Key"
-          class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500">
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
       </div>
     </div>
 
-    <!-- Select Device Button -->
-    <div class="mb-6">
+    <!-- Buttons Container - Always at bottom, proper spacing -->
+    <div class="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0 mt-6">
       <button type="button" id="select-device-btn" onclick="openDeviceSelectionModal()"
-        class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition duration-200"
+        class="w-full md:w-auto bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200"
         title="Select Device">
         Select Device
       </button>
-    </div>
-
-    <!-- Save Button -->
-    <div class="flex justify-end">
       <button type="button" id="save-button"
-        class="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition duration-200">
+        class="w-full md:w-auto bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition duration-200">
         Save
       </button>
     </div>
@@ -61,9 +57,7 @@
 
   <!-- Collapsible JSON Content -->
   <div class="mt-6">
-    <!-- Toggle Button -->
-    <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-800 focus:outline-none">
-      <!-- Chevron Icon -->
+    <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-700 focus:outline-none">
       <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
         xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -74,14 +68,14 @@
     <!-- Collapsible Content -->
     <div id="json-content-container" class="mt-2 hidden">
       <pre id="json_content" name="json_content"
-        class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 overflow-auto focus:outline-none focus:ring-2 focus:ring-yellow-500"
+        class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 overflow-auto focus:outline-none focus:ring-2 focus:ring-gray-400"
         readonly>{{.JsonContent}}</pre>
     </div>
   </div>
 
   <!-- Device Selection Modal -->
-  <div id="device-selection-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
-    <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-1/2 lg:w-1/3">
+  <div id="device-selection-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 max-w-2xl mx-4">
       <div class="flex justify-between items-center p-4 border-b">
         <h3 class="text-lg font-medium text-gray-800">Select Device</h3>
         <button type="button" onclick="closeDeviceSelectionModal()" class="text-gray-600 hover:text-gray-800">
@@ -97,7 +91,7 @@
       </div>
       <div class="flex justify-end p-4 border-t">
         <button type="button" onclick="closeDeviceSelectionModal()"
-          class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-200">
+          class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200">
           Close
         </button>
       </div>
@@ -117,16 +111,14 @@
     fetchDeviceList();
   }
 
-  // Function to close the device selection modal
   function closeDeviceSelectionModal() {
     const deviceSelectionModal = document.getElementById('device-selection-modal');
     deviceSelectionModal.classList.add('hidden');
   }
 
-  // Function to fetch the device list from the server
   function fetchDeviceList() {
     const deviceList = document.getElementById('device-list');
-    fetch('/device-list') // Ensure this endpoint matches your server's route
+    fetch('/device-list')
       .then(response => {
         if (!response.ok) {
           throw new Error('Failed to fetch device list.');
@@ -142,10 +134,9 @@
       });
   }
 
-  // Function to populate the device list in the modal
   function populateDeviceList(devices) {
     const deviceList = document.getElementById('device-list');
-    deviceList.innerHTML = ''; // Clear existing list
+    deviceList.innerHTML = '';
 
     if (!Array.isArray(devices) || devices.length === 0) {
       deviceList.innerHTML = `<li class="text-gray-500">No devices found.</li>`;
@@ -156,11 +147,10 @@
       const listItem = document.createElement('li');
       listItem.className = 'flex items-center justify-between p-2 border rounded-md hover:bg-gray-100 cursor-pointer';
       listItem.innerHTML = `
-      <span>${escapeHtml(device.name)}</span>
-      <button type="button" class="select-device-btn bg-blue-500 text-white px-2 py-1 rounded-md hover:bg-blue-600">Select</button>
-    `;
+        <span>${escapeHtml(device.name)}</span>
+        <button type="button" class="select-device-btn bg-gray-600 text-white px-2 py-1 rounded-md hover:bg-gray-700">Select</button>
+      `;
 
-      // Attach event listener to the Select button
       listItem.querySelector('.select-device-btn').addEventListener('click', () => {
         selectDevice(device);
         closeDeviceSelectionModal();
@@ -170,26 +160,21 @@
     });
   }
 
-  // Function to handle device selection
   function selectDevice(device) {
     if (!device || typeof device !== 'object') {
       console.error('Invalid device selected:', device);
       return;
     }
 
-
     const deviceInput = document.getElementById('device-input');
     const serialKeyInput = document.getElementById('serial-key');
 
-    // Populate the device input and serial key fields
     deviceInput.value = device.input.toUpperCase() || '';
     serialKeyInput.value = device.serial || '';
 
-    // Update jsonData accordingly
     jsonData.input = device.input || '';
     jsonData.serial = device.serial || '';
 
-    // Handle unsaved changes and update JSON display
     handleUnsavedChanges(true, 'Device selection has been updated. Please save your changes.');
     updateJsonTextarea();
   }

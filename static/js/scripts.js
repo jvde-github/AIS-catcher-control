@@ -87,43 +87,71 @@ function populateChannels(channelType) {
       const openChannelKey = `${channelType}-${channelIndex}`;
       const shouldShowProperties = openPropertiesChannels.has(openChannelKey);
 
-      // Create the content for the channel
+
       channelDiv.innerHTML = `
-        <div class="flex items-end space-x-4">
-          <!-- Active Checkbox -->
-          <div class="flex items-center h-[38px]">
-            <input type="checkbox" class="${channelType}-active-checkbox mr-2" ${isActive ? 'checked' : ''}>
-          </div>
-          <!-- Host Input -->
-          <div class="flex flex-col w-1/5">
-            <label class="block text-gray-500 text-sm mb-1">Host</label>
-            <input type="text" value="${escapeHtml(channel.host || '')}" 
-              class="${channelType}-host-input block w-full px-4 py-2 border border-gray-300 rounded-md" 
-              placeholder="e.g., 192.168.1.101">
-          </div>
-          <!-- Port Input -->
-          <div class="flex flex-col w-1/6">
-            <label class="block text-gray-500 text-sm mb-1">Port</label>
-            <input type="number" value="${escapeHtml(channel.port || '')}" 
-              class="${channelType}-port-input block w-full px-4 py-2 border border-gray-300 rounded-md" 
-              placeholder="10110">
-          </div>
-          <!-- Description Input -->
-          <div class="flex flex-col flex-grow">
-            <label class="block text-gray-500 text-sm mb-1">Description</label>
-            <input type="text" value="${escapeHtml(channel.description || '')}" 
-              class="${channelType}-description-input block w-full px-4 py-2 border border-gray-300 rounded-md" 
-              placeholder="Optional description">
-          </div>
-          <!-- Action Buttons -->
-          <div class="flex items-center space-x-2 h-[38px]">
+      <div class="flex flex-col space-y-4">
+        <!-- Mobile Controls Top -->
+        <div class="flex items-center justify-between md:hidden">
+          <div class="flex items-center space-x-4">
+            <!-- Active Checkbox -->
+            <div class="flex items-center h-[38px]">
+              <input type="checkbox" class="${channelType}-active-checkbox" ${isActive ? 'checked' : ''}>
+              <span class="ml-2 text-sm text-gray-600">Active</span>
+            </div>
             <!-- Toggle Properties Button -->
             <button type="button" class="${channelType}-toggle-properties-btn text-gray-600 hover:text-gray-800" id="${toggleButtonId}">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transition-transform duration-200 ${shouldShowProperties ? 'transform rotate-180' : ''}" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z" clip-rule="evenodd" />
               </svg>
             </button>
-            <!-- Delete Channel Button -->
+          </div>
+          <!-- Delete Channel Button -->
+          <button type="button" class="${channelType}-delete-channel-btn text-red-600 hover:text-red-800">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 -960 960 960" fill="currentColor">
+              <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/>
+            </svg>
+          </button>
+        </div>
+    
+        <!-- Main Content Area -->
+        <div class="flex flex-wrap md:flex-nowrap items-end space-y-2 md:space-y-0 md:space-x-4">
+          <!-- Desktop Controls - Hidden on Mobile -->
+          <div class="hidden md:flex items-center h-[38px] w-auto">
+            <input type="checkbox" class="${channelType}-active-checkbox mr-2" ${isActive ? 'checked' : ''}>
+          </div>
+          
+          <!-- Host Input -->
+          <div class="flex flex-col w-full md:w-1/4">
+            <label class="block text-gray-500 text-sm mb-1">Host</label>
+            <input type="text" value="${escapeHtml(channel.host || '')}" 
+              class="${channelType}-host-input block w-full px-4 py-2 border border-gray-300 rounded-md" 
+              placeholder="e.g., 192.168.1.101">
+          </div>
+          
+          <!-- Port Input -->
+          <div class="flex flex-col w-1/2 md:w-1/6">
+            <label class="block text-gray-500 text-sm mb-1">Port</label>
+            <input type="number" value="${escapeHtml(channel.port || '')}" 
+              class="${channelType}-port-input block w-full px-4 py-2 border border-gray-300 rounded-md" 
+              placeholder="10110">
+          </div>
+          
+          <!-- Description Input -->
+          <div class="flex flex-col w-full md:flex-1">
+            <label class="block text-gray-500 text-sm mb-1 md:hidden lg:block">Description</label>
+            <label class="hidden md:block lg:hidden text-gray-500 text-sm mb-1">Desc</label>
+            <input type="text" value="${escapeHtml(channel.description || '')}" 
+              class="${channelType}-description-input block w-full px-4 py-2 border border-gray-300 rounded-md" 
+              placeholder="Optional description">
+          </div>
+          
+          <!-- Desktop Action Buttons - Hidden on Mobile -->
+          <div class="hidden md:flex items-center space-x-2 h-[38px]">
+            <button type="button" class="${channelType}-toggle-properties-btn text-gray-600 hover:text-gray-800" id="${toggleButtonId}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transition-transform duration-200 ${shouldShowProperties ? 'transform rotate-180' : ''}" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z" clip-rule="evenodd" />
+              </svg>
+            </button>
             <button type="button" class="${channelType}-delete-channel-btn text-red-600 hover:text-red-800">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 -960 960 960" fill="currentColor">
                 <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/>
@@ -131,11 +159,12 @@ function populateChannels(channelType) {
             </button>
           </div>
         </div>
-        <!-- Properties Badges (Initially Hidden or Visible based on shouldShowProperties) -->
-        <div class="flex flex-wrap items-center space-x-2 mt-2 ${shouldShowProperties ? '' : 'hidden'}" id="${propertiesListId}">
-          <!-- Property Badges and Add Property Button will appear here -->
-        </div>
-      `;
+      </div>
+    
+      <!-- Properties Badges -->
+      <div class="flex flex-wrap items-center space-x-2 mt-2 ${shouldShowProperties ? '' : 'hidden'}" id="${propertiesListId}">
+      </div>
+    `;
 
       // Get the properties container
       const propertiesContainer = channelDiv.querySelector(`#${propertiesListId}`);
@@ -767,7 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
 if (saveButton) {
   // Add event listener to the save button
   saveButton.addEventListener('click', function (e) {
-    e.preventDefault(); 
+    e.preventDefault();
     saveData();
   });
 } else {

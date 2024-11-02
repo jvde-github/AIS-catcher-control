@@ -1,5 +1,5 @@
 {{ define "device-setup" }}
-<div id="device-setup" class="p-6 bg-white shadow-md rounded-lg">
+<div id="device-setup" class="p-6 bg-white shadow-md rounded-lg max-w-2xl mx-auto">
     <div class="border-b border-gray-200" role="tablist">
         <div class="flex -mb-px space-x-4">
             <button role="tab" aria-selected="true" data-tab="rtlsdr"
@@ -9,33 +9,39 @@
                 HF+</button>
             <button role="tab" aria-selected="false" data-tab="rtltcp"
                 class="py-2 px-4 text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors">TCP</button>
-
         </div>
     </div>
 
     <div role="tabpanel" id="rtlsdr-panel" class="mt-6">
         <h3 class="text-2xl font-semibold text-gray-800 mb-4">RTLSDR</h3>
         <form id="rtlsdr-form" class="space-y-6">
-            <div>
+            <div class="max-w-md">
+                <label for="rtlsdr-tuner" class="block text-gray-700 font-medium mb-2">Tuner:</label>
+                <select id="rtlsdr-tuner" name="tuner" class="w-full px-4 py-2 border border-gray-300 rounded-md">
+                    <option value="auto">Auto</option>
+                    {{range $i := seq 0 50}}
+                    <option value="{{$i}}">{{$i}}</option>
+                    {{end}}
+                </select>
+            </div>
+
+            <div class="max-w-md">
                 <label for="rtlsdr-bandwidth" class="block text-gray-700 font-medium mb-2">Bandwidth:</label>
-                <select id="rtlsdr-bandwidth" name="bandwidth"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
+                <select id="rtlsdr-bandwidth" name="bandwidth" class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="0">Off</option>
                     <option value="192K">192K</option>
                 </select>
             </div>
 
-            <div>
+            <div class="max-w-md">
                 <label for="rtlsdr-sample-rate" class="block text-gray-700 font-medium mb-2">Sample Rate:</label>
-                <select id="rtlsdr-sample-rate" name="sample_rate"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
+                <select id="rtlsdr-sample-rate" name="sample_rate" class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="288K">288K</option>
                     <option value="1536K" selected>1536K</option>
                 </select>
             </div>
 
-            <div class="flex items-center justify-between">
-
+            <div class="flex items-center justify-between max-w-md">
                 <div class="flex items-center mb-6">
                     <label for="biastee-toggle" class="text-gray-700 font-medium">Bias tee:</label>
                     <label class="ml-4 relative inline-flex items-center cursor-pointer">
@@ -48,7 +54,7 @@
                 </div>
             </div>
 
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between max-w-md">
                 <div class="flex items-center mb-6">
                     <label for="rtlagc-toggle" class="text-gray-700 font-medium">RTLAGC:</label>
                     <label class="ml-4 relative inline-flex items-center cursor-pointer">
@@ -60,31 +66,28 @@
                     </label>
                 </div>
             </div>
-
         </form>
     </div>
 
     <div role="tabpanel" id="airspyhf-panel" class="mt-6 hidden">
         <h3 class="text-2xl font-semibold text-gray-800 mb-4">Airspy HF+</h3>
         <form id="airspyhf-form" class="space-y-6">
-            <div>
+            <div class="max-w-md">
                 <label for="airspyhf-sample-rate" class="block text-gray-700 font-medium mb-2">Sample Rate:</label>
-                <select id="airspyhf-sample-rate" name="sample_rate"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
+                <select id="airspyhf-sample-rate" name="sample_rate" class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="192K">192K</option>
                 </select>
             </div>
 
-            <div>
+            <div class="max-w-md">
                 <label for="airspyhf-threshold" class="block text-gray-700 font-medium mb-2">Threshold:</label>
-                <select id="airspyhf-threshold" name="threshold"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
+                <select id="airspyhf-threshold" name="threshold" class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="low" selected>Low</option>
                     <option value="high">High</option>
                 </select>
             </div>
 
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between max-w-md">
                 <div class="flex items-center mb-6">
                     <label for="preamp-toggle" class="text-gray-700 font-medium">Preamp:</label>
                     <label class="ml-4 relative inline-flex items-center cursor-pointer">
@@ -96,16 +99,13 @@
                     </label>
                 </div>
             </div>
-
         </form>
     </div>
 
-    <!-- RTLTCP Panel -->
     <div role="tabpanel" id="rtltcp-panel" class="mt-6 hidden">
         <h3 class="text-2xl font-semibold text-gray-800 mb-4">TCP</h3>
         <form id="rtltcp-form" class="space-y-6">
-            <!-- Protocol Field -->
-            <div>
+            <div class="max-w-md">
                 <label for="rtltcp-protocol" class="block text-gray-700 font-medium mb-2">Protocol:</label>
                 <select id="rtltcp-protocol" name="protocol" class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="none">None</option>
@@ -113,65 +113,53 @@
                 </select>
             </div>
 
-            <!-- Host Field -->
-            <div>
+            <div class="max-w-md">
                 <label for="rtltcp-host" class="block text-gray-700 font-medium mb-2">Host:</label>
-                <input type="text" id="rtltcp-host" name="host"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., 127.0.0.1">
+                <input type="text" id="rtltcp-host" name="host" class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., 127.0.0.1">
             </div>
 
-            <!-- Port Field -->
-            <div>
+            <div class="max-w-md">
                 <label for="rtltcp-port" class="block text-gray-700 font-medium mb-2">Port:</label>
-                <input type="number" id="rtltcp-port" name="port"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., 1234">
+                <input type="number" id="rtltcp-port" name="port" class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., 1234">
             </div>
 
-            <!-- Sample Rate Field -->
-            <div>
+            <div class="max-w-md">
                 <label for="rtltcp-sample-rate" class="block text-gray-700 font-medium mb-2">Sample Rate:</label>
-                <select id="rtltcp-sample-rate" name="sample_rate"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
+                <select id="rtltcp-sample-rate" name="sample_rate" class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="288K">288K</option>
                     <option value="1536K">1536K</option>
                 </select>
             </div>
 
-            <!-- Bandwidth Field -->
-            <div>
+            <div class="max-w-md">
                 <label for="rtltcp-bandwidth" class="block text-gray-700 font-medium mb-2">Bandwidth:</label>
-                <select id="rtltcp-bandwidth" name="bandwidth"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
+                <select id="rtltcp-bandwidth" name="bandwidth" class="w-full px-4 py-2 border border-gray-300 rounded-md">
                     <option value="0">Off</option>
                     <option value="192K">192K</option>
                 </select>
             </div>
 
-            <!-- Bias Tee Toggle -->
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between max-w-md">
                 <div class="flex items-center mb-6">
                     <label for="rtltcp-biastee-toggle" class="text-gray-700 font-medium">Bias tee:</label>
                     <label class="ml-4 relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="rtltcp-biastee-toggle" class="sr-only peer">
-                        <div
-                            class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
-                                after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
-                                after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                            after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                            after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
                         </div>
                     </label>
                 </div>
             </div>
 
-            <!-- RTLAGC Toggle -->
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between max-w-md">
                 <div class="flex items-center mb-6">
                     <label for="rtltcp-rtlagc-toggle" class="text-gray-700 font-medium">RTLAGC:</label>
                     <label class="ml-4 relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="rtltcp-rtlagc-toggle" class="sr-only peer">
-                        <div
-                            class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
-                                after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
-                                after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                            after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                            after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
                         </div>
                     </label>
                 </div>
@@ -180,33 +168,25 @@
     </div>
 
     <div class="flex justify-end mt-6">
-        <button id="save-button"
-            class="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition-colors">Save</button>
+        <button id="save-button" class="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition-colors w-auto">Save</button>
     </div>
 
     <hr class="my-6 border-gray-300">
 
-    <!-- Collapsible JSON Content -->
     <div class="mt-6">
-        <!-- Toggle Button -->
         <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-800 focus:outline-none">
-            <!-- Chevron Icon -->
-            <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
-                xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
             <span class="ml-2 font-medium">Show JSON Content</span>
         </button>
 
-        <!-- Collapsible Content -->
         <div id="json-content-container" class="mt-2 hidden">
-            <pre id="json_content" name="json_content"
-                class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 overflow-auto focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                readonly>{{.JsonContent}}</pre>
+            <pre id="json_content" name="json_content" class="max-w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 overflow-auto focus:outline-none focus:ring-2 focus:ring-yellow-500" readonly>{{.JsonContent}}</pre>
         </div>
     </div>
-
 </div>
+
 
 <style>
     input:disabled,
@@ -231,6 +211,7 @@
     const formToJsonMap = {
         "rtlsdr-bandwidth": "rtlsdr.bandwidth",
         "rtlsdr-sample-rate": "rtlsdr.sample_rate",
+        "rtlsdr-tuner": "rtlsdr.tuner",
         "biastee-toggle": "rtlsdr.biastee",
         "rtlagc-toggle": "rtlsdr.rtlagc",
         "airspyhf-sample-rate": "airspyhf.sample_rate",
