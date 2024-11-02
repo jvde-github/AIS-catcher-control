@@ -106,7 +106,6 @@ func init() {
 	templates, err = templates.ParseFS(templatesFS,
 		"templates/layout.html",
 		"templates/login.html",
-		"templates/navigation.html",
 		"templates/content/control.html",
 		"templates/content/udp-channels.html",
 		"templates/content/tcp-channels.html",
