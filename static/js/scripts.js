@@ -415,7 +415,6 @@ function updateJsonTextarea() {
   jsonTextarea.innerText = JSON.stringify(jsonData, null, 2);
 }
 
-// Generic function to handle unsaved changes and update status messages
 function handleUnsavedChanges(isUnsaved, message = 'You have unsaved changes.') {
   unsavedChanges = isUnsaved;
   updateSaveButton();
@@ -606,7 +605,7 @@ function setupSharingKeyInput() {
       if (uuidRegex.test(key)) {
         jsonData.sharing_key = key;
         handleUnsavedChanges(true, 'Sharing UUID has been modified. Please save your changes.');
-        updateStatusMessage('control', 'Valid Sharing Key entered. Restart AIS-catcher to apply changes.');
+        updateStatusMessage('warning', 'Valid Sharing Key entered. Save and Restart AIS-catcher to apply changes.');
       } else {
         updateStatusMessage('error', 'Invalid UUID format for Sharing Key.');
       }
