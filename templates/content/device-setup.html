@@ -400,14 +400,12 @@
     }
 
     function selectSerialDevice(device) {
-        document.getElementById('serialport-port').value = device;
-
+        const input = document.getElementById('serialport-port');
+        input.value = device;
         const event = new Event('change', { bubbles: true });
         input.dispatchEvent(event);
-
         const inputEvent = new Event('input', { bubbles: true });
         input.dispatchEvent(inputEvent);
-
         closeSerialDeviceModal();
     }
 
