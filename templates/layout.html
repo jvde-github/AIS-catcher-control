@@ -155,19 +155,9 @@
           <span class="menu-text ml-3 text-sm font-medium">Control</span>
         </a>
 
-        <!-- Webviewer -->
-        <a href="/webviewer" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-            class="h-6 w-6">
-            <path
-              d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm-40-82v-78q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 121 79.5 212T440-162Zm276-102q20-22 36-47.5t26.5-53q10.5-27.5 16-56.5t5.5-59q0-98-54.5-179T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h240q17 0 28.5 11.5T600-440v120h40q26 0 47 15.5t29 40.5Z" />
-          </svg>
-          <span class="menu-text ml-3 text-sm font-medium">Webviewer</span>
-        </a>
-
         <!-- Input with submenu -->
         <div>
-          <button onclick="toggleSubmenu('output-submenu', 'output-chevron')"
+          <button onclick="toggleSubmenu('input-submenu', 'input-chevron')"
             class="w-full flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
             <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
               class="h-6 w-6">
@@ -176,15 +166,15 @@
             </svg>
             <span class="menu-text ml-3 text-sm font-medium">Input</span>
             <svg xmlns="http://www.w3.org/2000/svg" class="ml-auto h-4 w-4 transition-transform duration-200"
-              id="output-chevron" viewBox="0 0 20 20" fill="currentColor">
+              id="input-chevron" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd"
                 d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z"
                 clip-rule="evenodd" />
             </svg>
           </button>
-          <div id="output-submenu" class="bg-gray-50 hidden">
+          <div id="input-submenu" class="bg-gray-50 hidden">
             <a href="/input" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">Select</span>
+              <span class="menu-text text-sm">Selection</span>
             </a>
             <a href="/device" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
               <span class="menu-text text-sm">Configuration</span>
@@ -225,6 +215,15 @@
           </div>
         </div>
 
+        <!-- Webviewer -->
+        <a href="/webviewer" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
+          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
+            class="h-6 w-6">
+            <path
+              d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm-40-82v-78q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 121 79.5 212T440-162Zm276-102q20-22 36-47.5t26.5-53q10.5-27.5 16-56.5t5.5-59q0-98-54.5-179T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h240q17 0 28.5 11.5T600-440v120h40q26 0 47 15.5t29 40.5Z" />
+          </svg>
+          <span class="menu-text ml-3 text-sm font-medium">Webviewer</span>
+        </a>
 
         <div>
           <button onclick="toggleSubmenu('advanced-submenu', 'advanced-chevron')"
@@ -281,110 +280,111 @@
   <!-- Main Content -->
   <div class="main-content min-h-screen bg-gray-100">
     <div class="md:p-6 p-4 pt-20 md:pt-6">
-      <div id="status-message" class="hidden"></div>
+      <div  id="status-message" class="mt-2 mb-4 p-2 transition-opacity duration-300 opacity-0 hidden" role="alert" aria-live="assertive">
+      </div>
+
       {{ dynamicTemplate .ContentTemplate . }}
     </div>
-  </div>
 
-  <script>
-    // Menu Toggle
-    const menuToggle = document.getElementById('menu-toggle');
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
+    <script>
+      // Menu Toggle
+      const menuToggle = document.getElementById('menu-toggle');
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('overlay');
 
-    menuToggle?.addEventListener('click', () => {
-      sidebar.classList.toggle('show');
-      overlay.classList.toggle('hidden');
-    });
+      menuToggle?.addEventListener('click', () => {
+        sidebar.classList.toggle('show');
+        overlay.classList.toggle('hidden');
+      });
 
-    overlay?.addEventListener('click', () => {
-      sidebar.classList.remove('show');
-      overlay.classList.add('hidden');
-    });
-
-    // Moved toggleSubmenu outside of any other function to make it globally available
-    function toggleSubmenu(submenuId, chevronId) {
-      console.log(submenuId, chevronId);
-      const submenu = document.getElementById(submenuId);
-      const chevron = document.getElementById(chevronId);
-
-      if (submenu && chevron) {
-        if (submenu.classList.contains('hidden')) {
-          // Opening the submenu
-          submenu.classList.remove('hidden');
-          chevron.style.transform = 'rotate(180deg)';
-        } else {
-          // Closing the submenu
-          submenu.classList.add('hidden');
-          chevron.style.transform = 'rotate(0deg)';
-        }
-      }
-    }
-
-    function handleResize() {
-      if (window.innerWidth >= 768) {
+      overlay?.addEventListener('click', () => {
         sidebar.classList.remove('show');
         overlay.classList.add('hidden');
-      }
-    }
+      });
 
-    function closeAllSubmenus() {
-      document.querySelectorAll('[id$="-submenu"]').forEach(submenu => {
-        const chevronId = submenu.id.replace('submenu', 'chevron');
+      // Moved toggleSubmenu outside of any other function to make it globally available
+      function toggleSubmenu(submenuId, chevronId) {
+        console.log(submenuId, chevronId);
+        const submenu = document.getElementById(submenuId);
         const chevron = document.getElementById(chevronId);
-        submenu.classList.add('hidden');
-        if (chevron) {
-          chevron.style.transform = 'rotate(0deg)';
+
+        if (submenu && chevron) {
+          if (submenu.classList.contains('hidden')) {
+            // Opening the submenu
+            submenu.classList.remove('hidden');
+            chevron.style.transform = 'rotate(180deg)';
+          } else {
+            // Closing the submenu
+            submenu.classList.add('hidden');
+            chevron.style.transform = 'rotate(0deg)';
+          }
         }
-      });
-    }
+      }
 
-    // Add click event listeners for submenu buttons
-    function initializeSubmenuListeners() {
-      const submenuButtons = document.querySelectorAll('button[onclick*="toggleSubmenu"]');
-      submenuButtons.forEach(button => {
-        const submenuId = button.getAttribute('onclick').match(/'([^']+)'/)[1];
-        const chevronId = submenuId.replace('submenu', 'chevron');
+      function handleResize() {
+        if (window.innerWidth >= 768) {
+          sidebar.classList.remove('show');
+          overlay.classList.add('hidden');
+        }
+      }
 
-        // Remove the inline onclick attribute
-        button.removeAttribute('onclick');
-
-        // Add event listener
-        button.addEventListener('click', () => {
-          toggleSubmenu(submenuId, chevronId);
+      function closeAllSubmenus() {
+        document.querySelectorAll('[id$="-submenu"]').forEach(submenu => {
+          const chevronId = submenu.id.replace('submenu', 'chevron');
+          const chevron = document.getElementById(chevronId);
+          submenu.classList.add('hidden');
+          if (chevron) {
+            chevron.style.transform = 'rotate(0deg)';
+          }
         });
+      }
+
+      // Add click event listeners for submenu buttons
+      function initializeSubmenuListeners() {
+        const submenuButtons = document.querySelectorAll('button[onclick*="toggleSubmenu"]');
+        submenuButtons.forEach(button => {
+          const submenuId = button.getAttribute('onclick').match(/'([^']+)'/)[1];
+          const chevronId = submenuId.replace('submenu', 'chevron');
+
+          // Remove the inline onclick attribute
+          button.removeAttribute('onclick');
+
+          // Add event listener
+          button.addEventListener('click', () => {
+            toggleSubmenu(submenuId, chevronId);
+          });
+        });
+      }
+
+      // For tablet view, handle hover events
+      if (sidebar) {
+        let hoverTimeout;
+
+        sidebar.addEventListener('mouseenter', () => {
+          if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+            clearTimeout(hoverTimeout);
+          }
+        });
+
+        sidebar.addEventListener('mouseleave', () => {
+          if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+            hoverTimeout = setTimeout(() => {
+              closeAllSubmenus();
+            }, 300);
+          }
+        });
+      }
+
+      // Initialize everything when the DOM is loaded
+      document.addEventListener('DOMContentLoaded', () => {
+        initializeSubmenuListeners();
+        handleResize();
       });
-    }
 
-    // For tablet view, handle hover events
-    if (sidebar) {
-      let hoverTimeout;
+      window.addEventListener('resize', handleResize);
+    </script>
 
-      sidebar.addEventListener('mouseenter', () => {
-        if (window.innerWidth >= 768 && window.innerWidth < 1024) {
-          clearTimeout(hoverTimeout);
-        }
-      });
-
-      sidebar.addEventListener('mouseleave', () => {
-        if (window.innerWidth >= 768 && window.innerWidth < 1024) {
-          hoverTimeout = setTimeout(() => {
-            closeAllSubmenus();
-          }, 300);
-        }
-      });
-    }
-
-    // Initialize everything when the DOM is loaded
-    document.addEventListener('DOMContentLoaded', () => {
-      initializeSubmenuListeners();
-      handleResize();
-    });
-
-    window.addEventListener('resize', handleResize);
-  </script>
-
-  <script src="/static/js/scripts.js?v={{ .JsVersion }}"></script>
+    <script src="/static/js/scripts.js?v={{ .JsVersion }}"></script>
 </body>
 
 </html>

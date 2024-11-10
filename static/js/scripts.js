@@ -36,7 +36,7 @@ function populateChannels(channelType) {
     jsonData[channelType].forEach((channel, channelIndex) => {
       const propertiesListId = `${channelType}-properties-list-${channelIndex}`;
       const toggleButtonId = `${channelType}-toggle-btn-${channelIndex}`;
-      
+
       const channelDiv = document.createElement('div');
       channelDiv.className = `${channelType}-channel border p-4 rounded-md mb-4`;
       channelDiv.setAttribute('data-index', channelIndex);
@@ -173,12 +173,12 @@ function populateChannels(channelType) {
         // Get both mobile and desktop toggle properties buttons
         const toggleButtons = channelDiv.querySelectorAll(`.${channelType}-toggle-properties-btn`);
         const propertiesContainer = channelDiv.querySelector(`#${propertiesListId}`);
-        
+
         toggleButtons.forEach(toggleBtn => {
           toggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const chevronIcon = toggleBtn.querySelector('svg');
-            
+
             if (propertiesContainer) {
               // Toggle visibility
               if (propertiesContainer.classList.contains('hidden')) {
@@ -430,7 +430,7 @@ function handleUnsavedChanges(isUnsaved, message = 'You have unsaved changes.') 
   } else {
     // Only show success message if restart is required
     if (restartRequired) {
-      updateStatusMessage('good', 'Changes saved. They will take effect after restarting AIS-catcher.');
+      updateStatusMessage('control', 'Changes saved. They will take effect after restarting AIS-catcher.');
     } else {
       updateStatusMessage(); // Hide any status message
     }
@@ -524,6 +524,11 @@ function updateStatusMessage(type, message) {
       borderClass = 'border-green-400';
       textClass = 'text-green-700';
       break;
+    case 'control':
+      bgClass = 'bg-green-100';
+      borderClass = 'border-green-400';
+      textClass = 'text-green-700';
+      break;
     case 'warning':
       bgClass = 'bg-yellow-100';
       borderClass = 'border-yellow-400';
@@ -541,11 +546,23 @@ function updateStatusMessage(type, message) {
       textClass = 'text-blue-700';
   }
 
-  statusMessageDiv.innerHTML = `
+  if (type === 'control') {
+    statusMessageDiv.innerHTML = `
+      <div class="flex items-center justify-between gap-4">
+        <span>${escapeHtml(message)}</span>
+        <a href="/control" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+          Control
+        </a>
+      </div>
+    `;
+  }
+  else {
+    statusMessageDiv.innerHTML = `
     <div class="flex items-center">
       <span>${escapeHtml(message)}</span>
     </div>
   `;
+  }
 
   statusMessageDiv.className = `mt-2 p-2 ${bgClass} ${borderClass} ${textClass} rounded`;
 }
@@ -593,7 +610,7 @@ function setupSharingKeyInput() {
       if (uuidRegex.test(key)) {
         jsonData.sharing_key = key;
         handleUnsavedChanges(true, 'Sharing UUID has been modified. Please save your changes.');
-        updateStatusMessage('good', 'Valid Sharing Key entered.');
+        updateStatusMessage('control', 'Valid Sharing Key entered. Restart AIS-catcher to apply changes.');
       } else {
         updateStatusMessage('error', 'Invalid UUID format for Sharing Key.');
       }
