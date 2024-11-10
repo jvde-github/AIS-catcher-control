@@ -11,15 +11,15 @@
                     <select id="device-input" name="device_input" data-jsonpath="input"
                         class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
                         <option value="">Select Device</option>
-                        <option value="RTLSDR">RTL-SDR</option>
-                        <option value="AIRSPY">AirSpy</option>
-                        <option value="AIRSPYHF">Airspy HF+</option>
-                        <option value="HACKRF">HackRF</option>
-                        <option value="SERIALPORT">Serial</option>
+                        <option value="RTLSDR">RTLSDR</option>
+                        <option value="AIRSPY">AIRSPY</option>
+                        <option value="AIRSPYHF">AIRSPYHF</option>
+                        <option value="HACKRF">HACKRF</option>
+                        <option value="SERIALPORT">SERIAL</option>
                         <option value="UDPSERVER">UDP Server</option>
                         <option value="RTLTCP">TCP Client</option>
-                        <option value="SPYSERVER">SpyServer</option>
-
+                        <option value="SPYSERVER">SPYSERVER</option>
+                        <option value="NMEA2000">NMEA2000</option>
                     </select>
                     <button type="button" id="select-device-btn" onclick="openDeviceSelectionModal()"
                         class="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition duration-200 flex items-center"
@@ -381,6 +381,19 @@
                     jsonpath: "spyserver.port",
                     placeholder: "e.g., 5555",
                     defaultValue: "1234"
+                }
+            ]
+        },
+        NMEA2000: {
+            title: "NMEA2000 Settings",
+            fields: [
+                {
+                    name: "interface",
+                    label: "Interface",
+                    type: "text",
+                    jsonpath: "nmea2000.interface",
+                    placeholder: "CAN interface name",
+                    defaultValue: "can0"
                 }
             ]
         }
