@@ -1,2 +1,1 @@
-#
-
+# AIS-catcher configuration
