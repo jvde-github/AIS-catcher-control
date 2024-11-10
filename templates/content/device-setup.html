@@ -34,7 +34,7 @@
             </div>
 
             <!-- Serial Key -->
-            <div class="max-w-md mb-4" id = "serialKeyContainer">
+            <div class="max-w-md mb-4" id="serialKeyContainer">
                 <label for="serial-key" class="block text-gray-700 text-sm font-medium mb-2">Serial Key:</label>
                 <input type="text" id="serial-key" name="serial_key" data-jsonpath="serial"
                     placeholder="Optional Serial Key"
@@ -287,6 +287,7 @@
                     label: "Baud Rate",
                     type: "select",
                     jsonpath: "serialport.baudrate",
+                    defaultValue: "38400",
                     options: [
                         { value: "9600", label: "9600" },
                         { value: "19200", label: "19200" },
@@ -313,6 +314,40 @@
                     type: "number",
                     jsonpath: "udpserver.port",
                     placeholder: "e.g., 1234"
+                }
+            ]
+        }, 
+        HACKRF: {
+            title: "HACKRF Settings",
+            hasSerial: true,
+            fields: [
+                {
+                    name: "lna",
+                    label: "LNA Gain",
+                    type: "number",
+                    jsonpath: "hackrf.lna",
+                    min: 0,
+                    max: 40,
+                    step: 8,
+                    defaultValue: 8,
+                    placeholder: "0-40 (in steps of 8)"
+                },
+                {
+                    name: "vga",
+                    label: "VGA Gain",
+                    type: "number",
+                    jsonpath: "hackrf.vga",
+                    min: 0,
+                    max: 62,
+                    step: 2,
+                    defaultValue: 20,
+                    placeholder: "0-62 (in steps of 2)"
+                },
+                {
+                    name: "preamp",
+                    label: "Preamp",
+                    type: "toggle",
+                    jsonpath: "hackrf.preamp"
                 }
             ]
         }
@@ -367,6 +402,7 @@
             jsonContent.textContent = JSON.stringify(jsonData, null, 2);
         }
     }
+
     function createField(field) {
         const fieldContainer = document.createElement('div');
         fieldContainer.className = 'max-w-md mb-4';
@@ -406,9 +442,7 @@
                 input.className = 'sr-only peer';
 
                 const toggleUI = document.createElement('div');
-                toggleUI.className = "w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white \
-                    after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full \
-                    after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500";
+                toggleUI.className = "w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500";
 
                 toggleContainer.appendChild(input);
                 toggleContainer.appendChild(toggleUI);
@@ -422,6 +456,7 @@
                 input.placeholder = field.placeholder || '';
                 if (field.min !== undefined) input.min = field.min;
                 if (field.max !== undefined) input.max = field.max;
+                if (field.step !== undefined) input.step = field.step;
                 break;
         }
 
@@ -431,13 +466,13 @@
 
         input.id = field.name;
         input.name = field.name;
-        input.dataset.jsonpath = field.jsonpath; // Store jsonpath in data attribute
+        input.dataset.jsonpath = field.jsonpath;
 
-        // Set initial value from jsonData if available
+        // Set initial value from jsonData if available, otherwise use default value
         const pathSegments = field.jsonpath.split('.');
         let current = jsonData;
         for (let i = 0; i < pathSegments.length; i++) {
-            if (current[pathSegments[i]] !== undefined) {
+            if (current && current[pathSegments[i]] !== undefined) {
                 current = current[pathSegments[i]];
             } else {
                 current = undefined;
@@ -451,6 +486,23 @@
             } else {
                 input.value = current;
             }
+        } else if (field.defaultValue !== undefined) {
+            // Set default value in both the UI and jsonData
+            if (field.type === 'toggle') {
+                input.checked = field.defaultValue;
+            } else {
+                input.value = field.defaultValue;
+            }
+
+            // Update jsonData with default value
+            let currentObj = jsonData;
+            for (let i = 0; i < pathSegments.length - 1; i++) {
+                if (!currentObj[pathSegments[i]]) {
+                    currentObj[pathSegments[i]] = {};
+                }
+                currentObj = currentObj[pathSegments[i]];
+            }
+            currentObj[pathSegments[pathSegments.length - 1]] = field.defaultValue;
         }
 
         // Add event listeners to update jsonData
@@ -466,6 +518,7 @@
             }
         }
 
+        // Add button if needed
         if (field.withButton) {
             const button = document.createElement('button');
             button.type = 'button';
@@ -473,7 +526,6 @@
             button.setAttribute('onclick', field.withButton.onClick);
             button.title = field.withButton.label || '';
 
-            // If icon is provided, include it in the button
             if (field.withButton.icon) {
                 button.innerHTML = `${field.withButton.icon}${field.withButton.label ? `<span>${field.withButton.label}</span>` : ''}`;
             } else {
@@ -487,13 +539,12 @@
         return fieldContainer;
     }
 
-
     function updateDeviceSettings(deviceType) {
 
         if (deviceType && deviceConfigs[deviceType] && 'hasSerial' in deviceConfigs[deviceType]) {
             serialKeyContainer.style.display = deviceConfigs[deviceType].hasSerial ? 'block' : 'none';
         } else {
-            serialKeyContainer.style.display = 'none'; 
+            serialKeyContainer.style.display = 'none';
         }
 
         const settingsContainer = document.getElementById('device-settings');
