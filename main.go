@@ -357,6 +357,46 @@ func deviceListHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(stdout)
 }
 
+func serialListHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	devices := []string{}
+
+	// Add USB serial devices from by-id if directory exists
+	if entries, err := os.ReadDir("/dev/serial/by-id"); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				devices = append(devices, "/dev/serial/by-id/"+entry.Name())
+			}
+		}
+	}
+
+	// Check /dev for serial devices
+	if entries, err := os.ReadDir("/dev"); err == nil {
+		for _, entry := range entries {
+			name := entry.Name()
+			// Common serial device patterns
+			if strings.HasPrefix(name, "ttyUSB") || // USB serial devices
+				strings.HasPrefix(name, "ttyACM") || // USB ACM devices
+				strings.HasPrefix(name, "ttyAMA") || // Raspberry Pi and others
+				strings.HasPrefix(name, "ttyS") || // Standard serial ports
+				name == "serial0" || name == "serial1" { // Raspberry Pi aliases
+
+				devicePath := "/dev/" + name
+				// Verify it's a character device
+				if stat, err := os.Stat(devicePath); err == nil && (stat.Mode()&os.ModeCharDevice) != 0 {
+					devices = append(devices, devicePath)
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(devices)
+}
 func controlHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodGet {
@@ -1377,6 +1417,7 @@ func main() {
 	http.HandleFunc("/webviewer", authMiddleware(webviewerHandler))
 	http.HandleFunc("/logout", authMiddleware(logoutHandler))
 	http.HandleFunc("/device-list", authMiddleware(deviceListHandler))
+	http.HandleFunc("/serial-list", authMiddleware(serialListHandler))
 	http.HandleFunc("/editjson", authMiddleware(editConfigJSONHandler))
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
 
