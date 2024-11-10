@@ -147,36 +147,6 @@
 
 <script>
 
-    const generalConfigs = {
-        fields: [
-            {
-                name: "device-input",
-                label: "Device Type",
-                type: "select",
-                jsonpath: "input",
-                options: [
-                    { value: "", label: "Select Device" },
-                    { value: "RTLSDR", label: "RTLSDR" },
-                    { value: "AIRSPY", label: "AIRSPY" },
-                    { value: "AIRSPYHF", label: "AIRSPYHF" },
-                    { value: "SDRPLAY", label: "SDRPLAY" },
-                    { value: "RTLTCP", label: "TCP" },
-                    { value: "HACKRF", label: "HACKRF" },
-                    { value: "SOAPYSDR", label: "SOAPYSDR" },
-                    { value: "SERIALPORT", label: "SERIAL" },
-                    { value: "UDPSERVER", label: "UDP" }
-                ]
-            },
-            {
-                name: "serial-key",
-                label: "Serial Key",
-                type: "text",
-                jsonpath: "serial",
-                placeholder: "Enter Serial Key"
-            }
-        ]
-    };
-
     const deviceConfigs = {
         RTLSDR: {
             title: "RTLSDR Settings",
@@ -271,10 +241,10 @@
                     type: "select",
                     jsonpath: "rtltcp.protocol",
                     options: [
-                        { value: "none", label: "None" },
+                        { value: "none", label: "Raw" },
                         { value: "rtltcp", label: "RTLTCP" },
                         { value: "gpsd", label: "GPSD" },
-                        { value: "txt", label: "TXT" }
+                        { value: "txt", label: "NMEA" }
                     ]
                 },
                 {
