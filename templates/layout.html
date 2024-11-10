@@ -155,32 +155,16 @@
           <span class="menu-text ml-3 text-sm font-medium">Control</span>
         </a>
 
-        <!-- Input with submenu -->
-        <div>
-          <button onclick="toggleSubmenu('input-submenu', 'input-chevron')"
-            class="w-full flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-              class="h-6 w-6">
-              <path
-                d="M160-80q-33 0-56.5-23.5T80-160v-480q0-25 13.5-45t36.5-29l506-206 26 66-330 134h468q33 0 56.5 23.5T880-640v480q0 33-23.5 56.5T800-80H160Zm0-80h640v-280H160v280Zm160-40q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29ZM160-520h480v-80h80v80h80v-120H160v120Zm0 360v-280 280Z" />
-            </svg>
-            <span class="menu-text ml-3 text-sm font-medium">Input</span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="ml-auto h-4 w-4 transition-transform duration-200"
-              id="input-chevron" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd"
-                d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z"
-                clip-rule="evenodd" />
-            </svg>
-          </button>
-          <div id="input-submenu" class="bg-gray-50 hidden">
-            <a href="/input" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">Selection</span>
-            </a>
-            <a href="/device" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">Configuration</span>
-            </a>
-          </div>
-        </div>
+        <!-- Webviewer -->
+        <a href="/device" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
+          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
+            class="h-6 w-6">
+            <path
+              d="M160-80q-33 0-56.5-23.5T80-160v-480q0-25 13.5-45t36.5-29l506-206 26 66-330 134h468q33 0 56.5 23.5T880-640v480q0 33-23.5 56.5T800-80H160Zm0-80h640v-280H160v280Zm160-40q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29ZM160-520h480v-80h80v80h80v-120H160v120Zm0 360v-280 280Z" />
+          </svg>
+          <span class="menu-text ml-3 text-sm font-medium">Input</span>
+        </a>
+
 
         <!-- Output with submenu -->
         <div>
@@ -280,7 +264,8 @@
   <!-- Main Content -->
   <div class="main-content min-h-screen bg-gray-100">
     <div class="md:p-6 p-4 pt-20 md:pt-6">
-      <div  id="status-message" class="mt-2 mb-4 p-2 transition-opacity duration-300 opacity-0 hidden" role="alert" aria-live="assertive">
+      <div id="status-message" class="mt-2 mb-4 p-2 transition-opacity duration-300 opacity-0 hidden" role="alert"
+        aria-live="assertive">
       </div>
 
       {{ dynamicTemplate .ContentTemplate . }}

@@ -78,17 +78,6 @@ type ServiceConfig struct {
 	Port string `json:"port"`
 }
 
-func Seq(start, end int) []int {
-	if end < start {
-		return []int{}
-	}
-	s := make([]int, end-start+1)
-	for i := range s {
-		s[i] = start + i
-	}
-	return s
-}
-
 func init() {
 	funcMap := template.FuncMap{
 		"dynamicTemplate": func(name string, data interface{}) (template.HTML, error) {
@@ -96,7 +85,6 @@ func init() {
 			err := templates.ExecuteTemplate(&buf, name, data)
 			return template.HTML(buf.String()), err
 		},
-		"seq": Seq,
 	}
 
 	templates = template.New("").Funcs(funcMap)

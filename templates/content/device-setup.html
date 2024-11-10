@@ -1,227 +1,51 @@
 {{ define "device-setup" }}
-<div id="device-setup" class="p-6 bg-white shadow-md rounded-lg max-w-2xl mx-auto">
-    <div class="border-b border-gray-200" role="tablist">
-        <!-- Change from flex to grid for small screens -->
-        <div class="grid grid-cols-2 gap-2 sm:flex sm:-mb-px sm:space-x-4">
-            <button role="tab" aria-selected="true" data-tab="rtlsdr"
-                class="py-2 px-4 text-sm sm:text-base text-gray-700 font-medium border-b-2 border-yellow-500 hover:text-gray-900 transition-colors truncate">RTLSDR</button>
-            <button role="tab" aria-selected="false" data-tab="airspyhf"
-                class="py-2 px-4 text-sm sm:text-base text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors truncate">Airspy
-                HF+</button>
-            <button role="tab" aria-selected="false" data-tab="rtltcp"
-                class="py-2 px-4 text-sm sm:text-base text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors truncate">TCP</button>
-            <button role="tab" aria-selected="false" data-tab="udpserver"
-                class="py-2 px-4 text-sm sm:text-base text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors truncate">UDP
-            </button>
-            <button role="tab" aria-selected="false" data-tab="serialport"
-                class="py-2 px-4 text-sm sm:text-base text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors truncate">Serial
-            </button>
-        </div>
-    </div>
+<div id="input-selection" class="max-w-2xl mx-auto p-4 md:p-6 bg-white rounded-lg shadow-md">
+    <h3 class="text-lg text-xl font-semibold text-gray-800 mb-4">Input Selection</h3>
 
-    <div role="tabpanel" id="rtlsdr-panel" class="mt-6">
-        <h3 class="text-2xl font-semibold text-gray-800 mb-4">RTLSDR</h3>
-        <form id="rtlsdr-form" class="space-y-6">
-            <div class="max-w-md">
-                <label for="rtlsdr-tuner" class="block text-gray-700 font-medium mb-2">Tuner:</label>
-                <select id="rtlsdr-tuner" name="tuner" class="w-full px-4 py-2 border border-gray-300 rounded-md">
-                    <option value="auto">Auto</option>
-                    {{range $i := seq 0 50}}
-                    <option value="{{$i}}">{{$i}}</option>
-                    {{end}}
-                </select>
-            </div>
-
-            <div class="max-w-md">
-                <label for="rtlsdr-bandwidth" class="block text-gray-700 font-medium mb-2">Bandwidth:</label>
-                <select id="rtlsdr-bandwidth" name="bandwidth"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
-                    <option value="0">Off</option>
-                    <option value="192K">192K</option>
-                </select>
-            </div>
-
-            <div class="max-w-md">
-                <label for="rtlsdr-sample-rate" class="block text-gray-700 font-medium mb-2">Sample Rate:</label>
-                <select id="rtlsdr-sample-rate" name="sample_rate"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
-                    <option value="288K">288K</option>
-                    <option value="1536K" selected>1536K</option>
-                </select>
-            </div>
-
-            <div class="flex items-center justify-between max-w-md">
-                <div class="flex items-center mb-6">
-                    <label for="biastee-toggle" class="text-gray-700 font-medium">Bias tee:</label>
-                    <label class="ml-4 relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="biastee-toggle" class="sr-only peer">
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
-                            after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
-                            after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
-                        </div>
-                    </label>
-                </div>
-            </div>
-
-            <div class="flex items-center justify-between max-w-md">
-                <div class="flex items-center mb-6">
-                    <label for="rtlagc-toggle" class="text-gray-700 font-medium">RTLAGC:</label>
-                    <label class="ml-4 relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="rtlagc-toggle" class="sr-only peer">
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
-                            after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
-                            after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
-                        </div>
-                    </label>
-                </div>
-            </div>
-            <!-- Frequency Offset -->
-            <div class="max-w-md">
-                <label for="rtlsdr-freqoffset" class="block text-gray-700 font-medium mb-2">Frequency Offset:</label>
-                <input type="number" id="rtlsdr-freqoffset" name="freqoffset" min="-50" max="50" value="0"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
-            </div>
-        </form>
-    </div>
-
-    <div role="tabpanel" id="airspyhf-panel" class="mt-6 hidden">
-        <h3 class="text-2xl font-semibold text-gray-800 mb-4">Airspy HF+</h3>
-        <form id="airspyhf-form" class="space-y-6">
-            <div class="max-w-md">
-                <label for="airspyhf-sample-rate" class="block text-gray-700 font-medium mb-2">Sample Rate:</label>
-                <select id="airspyhf-sample-rate" name="sample_rate"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
-                    <option value="192K">192K</option>
-                </select>
-            </div>
-
-            <div class="max-w-md">
-                <label for="airspyhf-threshold" class="block text-gray-700 font-medium mb-2">Threshold:</label>
-                <select id="airspyhf-threshold" name="threshold"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
-                    <option value="low" selected>Low</option>
-                    <option value="high">High</option>
-                </select>
-            </div>
-
-            <div class="flex items-center justify-between max-w-md">
-                <div class="flex items-center mb-6">
-                    <label for="preamp-toggle" class="text-gray-700 font-medium">Preamp:</label>
-                    <label class="ml-4 relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="preamp-toggle" class="sr-only peer">
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
-                            after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
-                            after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
-                        </div>
-                    </label>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <div role="tabpanel" id="rtltcp-panel" class="mt-6 hidden">
-        <h3 class="text-2xl font-semibold text-gray-800 mb-4">TCP</h3>
-        <form id="rtltcp-form" class="space-y-6">
-            <div class="max-w-md">
-                <label for="rtltcp-protocol" class="block text-gray-700 font-medium mb-2">Protocol:</label>
-                <select id="rtltcp-protocol" name="protocol" class="w-full px-4 py-2 border border-gray-300 rounded-md">
-                    <option value="none">None</option>
-                    <option value="txt">TXT</option>
-                </select>
-            </div>
-
-            <div class="max-w-md">
-                <label for="rtltcp-host" class="block text-gray-700 font-medium mb-2">Host:</label>
-                <input type="text" id="rtltcp-host" name="host"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., 127.0.0.1">
-            </div>
-
-            <div class="max-w-md">
-                <label for="rtltcp-port" class="block text-gray-700 font-medium mb-2">Port:</label>
-                <input type="number" id="rtltcp-port" name="port"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., 1234">
-            </div>
-
-            <div class="max-w-md">
-                <label for="rtltcp-sample-rate" class="block text-gray-700 font-medium mb-2">Sample Rate:</label>
-                <select id="rtltcp-sample-rate" name="sample_rate"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
-                    <option value="288K">288K</option>
-                    <option value="1536K">1536K</option>
-                </select>
-            </div>
-
-            <div class="max-w-md">
-                <label for="rtltcp-bandwidth" class="block text-gray-700 font-medium mb-2">Bandwidth:</label>
-                <select id="rtltcp-bandwidth" name="bandwidth"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
-                    <option value="0">Off</option>
-                    <option value="192K">192K</option>
-                </select>
-            </div>
-
-            <div class="flex items-center justify-between max-w-md">
-                <div class="flex items-center mb-6">
-                    <label for="rtltcp-rtlagc-toggle" class="text-gray-700 font-medium">RTLAGC:</label>
-                    <label class="ml-4 relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="rtltcp-rtlagc-toggle" class="sr-only peer">
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
-                            after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
-                            after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
-                        </div>
-                    </label>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <div role="tabpanel" id="udpserver-panel" class="mt-6 hidden">
-        <h3 class="text-2xl font-semibold text-gray-800 mb-4">UDP Server</h3>
-        <form id="udpserver-form" class="space-y-6">
-            <div class="max-w-md">
-                <label for="udpserver-address" class="block text-gray-700 font-medium mb-2">Server Address:</label>
-                <input type="text" id="udpserver-address" name="address"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., 127.0.0.1">
-            </div>
-
-            <div class="max-w-md">
-                <label for="udpserver-port" class="block text-gray-700 font-medium mb-2">Port:</label>
-                <input type="number" id="udpserver-port" name="port"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., 1234">
-            </div>
-        </form>
-    </div>
-
-    <!-- New Serial Port panel -->
-    <div role="tabpanel" id="serialport-panel" class="mt-6 hidden">
-        <h3 class="text-2xl font-semibold text-gray-800 mb-4">Serial Port</h3>
-        <form id="serialport-form" class="space-y-6">
-            <div class="max-w-md">
-                <label for="serialport-port" class="block text-gray-700 font-medium mb-2">Port:</label>
+    <form id="device-form" class="space-y-4">
+        <!-- Device Type Selection -->
+        <div class="space-y-4">
+            <div class="max-w-md mb-4">
+                <label for="device-input" class="block text-gray-700 text-sm font-medium mb-2">Device Type:</label>
                 <div class="flex gap-2">
-                    <input type="text" id="serialport-port" name="port"
-                        class="flex-1 px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., /dev/tty0"
-                        value="">
-                    <button type="button" onclick="openSerialDeviceModal()"
-                        class="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors">
-                        Get
+                    <select id="device-input" name="device_input" data-jsonpath="input"
+                        class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
+                        <option value="">Select Device</option>
+                        <option value="RTLSDR">RTLSDR</option>
+                        <option value="AIRSPY">AIRSPY</option>
+                        <option value="AIRSPYHF">AIRSPYHF</option>
+                        <option value="SDRPLAY">SDRPLAY</option>
+                        <option value="RTLTCP">TCP</option>
+                        <option value="HACKRF">HACKRF</option>
+                        <option value="SERIALPORT">SERIAL</option>
+                        <option value="UDPSERVER">UDP</option>
+                    </select>
+                    <button type="button" id="select-device-btn" onclick="openDeviceSelectionModal()"
+                        class="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition duration-200 flex items-center"
+                        title="Get">
+                        <!-- SVG icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px"
+                            fill="#FFFFFF">
+                            <path
+                                d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z" />
+                        </svg>
                     </button>
                 </div>
             </div>
 
-            <div class="max-w-md">
-                <label for="serialport-baudrate" class="block text-gray-700 font-medium mb-2">Baud Rate:</label>
-                <select id="serialport-baudrate" name="baudrate"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
-                    <option value="9600">9600</option>
-                    <option value="19200">19200</option>
-                    <option value="38400" selected>38400</option>
-                    <option value="57600">57600</option>
-                    <option value="115200">115200</option>
-                </select>
+            <!-- Serial Key -->
+            <div class="max-w-md mb-4">
+                <label for="serial-key" class="block text-gray-700 text-sm font-medium mb-2">Serial Key:</label>
+                <input type="text" id="serial-key" name="serial_key" data-jsonpath="serial"
+                    placeholder="Enter Serial Key"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
             </div>
-        </form>
-    </div>
+        </div>
+    </form>
+
+    <hr class="my-6 border-gray-300">
+
+    <div id="device-settings" class="mt-6"> </div>
 
     <div class="flex justify-end mt-6">
         <button id="save-button"
@@ -272,6 +96,31 @@
     </div>
 </div>
 
+<div id="device-selection-modal"
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 max-w-2xl mx-4">
+        <div class="flex justify-between items-center p-4 border-b">
+            <h3 class="text-lg font-medium text-gray-800">Select Device</h3>
+            <button type="button" onclick="closeDeviceSelectionModal()" class="text-gray-600 hover:text-gray-800">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div class="p-4">
+            <ul id="device-list" class="space-y-2 max-h-64 overflow-y-auto">
+                <!-- Devices will be populated here via JavaScript -->
+            </ul>
+        </div>
+        <div class="flex justify-end p-4 border-t">
+            <button type="button" onclick="closeDeviceSelectionModal()"
+                class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
 <style>
     input:disabled,
     select:disabled {
@@ -298,93 +147,465 @@
 
 <script>
 
-    const formToJsonMap = {
-        "rtlsdr-bandwidth": "rtlsdr.bandwidth",
-        "rtlsdr-sample-rate": "rtlsdr.sample_rate",
-        "rtlsdr-tuner": "rtlsdr.tuner",
-        "rtlsdr-freqoffset": "rtlsdr.freqoffset",
-        "biastee-toggle": "rtlsdr.biastee",
-        "rtlagc-toggle": "rtlsdr.rtlagc",
-        "airspyhf-sample-rate": "airspyhf.sample_rate",
-        "airspyhf-threshold": "airspyhf.threshold",
-        "preamp-toggle": "airspyhf.preamp",
-        "rtltcp-host": "rtltcp.host",
-        "rtltcp-port": "rtltcp.port",
-        "rtltcp-protocol": "rtltcp.protocol",
-        "rtltcp-sample-rate": "rtltcp.sample_rate",
-        "rtltcp-bandwidth": "rtltcp.bandwidth",
-        "rtltcp-rtlagc-toggle": "rtltcp.rtlagc",
-        "udpserver-address": "udpserver.server",
-        "udpserver-port": "udpserver.port",
-        "serialport-port": "serialport.port",
-        "serialport-baudrate": "serialport.baudrate",
+    const generalConfigs = {
+        fields: [
+            {
+                name: "device-input",
+                label: "Device Type",
+                type: "select",
+                jsonpath: "input",
+                options: [
+                    { value: "", label: "Select Device" },
+                    { value: "RTLSDR", label: "RTLSDR" },
+                    { value: "AIRSPY", label: "AIRSPY" },
+                    { value: "AIRSPYHF", label: "AIRSPYHF" },
+                    { value: "SDRPLAY", label: "SDRPLAY" },
+                    { value: "RTLTCP", label: "TCP" },
+                    { value: "HACKRF", label: "HACKRF" },
+                    { value: "SOAPYSDR", label: "SOAPYSDR" },
+                    { value: "SERIALPORT", label: "SERIAL" },
+                    { value: "UDPSERVER", label: "UDP" }
+                ]
+            },
+            {
+                name: "serial-key",
+                label: "Serial Key",
+                type: "text",
+                jsonpath: "serial",
+                placeholder: "Enter Serial Key"
+            }
+        ]
     };
 
-    document.addEventListener('DOMContentLoaded', function () {
-        const tabs = document.querySelectorAll('[role="tab"]');
-        const panels = document.querySelectorAll('[role="tabpanel"]');
+    const deviceConfigs = {
+        RTLSDR: {
+            title: "RTLSDR Settings",
+            fields: [
+                {
+                    name: "tuner",
+                    label: "Tuner",
+                    type: "select",
+                    jsonpath: "rtlsdr.tuner",
+                    options: [
+                        { value: "auto", label: "Auto" },
+                        ...Array.from({ length: 51 }, (_, i) => ({ value: i.toString(), label: i.toString() }))
+                    ]
+                },
+                {
+                    name: "bandwidth",
+                    label: "Bandwidth",
+                    type: "select",
+                    jsonpath: "rtlsdr.bandwidth",
+                    options: [
+                        { value: "0", label: "Off" },
+                        { value: "192K", label: "192K" }
+                    ]
+                },
+                {
+                    name: "sample_rate",
+                    label: "Sample Rate",
+                    type: "select",
+                    jsonpath: "rtlsdr.sample_rate",
+                    options: [
+                        { value: "288K", label: "288K" },
+                        { value: "1536K", label: "1536K" }
+                    ]
+                },
+                {
+                    name: "freqoffset",
+                    label: "Frequency Offset",
+                    type: "number",
+                    jsonpath: "rtlsdr.freqoffset",
+                    min: -50,
+                    max: 50,
+                    defaultValue: 0
+                },
+                {
+                    name: "biastee",
+                    label: "Bias tee",
+                    type: "toggle",
+                    jsonpath: "rtlsdr.biastee"
+                },
+                {
+                    name: "rtlagc",
+                    label: "RTLAGC",
+                    type: "toggle",
+                    jsonpath: "rtlsdr.rtlagc"
+                }
+            ]
+        },
+        AIRSPYHF: {
+            title: "Airspy HF+ Settings",
+            fields: [
+                {
+                    name: "sample_rate",
+                    label: "Sample Rate",
+                    type: "select",
+                    jsonpath: "airspyhf.sample_rate",
+                    options: [{ value: "192K", label: "192K" }]
+                },
+                {
+                    name: "threshold",
+                    label: "Threshold",
+                    type: "select",
+                    jsonpath: "airspyhf.threshold",
+                    options: [
+                        { value: "low", label: "Low" },
+                        { value: "high", label: "High" }
+                    ]
+                },
+                {
+                    name: "preamp",
+                    label: "Preamp",
+                    type: "toggle",
+                    jsonpath: "airspyhf.preamp"
+                }
+            ]
+        },
+        RTLTCP: {
+            title: "TCP Settings",
+            fields: [
+                {
+                    name: "protocol",
+                    label: "Protocol",
+                    type: "select",
+                    jsonpath: "rtltcp.protocol",
+                    options: [
+                        { value: "rtltcp", label: "RTLTCP" },
+                        { value: "txt", label: "TXT" }
+                    ]
+                },
+                {
+                    name: "host",
+                    label: "Host",
+                    type: "text",
+                    jsonpath: "rtltcp.host",
+                    placeholder: "e.g., 127.0.0.1"
+                },
+                {
+                    name: "port",
+                    label: "Port",
+                    type: "number",
+                    jsonpath: "rtltcp.port",
+                    placeholder: "e.g., 1234"
+                }
+            ]
+        },
+        SERIALPORT: {
+            title: "Serial Port Settings",
+            fields: [
+                {
+                    name: "port",
+                    label: "Port",
+                    type: "text",
+                    jsonpath: "serialport.port",
+                    placeholder: "e.g., /dev/tty0",
+                    withButton: {
+                        label: "",
+                        onClick: "openSerialDeviceModal()",
+                        icon: `<svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor">
+                        <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/>
+                    </svg>`
+                    }
+                },
+                {
+                    name: "baudrate",
+                    label: "Baud Rate",
+                    type: "select",
+                    jsonpath: "serialport.baudrate",
+                    options: [
+                        { value: "9600", label: "9600" },
+                        { value: "19200", label: "19200" },
+                        { value: "38400", label: "38400" },
+                        { value: "57600", label: "57600" },
+                        { value: "115200", label: "115200" }
+                    ]
+                }
+            ]
+        },
+        UDPSERVER: {
+            title: "UDP Server Settings",
+            fields: [
+                {
+                    name: "server",
+                    label: "Server Address",
+                    type: "text",
+                    jsonpath: "udpserver.server",
+                    placeholder: "e.g., 127.0.0.1"
+                },
+                {
+                    name: "port",
+                    label: "Port",
+                    type: "number",
+                    jsonpath: "udpserver.port",
+                    placeholder: "e.g., 1234"
+                }
+            ]
+        }
+    };
 
-        // Tab switching logic
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                // Deselect all tabs and hide all panels
-                tabs.forEach(t => {
-                    t.setAttribute('aria-selected', 'false');
-                    t.classList.remove('text-gray-700', 'border-yellow-500');
-                    t.classList.add('text-gray-500', 'border-transparent');
-                });
-
-                panels.forEach(panel => {
-                    panel.classList.add('hidden');
-                });
-
-                // Select the clicked tab and show the corresponding panel
-                tab.setAttribute('aria-selected', 'true');
-                tab.classList.remove('text-gray-500', 'border-transparent');
-                tab.classList.add('text-gray-700', 'border-yellow-500');
-                document.getElementById(`${tab.dataset.tab}-panel`).classList.remove('hidden');
-            });
-        });
-
-        // Handle switch toggles
-        document.querySelectorAll('[role="switch"]').forEach(toggle => {
-            toggle.addEventListener('click', function () {
-                const isChecked = this.getAttribute('aria-checked') === 'true';
-                this.setAttribute('aria-checked', !isChecked);
-                this.classList.toggle('bg-yellow-500', !isChecked);
-                const knob = this.querySelector('span');
-                knob.style.transform = !isChecked ? 'translateX(1.5rem)' : 'translateX(0.25rem)';
-            });
-        });
-
-        // Function to update RTLTCP fields based on protocol
-        function updateRTLTCPFields() {
-            const protocol = document.getElementById('rtltcp-protocol').value;
-            const hostField = document.getElementById('rtltcp-host');
-            const portField = document.getElementById('rtltcp-port');
-            const otherFields = [
-                document.getElementById('rtltcp-sample-rate'),
-                document.getElementById('rtltcp-bandwidth'),
-                document.getElementById('rtltcp-rtlagc-toggle'),
-            ];
-
-            if (protocol === 'txt') {
-                // Enable host and port fields
-                hostField.disabled = false;
-                portField.disabled = false;
-                // Disable other fields
-                otherFields.forEach(field => field.disabled = true);
+    function deepMerge(target, source) {
+        for (const key in source) {
+            if (
+                source[key] &&
+                typeof source[key] === 'object' &&
+                !Array.isArray(source[key])
+            ) {
+                if (!target[key] || typeof target[key] !== 'object') {
+                    target[key] = {};
+                }
+                deepMerge(target[key], source[key]);
             } else {
-                // Disable host and port fields
-                hostField.disabled = true;
-                portField.disabled = true;
-                // Enable other fields
-                otherFields.forEach(field => field.disabled = false);
+                target[key] = source[key];
+            }
+        }
+        return target;
+    }
+
+    function handleFieldChange(fieldId, value) {
+        console.log('Field change:', fieldId, value);
+        const input = document.getElementById(fieldId);
+        if (!input) return;
+        const jsonpath = input.dataset.jsonpath;
+        if (!jsonpath) return;
+
+        const pathSegments = jsonpath.split('.');
+        let current = jsonData;
+
+        for (let i = 0; i < pathSegments.length - 1; i++) {
+            const segment = pathSegments[i];
+            if (!current[segment] || typeof current[segment] !== 'object') {
+                current[segment] = {};
+            }
+            current = current[segment];
+        }
+
+        current[pathSegments[pathSegments.length - 1]] = value;
+
+        updateJsonContent();
+
+        handleUnsavedChanges(true, `Settings have changed. Please save your changes.`);
+    }
+
+    function updateJsonContent() {
+        const jsonContent = document.getElementById('json_content');
+        if (jsonContent) {
+            jsonContent.textContent = JSON.stringify(jsonData, null, 2);
+        }
+    }
+    function createField(field) {
+        const fieldContainer = document.createElement('div');
+        fieldContainer.className = 'max-w-md mb-4';
+
+        // Create the label
+        const label = document.createElement('label');
+        label.htmlFor = field.name;
+        label.className = 'block text-gray-700 text-sm font-medium mb-2';
+        label.textContent = `${field.label}:`;
+        fieldContainer.appendChild(label);
+
+        // Create the input container
+        const inputContainer = document.createElement('div');
+        inputContainer.className = 'flex gap-2';
+
+        let input;
+
+        // Create input based on field type
+        switch (field.type) {
+            case 'select':
+                input = document.createElement('select');
+                input.className = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
+                field.options.forEach(option => {
+                    const opt = document.createElement('option');
+                    opt.value = option.value;
+                    opt.textContent = option.label;
+                    input.appendChild(opt);
+                });
+                break;
+
+            case 'toggle':
+                const toggleContainer = document.createElement('label');
+                toggleContainer.className = 'relative inline-flex items-center cursor-pointer';
+
+                input = document.createElement('input');
+                input.type = 'checkbox';
+                input.className = 'sr-only peer';
+
+                const toggleUI = document.createElement('div');
+                toggleUI.className = "w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white \
+                    after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full \
+                    after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500";
+
+                toggleContainer.appendChild(input);
+                toggleContainer.appendChild(toggleUI);
+                inputContainer.appendChild(toggleContainer);
+                break;
+
+            default:
+                input = document.createElement('input');
+                input.type = field.type;
+                input.className = 'flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
+                input.placeholder = field.placeholder || '';
+                if (field.min !== undefined) input.min = field.min;
+                if (field.max !== undefined) input.max = field.max;
+                break;
+        }
+
+        if (field.type !== 'toggle') {
+            inputContainer.appendChild(input);
+        }
+
+        input.id = field.name;
+        input.name = field.name;
+        input.dataset.jsonpath = field.jsonpath; // Store jsonpath in data attribute
+
+        // Set initial value from jsonData if available
+        const pathSegments = field.jsonpath.split('.');
+        let current = jsonData;
+        for (let i = 0; i < pathSegments.length; i++) {
+            if (current[pathSegments[i]] !== undefined) {
+                current = current[pathSegments[i]];
+            } else {
+                current = undefined;
+                break;
             }
         }
 
-        document.getElementById('rtltcp-protocol').addEventListener('change', updateRTLTCPFields);
+        if (current !== undefined) {
+            if (field.type === 'toggle') {
+                input.checked = current;
+            } else {
+                input.value = current;
+            }
+        }
 
+        // Add event listeners to update jsonData
+        if (input) {
+            input.addEventListener('change', () => {
+                handleFieldChange(input.id, field.type === 'toggle' ? input.checked : input.value);
+            });
+
+            if (field.type === 'text' || field.type === 'number') {
+                input.addEventListener('input', () => {
+                    handleFieldChange(input.id, input.value);
+                });
+            }
+        }
+
+        if (field.withButton) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center';
+            button.setAttribute('onclick', field.withButton.onClick);
+            button.title = field.withButton.label || '';
+
+            // If icon is provided, include it in the button
+            if (field.withButton.icon) {
+                button.innerHTML = `${field.withButton.icon}${field.withButton.label ? `<span>${field.withButton.label}</span>` : ''}`;
+            } else {
+                button.textContent = field.withButton.label || '';
+            }
+
+            inputContainer.appendChild(button);
+        }
+
+        fieldContainer.appendChild(inputContainer);
+        return fieldContainer;
+    }
+
+
+    function updateDeviceSettings(deviceType) {
+        const settingsContainer = document.getElementById('device-settings');
+        settingsContainer.innerHTML = '';
+
+        if (!deviceType || !deviceConfigs[deviceType]) return;
+
+        const config = deviceConfigs[deviceType];
+
+        // Add title
+        const title = document.createElement('h3');
+        title.className = 'text-xl font-semibold text-gray-800 mb-4';
+        title.textContent = config.title;
+        settingsContainer.appendChild(title);
+
+        // Add fields
+        const fieldsContainer = document.createElement('div');
+        fieldsContainer.className = 'space-y-4';
+
+        config.fields.forEach(field => {
+            const fieldElement = createField(field);
+            const input = fieldElement.querySelector(`#${field.name}`);
+
+            if (input) {
+                // Set initial value from jsonData if available
+                const deviceKey = deviceType.toLowerCase();
+                if (jsonData[deviceKey] && jsonData[deviceKey][field.name] !== undefined) {
+                    if (field.type === 'toggle') {
+                        input.checked = jsonData[deviceKey][field.name];
+                    } else {
+                        input.value = jsonData[deviceKey][field.name];
+                    }
+                }
+
+                // Add change event listener
+                input.addEventListener('change', () => {
+                    handleFieldChange(field.name, field.type === 'toggle' ? input.checked : input.value);
+                });
+
+                if (field.type === 'text' || field.type === 'number') {
+                    input.addEventListener('input', () => {
+                        handleFieldChange(field.name, input.value);
+                    });
+                }
+            }
+
+            fieldsContainer.appendChild(fieldElement);
+        });
+
+        settingsContainer.appendChild(fieldsContainer);
+    }
+
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Load existing JSON content
+        const jsonContent = document.getElementById('json_content');
+        if (jsonContent && jsonContent.textContent.trim()) {
+            try {
+                jsonData = JSON.parse(jsonContent.textContent);
+
+                // Set initial form values based on JSON
+                const deviceInput = document.getElementById('device-input');
+                const serialKey = document.getElementById('serial-key');
+
+                if (jsonData.input) {
+                    deviceInput.value = jsonData.input;
+                    updateDeviceSettings(jsonData.input);
+                }
+
+                if (jsonData.serial) {
+                    serialKey.value = jsonData.serial;
+                }
+            } catch (e) {
+                console.error('Error parsing initial JSON content:', e);
+                jsonData = {};
+            }
+        }
+
+        // Listen for device type changes
+        const deviceInput = document.getElementById('device-input');
+        deviceInput.addEventListener('change', function (e) {
+            handleFieldChange('device-input', e.target.value);
+            updateDeviceSettings(e.target.value);
+        });
+
+        // Listen for serial key changes
+        const serialKey = document.getElementById('serial-key');
+        serialKey.addEventListener('input', function (e) {
+            handleFieldChange('serial-key', e.target.value);
+        });
+
+        // Initialize JSON content display
+        updateJsonContent();
     });
 
     function openSerialDeviceModal() {
@@ -397,12 +618,14 @@
     }
 
     function selectSerialDevice(device) {
-        const input = document.getElementById('serialport-port');
-        input.value = device;
-        const event = new Event('change', { bubbles: true });
-        input.dispatchEvent(event);
-        const inputEvent = new Event('input', { bubbles: true });
-        input.dispatchEvent(inputEvent);
+        const input = document.getElementById('port');
+        if (input) {
+            input.value = device;
+            const event = new Event('change', { bubbles: true });
+            input.dispatchEvent(event);
+            const inputEvent = new Event('input', { bubbles: true });
+            input.dispatchEvent(inputEvent);
+        }
         closeSerialDeviceModal();
     }
 
@@ -434,5 +657,78 @@
                 list.innerHTML = '<li class="text-red-500 p-2">Error loading devices</li>';
             });
     }
+
+    function openDeviceSelectionModal() {
+        const deviceSelectionModal = document.getElementById('device-selection-modal');
+        deviceSelectionModal.classList.remove('hidden');
+        fetchDeviceList();
+    }
+
+    function closeDeviceSelectionModal() {
+        const deviceSelectionModal = document.getElementById('device-selection-modal');
+        deviceSelectionModal.classList.add('hidden');
+    }
+
+    function fetchDeviceList() {
+        const deviceList = document.getElementById('device-list');
+        fetch('/device-list')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch device list.');
+                }
+                return response.json();
+            })
+            .then(data => {
+                populateDeviceList(data.devices);
+            })
+            .catch(error => {
+                console.error('Error fetching device list:', error);
+                deviceList.innerHTML = `<li class="text-red-500">Error fetching device list.</li>`;
+            });
+    }
+
+    function populateDeviceList(devices) {
+        const deviceList = document.getElementById('device-list');
+        deviceList.innerHTML = '';
+
+        if (!Array.isArray(devices) || devices.length === 0) {
+            deviceList.innerHTML = `<li class="text-gray-500">No devices found.</li>`;
+            return;
+        }
+
+        devices.forEach(device => {
+            const listItem = document.createElement('li');
+            listItem.className = 'flex items-center justify-between p-2 border rounded-md hover:bg-gray-100 cursor-pointer';
+            listItem.innerHTML = `
+        <span>${escapeHtml(device.name)}</span>
+        <button type="button" class="select-device-btn bg-gray-600 text-white px-2 py-1 rounded-md hover:bg-gray-700">Select</button>
+      `;
+
+            listItem.querySelector('.select-device-btn').addEventListener('click', () => {
+                selectDevice(device);
+                closeDeviceSelectionModal();
+            });
+
+            deviceList.appendChild(listItem);
+        });
+    }
+
+    function selectDevice(device) {
+        if (!device || typeof device !== 'object') {
+            console.error('Invalid device selected:', device);
+            return;
+        }
+
+        const deviceInput = document.getElementById('device-input');
+        const serialKeyInput = document.getElementById('serial-key');
+
+        deviceInput.value = device.input.toUpperCase() || '';
+        serialKeyInput.value = device.serial || '';
+
+        // Update the device settings while preserving existing data
+        updateDeviceSettings(device.input.toUpperCase(), true);
+    }
+
+
 </script>
 {{ end }}

@@ -71,11 +71,8 @@
             <div class="flex flex-col space-y-3 sm:space-y-4">
                 <div class="flex items-center justify-between">
                     <span class="text-sm sm:text-base text-gray-600">Enabled:</span>
-                    <div>
-                        <span id="enabled-true"
-                            class="hidden px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full bg-gray-100 text-gray-800">Yes</span>
-                        <span id="enabled-false"
-                            class="hidden px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full bg-gray-100 text-gray-800">No</span>
+                    <div id="enabled-status">
+                        <!-- This will be updated by JavaScript -->
                     </div>
                 </div>
                 <div class="flex gap-2 justify-end">
@@ -110,18 +107,26 @@
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
-                    if (data.enabled) {
-                        document.getElementById('enabled-true').classList.remove('hidden')
-                        document.getElementById('enabled-false').classList.add('hidden')
-                        document.getElementById('enable-button').classList.add('hidden')
-                        document.getElementById('disable-button').classList.remove('hidden')
+                    // Update Enabled Status
+                    const enabledStatusDiv = document.getElementById('enabled-status');
+                    let enabledHTML = '';
+                    if (data.enabled === true) {
+                        enabledHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">Yes</span>';
+                        document.getElementById('enable-button').classList.add('hidden');
+                        document.getElementById('disable-button').classList.remove('hidden');
+                    } else if (data.enabled === false) {
+                        enabledHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-red-100 text-red-800">No</span>';
+                        document.getElementById('enable-button').classList.remove('hidden');
+                        document.getElementById('disable-button').classList.add('hidden');
                     } else {
-                        document.getElementById('enabled-true').classList.add('hidden')
-                        document.getElementById('enabled-false').classList.remove('hidden')
-                        document.getElementById('enable-button').classList.remove('hidden')
-                        document.getElementById('disable-button').classList.add('hidden')
+                        // Handle cases where data.enabled is undefined or another value
+                        enabledHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">Unknown</span>';
+                        document.getElementById('enable-button').classList.remove('hidden');
+                        document.getElementById('disable-button').classList.add('hidden');
                     }
+                    enabledStatusDiv.innerHTML = enabledHTML;
 
+                    // Update Service Status (existing code)
                     const statusSpan = document.getElementById('service-status');
                     let statusHTML = '';
                     if (data.status === 'active (running)') {
@@ -135,6 +140,7 @@
                     }
                     statusSpan.innerHTML = statusHTML;
 
+                    // Update Uptime and Action Buttons (existing code)
                     const uptimeSpan = document.getElementById('service-uptime');
                     uptimeSpan.textContent = data.uptime;
 
@@ -142,17 +148,15 @@
                     let buttonsHTML = '';
                     if (data.status === 'active (running)') {
                         buttonsHTML += `
-                            <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="stop">Stop</button>
-                            <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="restart">Restart</button>
-                        `;
+                    <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="stop">Stop</button>
+                    <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="restart">Restart</button>
+                `;
                     } else {
                         buttonsHTML += `
-                            <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="start">Start</button>
-                        `;
+                    <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="start">Start</button>
+                `;
                     }
                     actionButtonsDiv.innerHTML = buttonsHTML;
-
-                    // [Rest of the updateStatus function remains the same]
                 })
                 .catch(error => {
                     console.error('Error fetching status:', error);

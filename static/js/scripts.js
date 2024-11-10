@@ -294,18 +294,14 @@ function createChannelPropertyBadge(channelType, channelIndex, key, value) {
     </button>
   `;
 
-  // Attach event listener to remove property
   badge.querySelector(`.${channelType}-remove-property-btn`).addEventListener('click', () => {
     removeChannelProperty(channelType, channelIndex, key);
-    // Ensure properties container remains visible after removal
     openPropertiesChannels.add(`${channelType}-${channelIndex}`);
     updateSaveButton();
   });
 
-  // Attach event listener to edit property
   badge.querySelector(`.${channelType}-edit-property-btn`).addEventListener('click', () => {
     editChannelProperty(channelType, channelIndex, key);
-    // Ensure properties container remains visible after editing
     openPropertiesChannels.add(`${channelType}-${channelIndex}`);
     updateSaveButton();
   });
