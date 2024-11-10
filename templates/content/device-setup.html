@@ -34,10 +34,10 @@
             </div>
 
             <!-- Serial Key -->
-            <div class="max-w-md mb-4">
-                <label for="serial-key" class="block text-gray-700 text-sm font-medium mb-2">Serial Key SDR:</label>
+            <div class="max-w-md mb-4" id = "serialKeyContainer">
+                <label for="serial-key" class="block text-gray-700 text-sm font-medium mb-2">Serial Key:</label>
                 <input type="text" id="serial-key" name="serial_key" data-jsonpath="serial"
-                    placeholder="Enter Serial Key"
+                    placeholder="Optional Serial Key"
                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
             </div>
         </div>
@@ -150,6 +150,7 @@
     const deviceConfigs = {
         RTLSDR: {
             title: "RTLSDR Settings",
+            hasSerial: true,
             fields: [
                 {
                     name: "tuner",
@@ -206,6 +207,7 @@
         },
         AIRSPYHF: {
             title: "Airspy HF+ Settings",
+            hasSerial: true,
             fields: [
                 {
                     name: "sample_rate",
@@ -241,7 +243,7 @@
                     type: "select",
                     jsonpath: "rtltcp.protocol",
                     options: [
-                    { value: "txt", label: "NMEA" },
+                        { value: "txt", label: "NMEA" },
                         { value: "none", label: "Raw" },
                         { value: "rtltcp", label: "RTLTCP" },
                         { value: "gpsd", label: "GPSD" }
@@ -487,6 +489,13 @@
 
 
     function updateDeviceSettings(deviceType) {
+
+        if (deviceType && deviceConfigs[deviceType] && 'hasSerial' in deviceConfigs[deviceType]) {
+            serialKeyContainer.style.display = deviceConfigs[deviceType].hasSerial ? 'block' : 'none';
+        } else {
+            serialKeyContainer.style.display = 'none'; 
+        }
+
         const settingsContainer = document.getElementById('device-settings');
         settingsContainer.innerHTML = '';
 
@@ -567,6 +576,8 @@
         const deviceInput = document.getElementById('device-input');
         deviceInput.addEventListener('change', function (e) {
             handleFieldChange('device-input', e.target.value);
+            document.getElementById('serial-key').value = '';
+            handleFieldChange('serial-key', '');
             updateDeviceSettings(e.target.value);
         });
 
