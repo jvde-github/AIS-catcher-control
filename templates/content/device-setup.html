@@ -1,14 +1,21 @@
 {{ define "device-setup" }}
 <div id="device-setup" class="p-6 bg-white shadow-md rounded-lg max-w-2xl mx-auto">
     <div class="border-b border-gray-200" role="tablist">
-        <div class="flex -mb-px space-x-4">
+        <!-- Change from flex to grid for small screens -->
+        <div class="grid grid-cols-2 gap-2 sm:flex sm:-mb-px sm:space-x-4">
             <button role="tab" aria-selected="true" data-tab="rtlsdr"
-                class="py-2 px-4 text-gray-700 font-medium border-b-2 border-yellow-500 hover:text-gray-900 transition-colors">RTLSDR</button>
+                class="py-2 px-4 text-sm sm:text-base text-gray-700 font-medium border-b-2 border-yellow-500 hover:text-gray-900 transition-colors truncate">RTLSDR</button>
             <button role="tab" aria-selected="false" data-tab="airspyhf"
-                class="py-2 px-4 text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors">Airspy
+                class="py-2 px-4 text-sm sm:text-base text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors truncate">Airspy
                 HF+</button>
             <button role="tab" aria-selected="false" data-tab="rtltcp"
-                class="py-2 px-4 text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors">TCP</button>
+                class="py-2 px-4 text-sm sm:text-base text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors truncate">TCP</button>
+            <button role="tab" aria-selected="false" data-tab="udpserver"
+                class="py-2 px-4 text-sm sm:text-base text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors truncate">UDP
+                Server</button>
+            <button role="tab" aria-selected="false" data-tab="serialport"
+                class="py-2 px-4 text-sm sm:text-base text-gray-500 font-medium border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 transition-colors truncate">Serial
+                Port</button>
         </div>
     </div>
 
@@ -168,6 +175,47 @@
         </form>
     </div>
 
+    <div role="tabpanel" id="udpserver-panel" class="mt-6 hidden">
+        <h3 class="text-2xl font-semibold text-gray-800 mb-4">UDP Server</h3>
+        <form id="udpserver-form" class="space-y-6">
+            <div class="max-w-md">
+                <label for="udpserver-address" class="block text-gray-700 font-medium mb-2">Server Address:</label>
+                <input type="text" id="udpserver-address" name="address"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., 127.0.0.1">
+            </div>
+
+            <div class="max-w-md">
+                <label for="udpserver-port" class="block text-gray-700 font-medium mb-2">Port:</label>
+                <input type="number" id="udpserver-port" name="port"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., 1234">
+            </div>
+        </form>
+    </div>
+
+    <!-- New Serial Port panel -->
+    <div role="tabpanel" id="serialport-panel" class="mt-6 hidden">
+        <h3 class="text-2xl font-semibold text-gray-800 mb-4">Serial Port</h3>
+        <form id="serialport-form" class="space-y-6">
+            <div class="max-w-md">
+                <label for="serialport-port" class="block text-gray-700 font-medium mb-2">Port:</label>
+                <input type="text" id="serialport-port" name="port"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md" placeholder="e.g., /dev/tty0" value="">
+            </div>
+
+            <div class="max-w-md">
+                <label for="serialport-baudrate" class="block text-gray-700 font-medium mb-2">Baud Rate:</label>
+                <select id="serialport-baudrate" name="baudrate"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md">
+                    <option value="9600">9600</option>
+                    <option value="19200">19200</option>
+                    <option value="38400" selected>38400</option>
+                    <option value="57600">57600</option>
+                    <option value="115200">115200</option>
+                </select>
+            </div>
+        </form>
+    </div>
+
     <div class="flex justify-end mt-6">
         <button id="save-button"
             class="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition-colors w-auto">Save</button>
@@ -209,6 +257,12 @@
     label[for]:disabled {
         color: #a0aec0;
     }
+
+    @media (max-width: 640px) {
+        #device-setup {
+            padding: 1rem;
+        }
+    }
 </style>
 
 <script>
@@ -230,6 +284,10 @@
         "rtltcp-sample-rate": "rtltcp.sample_rate",
         "rtltcp-bandwidth": "rtltcp.bandwidth",
         "rtltcp-rtlagc-toggle": "rtltcp.rtlagc",
+        "udpserver-address": "udpserver.address",
+        "udpserver-port": "udpserver.port",
+        "serialport-port": "serialport.port",
+        "serialport-baudrate": "serialport.baudrate",
     };
 
     document.addEventListener('DOMContentLoaded', function () {

@@ -165,15 +165,32 @@
           <span class="menu-text ml-3 text-sm font-medium">Webviewer</span>
         </a>
 
-        <!-- Input -->
-        <a href="/input" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-            class="h-6 w-6">
-            <path
-              d="M160-160q-33 0-56.5-23.5T80-240v-120h80v120h640v-480H160v120H80v-120q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm300-140-56-58 83-82H80v-80h407l-83-82 56-58 180 180-180 180Z" />
-          </svg>
-          <span class="menu-text ml-3 text-sm font-medium">Input</span>
-        </a>
+        <!-- Input with submenu -->
+        <div>
+          <button onclick="toggleSubmenu('output-submenu', 'output-chevron')"
+            class="w-full flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
+            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
+              class="h-6 w-6">
+              <path
+                d="M160-80q-33 0-56.5-23.5T80-160v-480q0-25 13.5-45t36.5-29l506-206 26 66-330 134h468q33 0 56.5 23.5T880-640v480q0 33-23.5 56.5T800-80H160Zm0-80h640v-280H160v280Zm160-40q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29ZM160-520h480v-80h80v80h80v-120H160v120Zm0 360v-280 280Z" />
+            </svg>
+            <span class="menu-text ml-3 text-sm font-medium">Input</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="ml-auto h-4 w-4 transition-transform duration-200"
+              id="output-chevron" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z"
+                clip-rule="evenodd" />
+            </svg>
+          </button>
+          <div id="output-submenu" class="bg-gray-50 hidden">
+            <a href="/input" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
+              <span class="menu-text text-sm">Select</span>
+            </a>
+            <a href="/device" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
+              <span class="menu-text text-sm">Configuration</span>
+            </a>
+          </div>
+        </div>
 
         <!-- Output with submenu -->
         <div>
@@ -208,15 +225,6 @@
           </div>
         </div>
 
-        <!-- Devices -->
-        <a href="/device" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-            class="h-6 w-6">
-            <path
-              d="M160-80q-33 0-56.5-23.5T80-160v-480q0-25 13.5-45t36.5-29l506-206 26 66-330 134h468q33 0 56.5 23.5T880-640v480q0 33-23.5 56.5T800-80H160Zm0-80h640v-280H160v280Zm160-40q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29ZM160-520h480v-80h80v80h80v-120H160v120Zm0 360v-280 280Z" />
-          </svg>
-          <span class="menu-text ml-3 text-sm font-medium">Devices</span>
-        </a>
 
         <div>
           <button onclick="toggleSubmenu('advanced-submenu', 'advanced-chevron')"
