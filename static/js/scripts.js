@@ -792,6 +792,11 @@ function addFormEventListeners(json, map) {
         updateJsonTextarea();
       });
     }
+
+    if (element.tagName.toLowerCase() === 'select' || element.getAttribute("role") === "switch") {
+      const event = new Event('change', { bubbles: true });
+      element.dispatchEvent(event);
+    }
   }
 }
 
