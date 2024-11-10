@@ -411,7 +411,7 @@
                 const list = document.getElementById('serial-device-list');
                 list.innerHTML = '';
 
-                const devices = data.devices || [];
+                const devices = data && Array.isArray(data) ? data : [];
 
                 if (devices.length === 0) {
                     list.innerHTML = '<li class="text-gray-500 p-2">No devices found</li>';
