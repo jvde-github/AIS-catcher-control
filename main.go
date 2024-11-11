@@ -150,7 +150,7 @@ func loadControlSettings() error {
 		config = Config{
 			PasswordHash:   hashPassword(defaultPassword),
 			Port:           "8110",
-			ConfigCmdHash:  1090892212,
+			ConfigCmdHash:  435605018,
 			ConfigJSONHash: 3798370746,
 			Docker:         false,
 		}
