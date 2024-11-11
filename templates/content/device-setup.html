@@ -377,7 +377,7 @@
                 {
                     name: "port",
                     label: "Port",
-                    type: "text",
+                    type: "number",
                     jsonpath: "spyserver.port",
                     placeholder: "e.g., 5555",
                     defaultValue: "1234"
@@ -493,6 +493,48 @@
                 toggleContainer.appendChild(input);
                 toggleContainer.appendChild(toggleUI);
                 inputContainer.appendChild(toggleContainer);
+                break;
+
+            case 'number':
+                input = document.createElement('input');
+                input.type = 'number';
+                input.className = 'flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
+                input.placeholder = field.placeholder || '';
+
+                input.inputMode = 'decimal';  
+
+                // Adjust pattern based on step value
+                if (field.step && field.step.toString().includes('.')) {
+                    const decimals = field.step.toString().split('.')[1].length;
+                    input.pattern = `^-?\\d*\\.?\\d{0,${decimals}}$`; 
+                } else {
+                    input.pattern = '[0-9]*'; 
+                }
+
+                input.required = true;
+
+                input.onkeypress = (e) => {
+                    if (!/^[0-9]$/.test(e.key) &&
+                        !(e.key === '-' && e.target.value === '') &&
+                        !(e.key === '.' && !e.target.value.includes('.'))) {
+                        e.preventDefault();
+                    }
+                };
+
+                if (field.min !== undefined) input.min = field.min;
+                if (field.max !== undefined) input.max = field.max;
+                if (field.step !== undefined) input.step = field.step;
+
+                input.addEventListener('blur', () => {
+                    if (input.value && field.step) {
+                        const decimals = field.step.toString().split('.')[1]?.length || 0;
+                        const value = parseFloat(input.value);
+                        if (!isNaN(value)) {
+                            input.value = value.toFixed(decimals);
+                        }
+                    }
+                });
+
                 break;
 
             default:
