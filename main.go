@@ -950,7 +950,7 @@ func renderTemplateWithConfig(w http.ResponseWriter, title string, contentTempla
 		jsonContent = []byte("")
 	}
 
-	if false && configIntegrityError {
+	if true && configIntegrityError {
 		data := map[string]interface{}{
 			"Title":           "Configuration Integrity Error",
 			"ContentTemplate": "integrity-error",
