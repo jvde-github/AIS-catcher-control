@@ -130,10 +130,13 @@
         configDiv.appendChild(removeBtn);
 
         // URL Field
+        configDiv.appendChild(createSelectField(`http[${configIndex}].protocol`, 'Protocol', ['AISCATCHER', 'APRS', 'LIST', 'AIRFRAMES'], true));
+
         configDiv.appendChild(createInputField(`http[${configIndex}].url`, 'URL', 'text', 'https://example.com', true));
+        configDiv.appendChild(createInputField(`http[${configIndex}].id`, 'ID', 'text', 'id', true));
 
         // UserPWD Field
-        configDiv.appendChild(createInputField(`http[${configIndex}].userpwd`, 'Credentials (user:pwd)', 'text', 'user:password', false));
+        configDiv.appendChild(createInputField(`http[${configIndex}].userpwd`, 'Credentials', 'text', 'user:password', false));
 
         // Interval Field
         configDiv.appendChild(createInputField(`http[${configIndex}].interval`, 'Interval (seconds)', 'number', 60, true, { min: 1 }));
@@ -152,6 +155,7 @@
         // Initialize the corresponding JSON object
         jsonData.http.push({
             url: '',
+            protocol: 'AISCATCHER',
             userpwd: '',
             interval: 60,
             gzip: false,
@@ -219,6 +223,50 @@
         fieldContainer.appendChild(input);
         return fieldContainer;
     }
+
+    function createSelectField(name, label, options, required = false) {
+        const fieldContainer = document.createElement('div');
+        fieldContainer.className = 'max-w-md mb-4';
+
+        // Label
+        const labelElement = document.createElement('label');
+        labelElement.htmlFor = name;
+        labelElement.className = 'block text-gray-700 text-sm font-medium mb-2';
+        labelElement.textContent = `${label}:`;
+        fieldContainer.appendChild(labelElement);
+
+        // Select Element
+        const select = document.createElement('select');
+        select.id = name;
+        select.name = name;
+        select.required = required;
+        select.className = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
+
+        // Add Options
+        options.forEach(option => {
+            const optionElement = document.createElement('option');
+            optionElement.value = option;
+            optionElement.textContent = option;
+            select.appendChild(optionElement);
+        });
+
+        // Set initial value from jsonData
+        const value = getValueFromJsonHTTPPath(jsonData, name);
+        if (value !== undefined) {
+            select.value = value;
+        }
+
+        // Event Listener
+        select.addEventListener('change', (e) => {
+            setValueInJsonHTTPPath(jsonData, name, e.target.value);
+            handleUnsavedChanges(true, 'HTTP configurations have changed. Please save your changes.');
+            updateJsonTextarea();
+        });
+
+        fieldContainer.appendChild(select);
+        return fieldContainer;
+    }
+
 
     function createToggleField(name, label) {
         const fieldContainer = document.createElement('div');
@@ -319,6 +367,9 @@
             `;
             configDiv.appendChild(removeBtn);
 
+            // Protocol Field
+            configDiv.appendChild(createSelectField(`http[${index}].protocol`, 'Protocol', ['AISCATCHER', 'APRS', 'LIST', 'AIRFRAMES'], true));
+
             // URL Field
             configDiv.appendChild(createInputField(`http[${index}].url`, 'URL', 'text', 'https://example.com', true));
 
@@ -412,7 +463,9 @@
             interval: config.interval || 60,
             gzip: config.gzip || false,
             response: config.response || false,
-            filter: config.filter || false
+            filter: config.filter || false,
+            id: config.id || '',
+            protocol: config.protocol || 'AISCATCHER'
         });
 
         // Render the updated configurations
