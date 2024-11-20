@@ -96,6 +96,7 @@ func init() {
 		"templates/content/control.html",
 		"templates/content/udp-channels.html",
 		"templates/content/tcp-channels.html",
+		"templates/content/http-channels.html",
 		"templates/content/sharing-channel.html",
 		"templates/content/change-password.html",
 		"templates/content/input-selection.html",
@@ -1072,6 +1073,27 @@ func tcpChannelsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func httpChannelsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		log.Printf("Received GET request for /http")
+		renderTemplateWithConfig(w, "HTTP Channels", "http-channels")
+
+	} else if r.Method == http.MethodPost {
+		err := saveConfigJSON(w, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Configuration saved successfully."))
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+}
+
+
 func getFileVersion(staticFSys fs.FS, filepath string) string {
 	f, err := staticFSys.Open(filepath)
 	if err != nil {
@@ -1394,6 +1416,7 @@ func main() {
 	http.HandleFunc("/sharing", authMiddleware(sharingChannelsHandler))
 	http.HandleFunc("/udp", authMiddleware(udpChannelsHandler))
 	http.HandleFunc("/tcp", authMiddleware(tcpChannelsHandler))
+	http.HandleFunc("/http", authMiddleware(httpChannelsHandler))
 	http.HandleFunc("/control", authMiddleware(controlHandler))
 	http.HandleFunc("/change-password", authMiddleware(changePasswordHandler))
 	http.HandleFunc("/service", authMiddleware(serviceHandler))
