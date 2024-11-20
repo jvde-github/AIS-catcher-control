@@ -253,7 +253,7 @@
         // Set initial value from jsonData
         const value = getValueFromJsonHTTPPath(jsonData, name);
         if (value !== undefined) {
-            select.value = value;
+            select.value = value.toUpperCase();
         }
 
         // Event Listener
@@ -372,6 +372,7 @@
 
             // URL Field
             configDiv.appendChild(createInputField(`http[${index}].url`, 'URL', 'text', 'https://example.com', true));
+            configDiv.appendChild(createInputField(`http[${index}].id`, 'ID', 'text', 'id', true));
 
             // UserPWD Field
             configDiv.appendChild(createInputField(`http[${index}].userpwd`, 'Credentials (user:pwd)', 'text', 'user:password', false));
