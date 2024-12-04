@@ -112,14 +112,37 @@ jobs:
           mkdir -p build
           go build -ldflags="-s -w" -o build/AIS-catcher-control_arm64 .
 
-      # Step 8: Upload Artifacts to GitHub Actions
+
+      # Step 8: Build amd64 Executable (Intel 64-bit)
+      - name: Build amd64 Executable
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 0  # Disable CGO for static binaries
+        run: |
+          echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}"
+          mkdir -p build
+          go build -ldflags="-s -w" -o build/AIS-catcher-control_amd64 .
+
+      # Step 9: Build 386 Executable (Intel 32-bit)
+      - name: Build 386 Executable
+        env:
+          GOOS: linux
+          GOARCH: 386
+          CGO_ENABLED: 0  # Disable CGO for static binaries
+        run: |
+          echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}"
+          mkdir -p build
+          go build -ldflags="-s -w" -o build/AIS-catcher-control_386 .
+
+      # Step 10: Upload Artifacts to GitHub Actions
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: AIS-catcher-control_binaries
           path: build/*
 
-      # Step 9: Get the latest release
+      # Step 11: Get the latest release
       - name: Get the Latest Release
         id: get_latest_release
         uses: actions/github-script@v6
@@ -132,7 +155,7 @@ jobs:
             });
             core.setOutput('release_id', latestRelease.data.id);
 
-      # Step 10: Upload Assets to the Latest Release
+      # Step 12: Upload Assets to the Latest Release
       - name: Upload Assets to Latest Release
         uses: actions/github-script@v6
         with:

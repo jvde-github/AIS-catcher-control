@@ -72,6 +72,10 @@ detect_architecture() {
     BINARY_SUFFIX="arm64"
   elif [[ "$ARCH" == "armv6l" || "$ARCH" == "armv7l" || "$ARCH" == "armhf" ]]; then
     BINARY_SUFFIX="armhf"
+  elif [[ "$ARCH" == "x86_64" ]]; then
+    BINARY_SUFFIX="amd64"
+  elif [[ "$ARCH" == "i386" || "$ARCH" == "i686" ]]; then
+    BINARY_SUFFIX="386"
   else
     print_message "Unsupported architecture: $ARCH"
     exit 1
