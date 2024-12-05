@@ -166,7 +166,7 @@ func collectSystemInfo() {
     // Keep existing system info collection
     systemInfo.OS = runtime.GOOS
     systemInfo.Architecture = runtime.GOARCH
-	
+
 	cmd := exec.Command("/usr/bin/AIS-catcher", "-h", "JSON")
     output, err := cmd.CombinedOutput()
 	firstLine := strings.Split(string(output), "\n")[0]
@@ -270,7 +270,7 @@ func init() {
 		"templates/content/integrity-error.html",
 		"templates/content/server-setup.html",
 		"templates/content/webviewer.html",
-		"templates/content/support.html",
+		"templates/content/system.html",
 		"templates/content/edit-config-json.html",
 		"templates/content/edit-config-cmd.html",
 	)
@@ -1543,7 +1543,7 @@ func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
         "CssVersion":      cssVersion,
         "JsVersion":       jsVersion,
         "Title":           "System Information",
-        "ContentTemplate": "support",
+        "ContentTemplate": "system",
         "SystemInfo":      systemInfo,
         "MemoryGB":       memoryGB,
     })
@@ -1627,7 +1627,7 @@ func main() {
 	http.HandleFunc("/serial-list", authMiddleware(serialListHandler))
 	http.HandleFunc("/editjson", authMiddleware(editConfigJSONHandler))
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
-	http.HandleFunc("/support", authMiddleware(systemInfoHandler))
+	http.HandleFunc("/system", authMiddleware(systemInfoHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)
