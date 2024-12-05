@@ -99,7 +99,7 @@ jobs:
         run: |
           echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}, GOARM=${GOARM}"
           mkdir -p build
-          go build -ldflags="-s -w" -o build/AIS-catcher-control_armhf .
+          go build -ldflags="-s -w -X main.buildVersion=$(git describe --tags --always )" -o build/AIS-catcher-control_armhf .
 
       # Step 7: Build arm64 Executable (64-bit Raspberry Pi)
       - name: Build arm64 Executable
@@ -110,7 +110,7 @@ jobs:
         run: |
           echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}"
           mkdir -p build
-          go build -ldflags="-s -w" -o build/AIS-catcher-control_arm64 .
+          go build -ldflags="-s -w -X main.buildVersion=$(git describe --tags --always )" -o build/AIS-catcher-control_arm64 .
 
 
       # Step 8: Build amd64 Executable (Intel 64-bit)
@@ -122,7 +122,7 @@ jobs:
         run: |
           echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}"
           mkdir -p build
-          go build -ldflags="-s -w" -o build/AIS-catcher-control_amd64 .
+          go build -ldflags="-s -w -X main.buildVersion=$(git describe --tags --always )" -o build/AIS-catcher-control_amd64 .
 
       # Step 9: Build 386 Executable (Intel 32-bit)
       - name: Build 386 Executable
@@ -133,7 +133,7 @@ jobs:
         run: |
           echo "Building for GOOS=${GOOS}, GOARCH=${GOARCH}"
           mkdir -p build
-          go build -ldflags="-s -w" -o build/AIS-catcher-control_386 .
+          go build -ldflags="-s -w -X main.buildVersion=$(git describe --tags --always )" -o build/AIS-catcher-control_386 .
 
       # Step 10: Upload Artifacts to GitHub Actions
       - name: Upload Artifacts

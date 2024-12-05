@@ -23,6 +23,12 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"runtime"
+    "strconv"
+)
+
+var (
+    buildVersion = "dev"    // This will be set during build
 )
 
 // Embedding the templates and static files
@@ -47,6 +53,22 @@ var (
 	cssVersion string
 	jsVersion  string
 )
+
+type SystemInfo struct {
+    AISCatcherVersion     string `json:"ais_catcher_version"`      // Full version string
+    AISCatcherVersionCode int    `json:"ais_catcher_version_code"` // Numeric version
+    AISCatcherDescribe    string `json:"ais_catcher_describe"`     // Detailed version info
+    AISCatcherAvailable   bool   `json:"ais_catcher_available"`    // Is AIS-catcher installed
+    OS                    string `json:"os"`                        // Operating system
+    Architecture          string `json:"architecture"`              // CPU architecture
+    CPUInfo              string `json:"cpu_info"`                  // CPU information
+    TotalMemory          uint64 `json:"total_memory"`              // Total system memory
+    KernelVersion        string `json:"kernel_version"`            // Linux kernel version
+    ServiceStatus        string `json:"service_status"`            // systemd service status
+    DockerMode           bool   `json:"docker_mode"`               // Running in Docker
+	BuildVersion         string `json:"build_version"`             // Git version/build info
+}
+
 
 var configIntegrityError = false
 
@@ -78,6 +100,89 @@ type ServiceConfig struct {
 	Port string `json:"port"`
 }
 
+var systemInfo SystemInfo
+
+func collectSystemInfo() {
+
+	systemInfo.BuildVersion = buildVersion
+	
+	cmd := exec.Command("/usr/bin/AIS-catcher", "-h", "JSON")
+    output, err := cmd.CombinedOutput()
+	firstLine := strings.Split(string(output), "\n")[0]
+    
+    if err != nil {
+        log.Printf("Command error: %v", err)
+        if exitErr, ok := err.(*exec.ExitError); ok {
+            log.Printf("Exit error code: %d", exitErr.ExitCode())
+            systemInfo.AISCatcherAvailable = true
+            systemInfo.AISCatcherVersion = "v0.60 or earlier"
+            systemInfo.AISCatcherVersionCode = -1
+            systemInfo.AISCatcherDescribe = "Version before JSON support"
+        } else {
+            systemInfo.AISCatcherAvailable = false
+            systemInfo.AISCatcherVersion = "not installed"
+            systemInfo.AISCatcherVersionCode = 0
+            systemInfo.AISCatcherDescribe = "Not found in system"
+        }
+	} else {
+		var jsonOutput map[string]interface{}
+		if err := json.Unmarshal([]byte(firstLine), &jsonOutput); err != nil {
+			log.Printf("JSON unmarshal error: %v", err)
+			systemInfo.AISCatcherAvailable = true
+			systemInfo.AISCatcherVersion = "unknown"
+			systemInfo.AISCatcherVersionCode = -1
+			systemInfo.AISCatcherDescribe = "Invalid JSON output"
+		} else {
+			systemInfo.AISCatcherAvailable = true
+			systemInfo.AISCatcherVersion = jsonOutput["version"].(string)
+			systemInfo.AISCatcherVersionCode = int(jsonOutput["version_code"].(float64))
+			systemInfo.AISCatcherDescribe = jsonOutput["version_describe"].(string)
+		}
+	}
+
+    // Get OS and Architecture
+    systemInfo.OS = runtime.GOOS
+    systemInfo.Architecture = runtime.GOARCH
+
+    // Get CPU Info
+    if cpuinfo, err := ioutil.ReadFile("/proc/cpuinfo"); err == nil {
+        scanner := bufio.NewScanner(strings.NewReader(string(cpuinfo)))
+        for scanner.Scan() {
+            line := scanner.Text()
+            if strings.HasPrefix(line, "model name") {
+                systemInfo.CPUInfo = strings.TrimSpace(strings.Split(line, ":")[1])
+                break
+            }
+        }
+    }
+
+    // Get Memory Info
+    if meminfo, err := ioutil.ReadFile("/proc/meminfo"); err == nil {
+        scanner := bufio.NewScanner(strings.NewReader(string(meminfo)))
+        for scanner.Scan() {
+            line := scanner.Text()
+            if strings.HasPrefix(line, "MemTotal:") {
+                fields := strings.Fields(line)
+                if len(fields) >= 2 {
+                    if mem, err := strconv.ParseUint(fields[1], 10, 64); err == nil {
+                        systemInfo.TotalMemory = mem * 1024 // Convert from KB to bytes
+                    }
+                }
+                break
+            }
+        }
+    }
+
+    // Get Kernel Version
+    if kernel, err := exec.Command("uname", "-r").Output(); err == nil {
+        systemInfo.KernelVersion = strings.TrimSpace(string(kernel))
+    }
+
+    // Get service status
+    systemInfo.ServiceStatus = getServiceStatus()
+    systemInfo.DockerMode = config.Docker
+}
+
 func init() {
 	funcMap := template.FuncMap{
 		"dynamicTemplate": func(name string, data interface{}) (template.HTML, error) {
@@ -104,6 +209,7 @@ func init() {
 		"templates/content/integrity-error.html",
 		"templates/content/server-setup.html",
 		"templates/content/webviewer.html",
+		"templates/content/support.html",
 		"templates/content/edit-config-json.html",
 		"templates/content/edit-config-cmd.html",
 	)
@@ -1360,7 +1466,34 @@ func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type SystemInfoTemplate struct {
+    SystemInfo    SystemInfo
+    MemoryGB     float64
+    CssVersion   string
+    JsVersion    string
+}
+
+func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
+    memoryGB := float64(systemInfo.TotalMemory) / 1073741824.0
+    
+    err := templates.ExecuteTemplate(w, "layout.html", map[string]interface{}{
+        "CssVersion":      cssVersion,
+        "JsVersion":       jsVersion,
+        "Title":           "System Information",
+        "ContentTemplate": "support",
+        "SystemInfo":      systemInfo,
+        "MemoryGB":       memoryGB,
+    })
+    if err != nil {
+        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        log.Printf("Template execution error: %v", err)
+    }
+}
+
+
 func main() {
+
+	collectSystemInfo()
 
 	if err := checkTailCommand(); err != nil {
 		log.Fatalf("Required command not found: %v", err)
@@ -1431,6 +1564,7 @@ func main() {
 	http.HandleFunc("/serial-list", authMiddleware(serialListHandler))
 	http.HandleFunc("/editjson", authMiddleware(editConfigJSONHandler))
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
+	http.HandleFunc("/support", authMiddleware(systemInfoHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)
