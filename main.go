@@ -1474,6 +1474,8 @@ type SystemInfoTemplate struct {
 }
 
 func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
+	collectSystemInfo()
+	
     memoryGB := float64(systemInfo.TotalMemory) / 1073741824.0
     
     err := templates.ExecuteTemplate(w, "layout.html", map[string]interface{}{
