@@ -4,22 +4,13 @@
         <h2 class="text-2xl font-bold text-gray-800 mb-6">Support</h2>
         <div class="flex items-center gap-3 mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" height="56px" viewBox="0 -960 960 960" width="56px" fill="#5f6368">
-                <path
-                    d="m480-80-10-120h-10q-142 0-241-99t-99-241q0-142 99-241t241-99q71 0 132.5 26.5t108 73q46.5 46.5 73 108T800-540q0 75-24.5 144t-67 128q-42.5 59-101 107T480-80Zm80-146q71-60 115.5-140.5T720-540q0-109-75.5-184.5T460-800q-109 0-184.5 75.5T200-540q0 109 75.5 184.5T460-280h100v54Zm-101-95q17 0 29-12t12-29q0-17-12-29t-29-12q-17 0-29 12t-12 29q0 17 12 29t29 12Zm-29-127h60q0-30 6-42t38-44q18-18 30-39t12-45q0-51-34.5-76.5T460-720q-44 0-74 24.5T344-636l56 22q5-17 19-33.5t41-16.5q27 0 40.5 15t13.5 33q0 17-10 30.5T480-558q-35 30-42.5 47.5T430-448Zm30-65Z" />
+                <path d="m480-80-10-120h-10q-142 0-241-99t-99-241q0-142 99-241t241-99q71 0 132.5 26.5t108 73q46.5 46.5 73 108T800-540q0 75-24.5 144t-67 128q-42.5 59-101 107T480-80Zm80-146q71-60 115.5-140.5T720-540q0-109-75.5-184.5T460-800q-109 0-184.5 75.5T200-540q0 109 75.5 184.5T460-280h100v54Zm-101-95q17 0 29-12t12-29q0-17-12-29t-29-12q-17 0-29 12t-12 29q0 17 12 29t29 12Zm-29-127h60q0-30 6-42t38-44q18-18 30-39t12-45q0-51-34.5-76.5T460-720q-44 0-74 24.5T344-636l56 22q5-17 19-33.5t41-16.5q27 0 40.5 15t13.5 33q0 17-10 30.5T480-558q-35 30-42.5 47.5T430-448Zm30-65Z" />
             </svg>
-            <span class="text-gray-700">Need help? Read the <a href="https://docs.aiscatcher.org/usage/gui/"
-                    class="text-blue-600 hover:underline font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-                    target="_blank">documentation →</a> to learn more about AIS-catcher. Visit our <a
-                    href="https://github.com/jvde-github/AIS-catcher/discussions"
-                    class="text-blue-600 hover:underline font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-                    target="_blank">community forum →</a> for support and discussions.</span>
+            <span class="text-gray-700">Need help? Read the <a href="https://docs.aiscatcher.org/usage/gui/" class="text-blue-600 hover:underline font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors" target="_blank">documentation →</a> to learn more about AIS-catcher. Visit our <a href="https://github.com/jvde-github/AIS-catcher/discussions" class="text-blue-600 hover:underline font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors" target="_blank">community forum →</a> for support and discussions.</span>
         </div>
     </div>
 
-
-
     <div class="bg-white shadow-sm rounded-lg border">
-        <!-- Rest of the template content remains the same -->
         <div class="p-6">
             <h2 class="text-2xl font-bold text-gray-800 mb-6">System Information</h2>
 
@@ -37,30 +28,46 @@
                     </div>
                     <div class="col-span-1">
                         <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Version</p>
-                        <p class="text-gray-800">
-                            {{if not .SystemInfo.AISCatcherAvailable}}
-                            < 0.61 {{else if eq .SystemInfo.AISCatcherVersionCode -1}} ≤ 0.60 {{else}}
-                                {{.SystemInfo.AISCatcherVersion}} {{end}} </p>
+                        <p class="text-gray-800">{{if not .SystemInfo.AISCatcherAvailable}}< 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
                     </div>
                     <div class="col-span-1">
                         <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Version Code</p>
-                        <p class="text-gray-800">
-                            {{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}
-                            -
-                            {{else}}
-                            {{.SystemInfo.AISCatcherVersionCode}}
-                            {{end}}
-                        </p>
+                        <p class="text-gray-800">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}-{{else}}{{.SystemInfo.AISCatcherVersionCode}}{{end}}</p>
                     </div>
                     <div class="col-span-3">
                         <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Version Details</p>
-                        <p class="text-gray-800">
-                            {{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}
-                            -
-                            {{else}}
-                            {{.SystemInfo.AISCatcherDescribe}}
-                            {{end}}
-                        </p>
+                        <p class="text-gray-800">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}-{{else}}{{.SystemInfo.AISCatcherDescribe}}{{end}}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Process Statistics Section -->
+            <div class="mb-8 bg-gray-50 rounded-lg p-6 border border-gray-200">
+                <h3 class="text-xl font-medium text-gray-800 mb-4">Process Statistics</h3>
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="col-span-1">
+                        <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Process ID</p>
+                        <p class="text-gray-800">{{if eq .SystemInfo.ProcessID 0}}-{{else}}{{.SystemInfo.ProcessID}}{{end}}</p>
+                    </div>
+                    <div class="col-span-1">
+                        <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Memory Usage</p>
+                        <p class="text-gray-800">{{if lt .SystemInfo.ProcessMemoryUsage 0.01}}-{{else}}{{printf "%.2f MB" .SystemInfo.ProcessMemoryUsage}}{{end}}</p>
+                    </div>
+                    <div class="col-span-1">
+                        <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">CPU Usage</p>
+                        <p class="text-gray-800">{{if lt .SystemInfo.ProcessCPUUsage 0.01}}-{{else}}{{printf "%.1f%%" .SystemInfo.ProcessCPUUsage}}{{end}}</p>
+                    </div>
+                    <div class="col-span-1">
+                        <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">System CPU Usage</p>
+                        <p class="text-gray-800">{{if lt .SystemInfo.SystemCPUUsage 0.01}}-{{else}}{{printf "%.1f%%" .SystemInfo.SystemCPUUsage}}{{end}}</p>
+                    </div>
+                    <div class="col-span-1">
+                        <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Thread Count</p>
+                        <p class="text-gray-800">{{if eq .SystemInfo.ProcessThreadCount 0}}-{{else}}{{.SystemInfo.ProcessThreadCount}}{{end}}</p>
+                    </div>
+                    <div class="col-span-1">
+                        <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Running Since</p>
+                        <p class="text-gray-800">{{if .SystemInfo.ProcessStartTime.IsZero}}-{{else}}{{.SystemInfo.ProcessStartTime.Format "Jan 02, 15:04:05"}}{{end}}</p>
                     </div>
                 </div>
             </div>

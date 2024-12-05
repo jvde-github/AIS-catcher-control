@@ -25,6 +25,8 @@ import (
 	"unicode"
 	"runtime"
     "strconv"
+	"github.com/shirou/gopsutil/v3/process"
+    "github.com/shirou/gopsutil/v3/cpu"
 )
 
 var (
@@ -67,6 +69,13 @@ type SystemInfo struct {
     ServiceStatus        string `json:"service_status"`            // systemd service status
     DockerMode           bool   `json:"docker_mode"`               // Running in Docker
 	BuildVersion         string `json:"build_version"`             // Git version/build info
+	ProcessID            int32     `json:"process_id"`
+    ProcessMemoryUsage   float64   `json:"process_memory_usage"`  // in MB
+    ProcessCPUUsage      float64   `json:"process_cpu_usage"`     // percentage
+    ProcessStartTime     time.Time `json:"process_start_time"`
+    ProcessThreadCount   int32     `json:"process_thread_count"`
+    SystemCPUUsage      float64   `json:"system_cpu_usage"`      // percentage
+    SystemMemoryUsage   float64   `json:"system_memory_usage"`   // percentage
 }
 
 
@@ -102,9 +111,61 @@ type ServiceConfig struct {
 
 var systemInfo SystemInfo
 
+func findAISCatcherPID() (int32, error) {
+    processes, err := process.Processes()
+    if err != nil {
+        return 0, err
+    }
+
+    for _, p := range processes {
+        name, err := p.Name()
+        if err != nil {
+            continue
+        }
+        if name == "AIS-catcher" {
+            return p.Pid, nil
+        }
+    }
+    return 0, fmt.Errorf("AIS-catcher process not found")
+}
+
 func collectSystemInfo() {
 
 	systemInfo.BuildVersion = buildVersion
+	
+	if pid, err := findAISCatcherPID(); err == nil {
+        systemInfo.ProcessID = pid
+        if proc, err := process.NewProcess(pid); err == nil {
+            // Memory usage
+            if memInfo, err := proc.MemoryInfo(); err == nil {
+                systemInfo.ProcessMemoryUsage = float64(memInfo.RSS) / 1024 / 1024 // Convert to MB
+            }
+
+            // CPU usage
+            if cpuPercent, err := proc.CPUPercent(); err == nil {
+                systemInfo.ProcessCPUUsage = cpuPercent
+            }
+
+            // Start time
+            if createTime, err := proc.CreateTime(); err == nil {
+                systemInfo.ProcessStartTime = time.Unix(createTime/1000, 0)
+            }
+
+            // Thread count
+            if numThreads, err := proc.NumThreads(); err == nil {
+                systemInfo.ProcessThreadCount = numThreads
+            }
+        }
+    }
+
+    // System-wide CPU usage
+    if cpuPercent, err := cpu.Percent(time.Second, false); err == nil && len(cpuPercent) > 0 {
+        systemInfo.SystemCPUUsage = cpuPercent[0]
+    }
+
+    // Keep existing system info collection
+    systemInfo.OS = runtime.GOOS
+    systemInfo.Architecture = runtime.GOARCH
 	
 	cmd := exec.Command("/usr/bin/AIS-catcher", "-h", "JSON")
     output, err := cmd.CombinedOutput()
