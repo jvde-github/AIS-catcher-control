@@ -235,6 +235,47 @@
                 }
             ]
         },
+        AIRSPY: {
+            title: "AirSpy Settings",
+            hasSerial: true,
+            fields: [
+                {
+                    name: "biastee",
+                    label: "Bias tee",
+                    type: "toggle",
+                    jsonpath: "airspy.biastee"
+                },
+                {
+                    name: "vga",
+                    label: "VGA",
+                    type: "select",
+                    jsonpath: "airspy.vga",
+                    options: [
+                        ...Array.from({ length: 11 }, (_, i) => ({ value: i.toString(), label: i.toString() }))
+                    ]
+                },
+                {
+                    name: "mixer",
+                    label: "Mixer",
+                    type: "select",
+                    jsonpath: "airspy.mixer",
+                    options: [
+                        { value: "auto", label: "Auto" },
+                        ...Array.from({ length: 15 }, (_, i) => ({ value: i.toString(), label: i.toString() }))
+                    ]
+                },
+                {
+                    name: "lna",
+                    label: "LNA",
+                    type: "select",
+                    jsonpath: "airspy.lna",
+                    options: [
+                        { value: "auto", label: "Auto" },
+                        ...Array.from({ length: 15 }, (_, i) => ({ value: i.toString(), label: i.toString() }))
+                    ]
+                }
+            ]
+        },
         RTLTCP: {
             title: "TCP Settings",
             fields: [
@@ -501,14 +542,14 @@
                 input.className = 'flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
                 input.placeholder = field.placeholder || '';
 
-                input.inputMode = 'decimal';  
+                input.inputMode = 'decimal';
 
                 // Adjust pattern based on step value
                 if (field.step && field.step.toString().includes('.')) {
                     const decimals = field.step.toString().split('.')[1].length;
-                    input.pattern = `^-?\\d*\\.?\\d{0,${decimals}}$`; 
+                    input.pattern = `^-?\\d*\\.?\\d{0,${decimals}}$`;
                 } else {
-                    input.pattern = '[0-9]*'; 
+                    input.pattern = '[0-9]*';
                 }
 
                 input.required = true;
