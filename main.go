@@ -8,6 +8,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"hash/fnv"
 	"html/template"
@@ -19,18 +20,19 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
-	"runtime"
-    "strconv"
+
+	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/process"
-    "github.com/shirou/gopsutil/v3/cpu"
 )
 
 var (
-    buildVersion = "dev"    // This will be set during build
+	buildVersion = "dev" // This will be set during build
 )
 
 // Embedding the templates and static files
@@ -57,27 +59,26 @@ var (
 )
 
 type SystemInfo struct {
-    AISCatcherVersion     string `json:"ais_catcher_version"`      // Full version string
-    AISCatcherVersionCode int    `json:"ais_catcher_version_code"` // Numeric version
-    AISCatcherDescribe    string `json:"ais_catcher_describe"`     // Detailed version info
-    AISCatcherAvailable   bool   `json:"ais_catcher_available"`    // Is AIS-catcher installed
-    OS                    string `json:"os"`                        // Operating system
-    Architecture          string `json:"architecture"`              // CPU architecture
-    CPUInfo              string `json:"cpu_info"`                  // CPU information
-    TotalMemory          uint64 `json:"total_memory"`              // Total system memory
-    KernelVersion        string `json:"kernel_version"`            // Linux kernel version
-    ServiceStatus        string `json:"service_status"`            // systemd service status
-    DockerMode           bool   `json:"docker_mode"`               // Running in Docker
-	BuildVersion         string `json:"build_version"`             // Git version/build info
-	ProcessID            int32     `json:"process_id"`
-    ProcessMemoryUsage   float64   `json:"process_memory_usage"`  // in MB
-    ProcessCPUUsage      float64   `json:"process_cpu_usage"`     // percentage
-    ProcessStartTime     time.Time `json:"process_start_time"`
-    ProcessThreadCount   int32     `json:"process_thread_count"`
-    SystemCPUUsage      float64   `json:"system_cpu_usage"`      // percentage
-    SystemMemoryUsage   float64   `json:"system_memory_usage"`   // percentage
+	AISCatcherVersion     string    `json:"ais_catcher_version"`      // Full version string
+	AISCatcherVersionCode int       `json:"ais_catcher_version_code"` // Numeric version
+	AISCatcherDescribe    string    `json:"ais_catcher_describe"`     // Detailed version info
+	AISCatcherAvailable   bool      `json:"ais_catcher_available"`    // Is AIS-catcher installed
+	OS                    string    `json:"os"`                       // Operating system
+	Architecture          string    `json:"architecture"`             // CPU architecture
+	CPUInfo               string    `json:"cpu_info"`                 // CPU information
+	TotalMemory           uint64    `json:"total_memory"`             // Total system memory
+	KernelVersion         string    `json:"kernel_version"`           // Linux kernel version
+	ServiceStatus         string    `json:"service_status"`           // systemd service status
+	DockerMode            bool      `json:"docker_mode"`              // Running in Docker
+	BuildVersion          string    `json:"build_version"`            // Git version/build info
+	ProcessID             int32     `json:"process_id"`
+	ProcessMemoryUsage    float64   `json:"process_memory_usage"` // in MB
+	ProcessCPUUsage       float64   `json:"process_cpu_usage"`    // percentage
+	ProcessStartTime      time.Time `json:"process_start_time"`
+	ProcessThreadCount    int32     `json:"process_thread_count"`
+	SystemCPUUsage        float64   `json:"system_cpu_usage"`    // percentage
+	SystemMemoryUsage     float64   `json:"system_memory_usage"` // percentage
 }
-
 
 var configIntegrityError = false
 
@@ -112,79 +113,79 @@ type ServiceConfig struct {
 var systemInfo SystemInfo
 
 func findAISCatcherPID() (int32, error) {
-    processes, err := process.Processes()
-    if err != nil {
-        return 0, err
-    }
+	processes, err := process.Processes()
+	if err != nil {
+		return 0, err
+	}
 
-    for _, p := range processes {
-        name, err := p.Name()
-        if err != nil {
-            continue
-        }
-        if name == "AIS-catcher" {
-            return p.Pid, nil
-        }
-    }
-    return 0, fmt.Errorf("AIS-catcher process not found")
+	for _, p := range processes {
+		name, err := p.Name()
+		if err != nil {
+			continue
+		}
+		if name == "AIS-catcher" {
+			return p.Pid, nil
+		}
+	}
+	return 0, fmt.Errorf("AIS-catcher process not found")
 }
 
 func collectSystemInfo() {
 
 	systemInfo.BuildVersion = buildVersion
-	
+
 	if pid, err := findAISCatcherPID(); err == nil {
-        systemInfo.ProcessID = pid
-        if proc, err := process.NewProcess(pid); err == nil {
-            // Memory usage
-            if memInfo, err := proc.MemoryInfo(); err == nil {
-                systemInfo.ProcessMemoryUsage = float64(memInfo.RSS) / 1024 / 1024 // Convert to MB
-            }
+		systemInfo.ProcessID = pid
+		if proc, err := process.NewProcess(pid); err == nil {
+			// Memory usage
+			if memInfo, err := proc.MemoryInfo(); err == nil {
+				systemInfo.ProcessMemoryUsage = float64(memInfo.RSS) / 1024 / 1024 // Convert to MB
+			}
 
-            // CPU usage
-            if cpuPercent, err := proc.CPUPercent(); err == nil {
-                systemInfo.ProcessCPUUsage = cpuPercent
-            }
+			// CPU usage
+			if cpuPercent, err := proc.CPUPercent(); err == nil {
+				systemInfo.ProcessCPUUsage = cpuPercent
+			}
 
-            // Start time
-            if createTime, err := proc.CreateTime(); err == nil {
-                systemInfo.ProcessStartTime = time.Unix(createTime/1000, 0)
-            }
+			// Start time
+			if createTime, err := proc.CreateTime(); err == nil {
+				systemInfo.ProcessStartTime = time.Unix(createTime/1000, 0)
+			}
 
-            // Thread count
-            if numThreads, err := proc.NumThreads(); err == nil {
-                systemInfo.ProcessThreadCount = numThreads
-            }
-        }
-    }
+			// Thread count
+			if numThreads, err := proc.NumThreads(); err == nil {
+				systemInfo.ProcessThreadCount = numThreads
+			}
+		}
+	}
 
-    // System-wide CPU usage
-    if cpuPercent, err := cpu.Percent(time.Second, false); err == nil && len(cpuPercent) > 0 {
-        systemInfo.SystemCPUUsage = cpuPercent[0]
-    }
+	// System-wide CPU usage
+	if cpuPercent, err := cpu.Percent(time.Second, false); err == nil && len(cpuPercent) > 0 {
+		systemInfo.SystemCPUUsage = cpuPercent[0]
+	}
 
-    // Keep existing system info collection
-    systemInfo.OS = runtime.GOOS
-    systemInfo.Architecture = runtime.GOARCH
+	// Keep existing system info collection
+	systemInfo.OS = runtime.GOOS
+	systemInfo.Architecture = runtime.GOARCH
 
 	cmd := exec.Command("/usr/bin/AIS-catcher", "-h", "JSON")
-    output, err := cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
 	firstLine := strings.Split(string(output), "\n")[0]
-    
-    if err != nil {
-        log.Printf("Command error: %v", err)
-        if exitErr, ok := err.(*exec.ExitError); ok {
-            log.Printf("Exit error code: %d", exitErr.ExitCode())
-            systemInfo.AISCatcherAvailable = true
-            systemInfo.AISCatcherVersion = "v0.60 or earlier"
-            systemInfo.AISCatcherVersionCode = -1
-            systemInfo.AISCatcherDescribe = "Version before JSON support"
-        } else {
-            systemInfo.AISCatcherAvailable = false
-            systemInfo.AISCatcherVersion = "not installed"
-            systemInfo.AISCatcherVersionCode = 0
-            systemInfo.AISCatcherDescribe = "Not found in system"
-        }
+
+	if err != nil {
+		log.Printf("Command error: %v", err)
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			log.Printf("Exit error code: %d", exitErr.ExitCode())
+			systemInfo.AISCatcherAvailable = true
+			systemInfo.AISCatcherVersion = "v0.60 or earlier"
+			systemInfo.AISCatcherVersionCode = -1
+			systemInfo.AISCatcherDescribe = "Version before JSON support"
+		} else {
+			systemInfo.AISCatcherAvailable = false
+			systemInfo.AISCatcherVersion = "not installed"
+			systemInfo.AISCatcherVersionCode = 0
+			systemInfo.AISCatcherDescribe = "Not found in system"
+		}
 	} else {
 		var jsonOutput map[string]interface{}
 		if err := json.Unmarshal([]byte(firstLine), &jsonOutput); err != nil {
@@ -201,47 +202,47 @@ func collectSystemInfo() {
 		}
 	}
 
-    // Get OS and Architecture
-    systemInfo.OS = runtime.GOOS
-    systemInfo.Architecture = runtime.GOARCH
+	// Get OS and Architecture
+	systemInfo.OS = runtime.GOOS
+	systemInfo.Architecture = runtime.GOARCH
 
-    // Get CPU Info
-    if cpuinfo, err := ioutil.ReadFile("/proc/cpuinfo"); err == nil {
-        scanner := bufio.NewScanner(strings.NewReader(string(cpuinfo)))
-        for scanner.Scan() {
-            line := scanner.Text()
-            if strings.HasPrefix(line, "model name") {
-                systemInfo.CPUInfo = strings.TrimSpace(strings.Split(line, ":")[1])
-                break
-            }
-        }
-    }
+	// Get CPU Info
+	if cpuinfo, err := ioutil.ReadFile("/proc/cpuinfo"); err == nil {
+		scanner := bufio.NewScanner(strings.NewReader(string(cpuinfo)))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "model name") {
+				systemInfo.CPUInfo = strings.TrimSpace(strings.Split(line, ":")[1])
+				break
+			}
+		}
+	}
 
-    // Get Memory Info
-    if meminfo, err := ioutil.ReadFile("/proc/meminfo"); err == nil {
-        scanner := bufio.NewScanner(strings.NewReader(string(meminfo)))
-        for scanner.Scan() {
-            line := scanner.Text()
-            if strings.HasPrefix(line, "MemTotal:") {
-                fields := strings.Fields(line)
-                if len(fields) >= 2 {
-                    if mem, err := strconv.ParseUint(fields[1], 10, 64); err == nil {
-                        systemInfo.TotalMemory = mem * 1024 // Convert from KB to bytes
-                    }
-                }
-                break
-            }
-        }
-    }
+	// Get Memory Info
+	if meminfo, err := ioutil.ReadFile("/proc/meminfo"); err == nil {
+		scanner := bufio.NewScanner(strings.NewReader(string(meminfo)))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "MemTotal:") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					if mem, err := strconv.ParseUint(fields[1], 10, 64); err == nil {
+						systemInfo.TotalMemory = mem * 1024 // Convert from KB to bytes
+					}
+				}
+				break
+			}
+		}
+	}
 
-    // Get Kernel Version
-    if kernel, err := exec.Command("uname", "-r").Output(); err == nil {
-        systemInfo.KernelVersion = strings.TrimSpace(string(kernel))
-    }
+	// Get Kernel Version
+	if kernel, err := exec.Command("uname", "-r").Output(); err == nil {
+		systemInfo.KernelVersion = strings.TrimSpace(string(kernel))
+	}
 
-    // Get service status
-    systemInfo.ServiceStatus = getServiceStatus()
-    systemInfo.DockerMode = config.Docker
+	// Get service status
+	systemInfo.ServiceStatus = getServiceStatus()
+	systemInfo.DockerMode = config.Docker
 }
 
 func init() {
@@ -1260,7 +1261,6 @@ func httpChannelsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 func getFileVersion(staticFSys fs.FS, filepath string) string {
 	f, err := staticFSys.Open(filepath)
 	if err != nil {
@@ -1528,43 +1528,75 @@ func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type SystemInfoTemplate struct {
-    SystemInfo    SystemInfo
-    MemoryGB     float64
-    CssVersion   string
-    JsVersion    string
+	SystemInfo SystemInfo
+	MemoryGB   float64
+	CssVersion string
+	JsVersion  string
 }
 
 func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 	collectSystemInfo()
-	
-    memoryGB := float64(systemInfo.TotalMemory) / 1073741824.0
-    
-    err := templates.ExecuteTemplate(w, "layout.html", map[string]interface{}{
-        "CssVersion":      cssVersion,
-        "JsVersion":       jsVersion,
-        "Title":           "System Information",
-        "ContentTemplate": "system",
-        "SystemInfo":      systemInfo,
-        "MemoryGB":       memoryGB,
-    })
-    if err != nil {
-        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-        log.Printf("Template execution error: %v", err)
-    }
+
+	memoryGB := float64(systemInfo.TotalMemory) / 1073741824.0
+
+	err := templates.ExecuteTemplate(w, "layout.html", map[string]interface{}{
+		"CssVersion":      cssVersion,
+		"JsVersion":       jsVersion,
+		"Title":           "System Information",
+		"ContentTemplate": "system",
+		"SystemInfo":      systemInfo,
+		"MemoryGB":        memoryGB,
+	})
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Printf("Template execution error: %v", err)
+	}
 }
 
-
 func main() {
+
+	resetHashes := flag.Bool("overwrite-hashes", false, "Reset configuration file hashes")
+	flag.Parse()
+
+	err := initPaths()
+	if err != nil {
+		log.Fatal("Failed to initialize paths:", err)
+	}
+
+	if *resetHashes {
+		err := loadControlSettings()
+		if err != nil {
+			log.Fatal("Failed to load control settings:", err)
+		}
+
+		jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+		if err != nil {
+			log.Fatal("Failed to read config.json:", err)
+		}
+		config.ConfigJSONHash = calculate32BitHash(string(jsonContent))
+
+		// Calculate and set hash for config.cmd
+		cmdContent, err := ioutil.ReadFile(configCmdFilePath)
+		if err != nil {
+			log.Fatal("Failed to read config.cmd:", err)
+		}
+		config.ConfigCmdHash = calculate32BitHash(string(cmdContent))
+
+		err = saveControlSettings()
+		if err != nil {
+			log.Fatal("Failed to save control settings:", err)
+		}
+
+		fmt.Printf("Configuration hashes have been reset successfully:\n")
+		fmt.Printf("config.json hash: %d\n", config.ConfigJSONHash)
+		fmt.Printf("config.cmd hash: %d\n", config.ConfigCmdHash)
+		os.Exit(0)
+	}
 
 	collectSystemInfo()
 
 	if err := checkTailCommand(); err != nil {
 		log.Fatalf("Required command not found: %v", err)
-	}
-
-	err := initPaths()
-	if err != nil {
-		log.Fatal("Failed to initialize paths:", err)
 	}
 
 	err = loadControlSettings()
