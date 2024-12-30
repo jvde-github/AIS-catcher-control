@@ -42,7 +42,7 @@ start_ais_catcher() {
     fi
 
     log "Starting AIS-catcher..."
-    /usr/bin/AIS-catcher -C /etc/AIS-catcher/config.json -q -v 60 -G /etc/AIS-catcher/log.txt  &
+    /usr/bin/AIS-catcher -C /etc/AIS-catcher/config.json -q -v 60  &
 
     sleep 1  # Allow some time to start
     if is_ais_catcher_running; then
