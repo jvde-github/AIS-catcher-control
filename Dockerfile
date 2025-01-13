@@ -1,6 +1,7 @@
 # -------------------
 # Build Stage for AIS-catcher
 # -------------------
+
 FROM debian:bookworm-slim AS build-ais-catcher
 
 RUN apt-get update && apt-get upgrade -y
