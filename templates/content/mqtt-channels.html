@@ -134,6 +134,7 @@
             configDiv.appendChild(createInputField(`mqtt[${configIndex}].topic`, 'Topic', 'text', 'ais/data', true));
             configDiv.appendChild(createInputField(`mqtt[${configIndex}].client_id`, 'Client ID', 'text', '', true));
             configDiv.appendChild(createSelectField(`mqtt[${configIndex}].qos`, 'QoS', ['0', '1', '2'], true));
+            configDiv.appendChild(createSelectField(`mqtt[${configIndex}].msgformat`, 'Format', ['NMEA', 'JSON_FULL', 'JSON_NMEA'], true));
 
         configurationsContainer.appendChild(configDiv);
 
@@ -142,7 +143,8 @@
             url: 'mqtt[s]://[user:pass@]host[:port]',
             topic: 'ais/data',
             client_id: '',
-            qos: '0'            
+            qos: '0',
+            msgformat: 'JSON_FULL'            
         });
 
         handleUnsavedChanges(true, 'Added a new MQTT configuration. Please save your changes.');
@@ -355,6 +357,7 @@
             configDiv.appendChild(createInputField(`mqtt[${index}].topic`, 'Topic', 'text', 'ais/data', true));
             configDiv.appendChild(createInputField(`mqtt[${index}].client_id`, 'Client ID', 'text', '', true));
             configDiv.appendChild(createSelectField(`mqtt[${index}].qos`, 'QoS', ['0', '1', '2'], true));
+            configDiv.appendChild(createSelectField(`mqtt[${index}].msgformat`, 'Format', ['NMEA', 'JSON_FULL', 'JSON_NMEA'], true));
 
 
             configurationsContainer.appendChild(configDiv);
@@ -430,7 +433,8 @@
             url: config.url || '',
             topic: config.topic || '',
             client_id: config.client_id || '',
-            qos: config.qos || '0'
+            qos: config.qos || '0',
+            msgformat: config.msgformat || 'JSON_FULL'
         });
 
         // Render the updated configurations
