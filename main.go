@@ -196,12 +196,19 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create a unique unit name for this execution
-	unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
+	// Check if an update is already running
+	status := getUnitStatus("ais-update")
+	if status == "active" || status == "activating" {
+		sendSSEError(w, flusher, "Another update is already in progress")
+		return
+	}
 
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+
+	// Use fixed unit name
+	const unitName = "ais-update"
 
 	// Set proper unit properties for systemd-run
 	runCmd := exec.Command("systemd-run",
@@ -258,6 +265,37 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+func checkSystemRunHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cmd := exec.Command("systemctl", "is-active", "ais-update")
+	output, err := cmd.Output()
+	status := strings.TrimSpace(string(output))
+
+	response := struct {
+		IsRunning bool   `json:"is_running"`
+		Status    string `json:"status"`
+		Error     string `json:"error,omitempty"`
+	}{
+		IsRunning: status == "active" || status == "activating",
+		Status:    status,
+	}
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			response.Error = string(exitErr.Stderr)
+		} else {
+			response.Error = err.Error()
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- string) {
@@ -1984,6 +2022,7 @@ func main() {
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
+	http.HandleFunc("/check-system-run", authMiddleware(checkSystemRunHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)

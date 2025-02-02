@@ -172,9 +172,11 @@
 </div>
 
 <script>
-  let currentOperation = null;
+ // Add this to your existing script section, replacing the existing variables
+let currentOperation = null;
 let currentAction = null;
 
+// Functions to control UI elements
 function showProgress(show = true) {
     const display = document.getElementById('progressDisplay');
     const executeButton = document.getElementById('executeButton');
@@ -193,9 +195,7 @@ function showProgress(show = true) {
 function appendOutput(text) {
     const output = document.getElementById('progressOutput');
     const wasScrolledToBottom = output.scrollHeight - output.clientHeight <= output.scrollTop + 1;
-    
     output.innerHTML += text.replace(/\n/g, '<br>');
-    
     if (wasScrolledToBottom) {
         output.scrollTop = output.scrollHeight;
     }
@@ -209,6 +209,79 @@ function updateStatus(status, isError = false) {
     statusElement.textContent = status;
 }
 
+async function checkProcessStatus() {
+    try {
+        const response = await fetch('/check-system-run');
+        const data = await response.json();
+        
+        // Re-enable button and hide progress if there's an error or not running
+        if (data.error || !data.is_running) {
+            if (currentOperation) {
+                currentOperation.close();
+                currentOperation = null;
+            }
+            showProgress(false);
+        } else if (data.is_running) {
+            // Process is running, show progress and disable button
+            if (!currentOperation) {
+                currentOperation = new EventSource('/system-action-progress?action=check');
+                setupEventHandlers();
+            }
+            showProgress(true);
+            updateStatus(data.status);
+        }
+    } catch (error) {
+        // On any error, enable button and hide progress
+        if (currentOperation) {
+            currentOperation.close();
+            currentOperation = null;
+        }
+        showProgress(false);
+        console.error('Error checking status:', error);
+    }
+}
+
+
+function setupEventHandlers() {
+    if (!currentOperation) return;
+    
+    currentOperation.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'output') {
+            appendOutput(data.content + '\n');
+        } else if (data.type === 'complete') {
+            appendOutput('\nOperation completed successfully\n');
+            if (data.content && JSON.parse(data.content).reload) {
+                appendOutput('\nSystem will reboot in 5 seconds...');
+                setTimeout(() => window.location.reload(), 5000);
+            }
+            finishOperation('Completed', false);
+        } else if (data.type === 'error') {
+            appendOutput('\nError: ' + data.content + '\n');
+            finishOperation('Failed', true);
+        }
+    };
+
+    currentOperation.onerror = () => {
+        currentOperation.close();
+        currentOperation = null;
+        checkProcessStatus(); // Recheck status after error
+    };
+}
+
+function finishOperation(status, isError = false) {
+    updateStatus(status, isError);
+    if (currentOperation) {
+        currentOperation.close();
+        currentOperation = null;
+    }
+    currentAction = null;
+    
+    const executeButton = document.getElementById('executeButton');
+    executeButton.disabled = false;
+    executeButton.classList.remove('opacity-50', 'cursor-not-allowed');
+}
 
 async function executeSelectedAction() {
     const select = document.getElementById('actionSelect');
@@ -224,7 +297,6 @@ async function executeSelectedAction() {
         return;
     }
 
-    // Handle reboot confirmations
     if (action === 'system-reboot' || action === 'update-all-reboot') {
         if (!confirm('Are you sure you want to reboot the system? This will disconnect all users and stop AIS-catcher.')) {
             return;
@@ -238,53 +310,7 @@ async function executeSelectedAction() {
     showProgress(true);
 
     currentOperation = new EventSource(`/system-action-progress?action=${action}`);
-    
-    currentOperation.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'output') {
-            appendOutput(data.content + '\n');
-        } else if (data.type === 'status') {
-            updateStatus(data.content);
-        } else if (data.type === 'complete') {
-            appendOutput('\nOperation completed successfully\n');
-            if (data.reload) {
-                appendOutput('\nSystem will reboot in 5 seconds...');
-                setTimeout(() => window.location.reload(), 5000);
-            }
-            finishOperation('Completed', false);
-        } else if (data.type === 'error') {
-            appendOutput('\nError: ' + data.content + '\n');
-            finishOperation('Failed', true);
-        }
-    };
-
-    currentOperation.onerror = () => {
-        // Only show error if we haven't finished normally
-        if (currentAction) {
-            finishOperation('Connection Lost', true);
-        }
-    };
-}
-
-function finishOperation(status, isError = false) {
-    updateStatus(status, isError);
-    if (currentOperation) {
-        currentOperation.close();
-        currentOperation = null;
-    }
-    currentAction = null;
-    
-    // Always re-enable the button
-    const executeButton = document.getElementById('executeButton');
-    executeButton.disabled = false;
-    executeButton.classList.remove('opacity-50', 'cursor-not-allowed');
-    
-    // Keep the progress display visible but mark it as complete
-    const progressDisplay = document.getElementById('progressDisplay');
-    if (progressDisplay) {
-        progressDisplay.classList.remove('hidden');
-    }
+    setupEventHandlers();
 }
 
 function getActionTitle(action) {
@@ -298,5 +324,11 @@ function getActionTitle(action) {
     };
     return titles[action] || 'System Operation';
 }
+
+// Start checking status when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    checkProcessStatus();
+    setInterval(checkProcessStatus, 1000); 
+});
 </script>
 {{end}}
