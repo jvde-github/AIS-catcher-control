@@ -136,7 +136,17 @@ func getActionScript(action string) (string, bool) {
 
 	case "control-update":
 		script = `
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash`
+            # Stop the service before update
+            systemctl stop ais-catcher-control && \
+            # Run the update script
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash && \
+            # Force reload systemd daemon
+            systemctl daemon-reload && \
+            # Start the service again
+            systemctl start ais-catcher-control && \
+            # Wait to ensure service is running
+            sleep 3 && \
+            systemctl is-active --quiet ais-catcher-control`
 		reload = true
 
 	case "system-reboot":
