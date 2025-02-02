@@ -126,41 +126,71 @@ func getActionScript(action string) (string, bool) {
 
 	switch action {
 	case "system-update":
-		script = "stdbuf -oL apt-get update -y"
+		script = `
+            echo "Starting system update..."
+            apt-get update -y
+            echo "System update completed"`
 
 	case "ais-update-prebuilt":
-		script = `wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p`
+		script = `
+            echo "Starting AIS-catcher prebuilt update..."
+            echo "Downloading and executing installation script..."
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p
+            echo "AIS-catcher installation completed"`
 
 	case "ais-update-source":
-		script = `wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash`
+		script = `
+            echo "Starting AIS-catcher source update..."
+            echo "Downloading and executing installation script..."
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash
+            echo "AIS-catcher installation completed"`
 
 	case "control-update":
 		script = `
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash `
+            echo "Starting AIS-catcher Control update..."
+            echo "Downloading and executing installation script..."
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash
+            echo "AIS-catcher Control installation completed"`
 		reload = true
 
 	case "system-reboot":
-		script = "reboot"
+		script = `
+            echo "Initiating system reboot..."
+            reboot`
 		reload = true
 
 	case "update-all":
 		script = `
-            echo "Installing AIS-catcher..." && \
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p && \
-            echo "Installing AIS-catcher Control..." && \
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash`
+            echo "Starting full system update..."
+            echo "Step 1: Installing AIS-catcher..."
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p
+            echo "AIS-catcher installation completed"
+            echo "Step 2: Installing AIS-catcher Control..."
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash
+            echo "Full system update completed"`
 		reload = true
 
 	case "update-all-reboot":
 		script = `
-            echo "Installing AIS-catcher..." && \
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p && \
-            echo "Installing AIS-catcher Control..." && \
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash && \
-            echo "Preparing for reboot..." && \
-            sudo reboot`
+            echo "Starting full system update with reboot..."
+            echo "Step 1: Installing AIS-catcher..."
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p
+            echo "AIS-catcher installation completed"
+            echo "Step 2: Installing AIS-catcher Control..."
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash
+            echo "Full system update completed"
+            echo "Step 3: Preparing for reboot..."
+            reboot`
 		reload = true
 	}
+
+	// Wrap the script to ensure proper output capturing
+	script = fmt.Sprintf(`
+        exec 1> >(sed "s/^/[stdout] /")
+        exec 2> >(sed "s/^/[stderr] /" >&2)
+        set -x
+        %s
+    `, script)
 
 	return script, reload
 }
