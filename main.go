@@ -208,8 +208,8 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	defer os.Remove(logFile) // Clean up log file when done
 
 	wrappedScript := fmt.Sprintf(`#!/bin/bash
-	# Launch the update command in a completely detached session.
-	nohup setsid bash -c '%s' > %s 2>&1 &
+	# Run the update command in a new transient systemd unit.
+	systemd-run --unit=update-script -- /bin/bash -c '%s' > %s 2>&1 &
 	pid=$!
 	tail -f --pid=$pid %s
 	`, script, logFile, logFile)
