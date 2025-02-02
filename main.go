@@ -183,61 +183,27 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid action", http.StatusBadRequest)
 		return
 	}
-	// Create unique identifier for this update script
-	scriptID := fmt.Sprintf("update-script-%d", time.Now().UnixNano())
-	unitName := scriptID + ".service"
 
-	// Use /tmp for unit file
-	unitFile := fmt.Sprintf("/tmp/%s", unitName)
-	unitContent := fmt.Sprintf(`[Unit]
-Description=AIS-catcher Update Script (%s)
-[Service]
-Type=oneshot
-ExecStart=/bin/bash -c '%s'
-StandardOutput=journal
-StandardError=journal
-RemainAfterExit=yes`, scriptID, script)
+	// Create a unique unit name for this execution
+	unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
 
-	// Write unit file
-	err := ioutil.WriteFile(unitFile, []byte(unitContent), 0644)
-	if err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to create unit file: %v", err))
-		return
-	}
-	defer os.Remove(unitFile)
-
-	// Copy unit file to systemd directory and enable it
-	copyCmd := exec.Command("sudo", "cp", unitFile, "/etc/systemd/system/")
-	if err := copyCmd.Run(); err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to install unit file: %v", err))
-		return
-	}
-	defer func() {
-		exec.Command("sudo", "systemctl", "stop", unitName).Run()
-		exec.Command("sudo", "systemctl", "disable", unitName).Run()
-		exec.Command("sudo", "rm", "/etc/systemd/system/"+unitName).Run()
-		exec.Command("sudo", "systemctl", "daemon-reload").Run()
-	}()
-
-	// Reload systemd
-	reloadCmd := exec.Command("sudo", "systemctl", "daemon-reload")
-	if err := reloadCmd.Run(); err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to reload systemd: %v", err))
-		return
-	}
-
-	// Start the unit
-	startCmd := exec.Command("sudo", "systemctl", "start", unitName)
-	if err := startCmd.Run(); err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to start update script: %v", err))
-		return
-	}
-
-	// Create a context with cancellation
+	// Create context with cancellation
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// Start log streaming in a goroutine
+	// Start the command with systemd-run
+	runCmd := exec.Command("systemd-run",
+		"--unit="+unitName,
+		"--collect", // Collect logs even after command finishes
+		"--pipe",    // Connect stdout/stderr to journal
+		"/bin/bash", "-c", script)
+
+	if err := runCmd.Start(); err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to start command: %v", err))
+		return
+	}
+
+	// Start log streaming immediately
 	logChan := make(chan string, 100)
 	go streamJournalLogs(ctx, unitName, logChan)
 
@@ -253,16 +219,16 @@ RemainAfterExit=yes`, scriptID, script)
 			sendSSEMessage(w, flusher, "output", log)
 		case <-ticker.C:
 			status := getUnitStatus(unitName)
-			switch status {
-			case "failed":
-				sendSSEMessage(w, flusher, "error", "Service failed")
-				return
-			case "inactive", "dead":
+			if status == "inactive" || status == "dead" {
+				// Check exit status
 				if getUnitExitStatus(unitName) == 0 {
 					sendSSEMessage(w, flusher, "complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
 				} else {
-					sendSSEMessage(w, flusher, "error", "Service failed")
+					sendSSEMessage(w, flusher, "error", "Command failed")
 				}
+				return
+			} else if status == "failed" {
+				sendSSEMessage(w, flusher, "error", "Command failed")
 				return
 			}
 		}
@@ -270,7 +236,7 @@ RemainAfterExit=yes`, scriptID, script)
 }
 
 func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- string) {
-	cmd := exec.Command("journalctl", "-f", "-u", unitName, "--no-pager", "--output=cat")
+	cmd := exec.Command("journalctl", "-u", unitName, "-f", "--no-pager", "--output=cat")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Printf("Failed to create stdout pipe: %v", err)
@@ -299,7 +265,6 @@ func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- stri
 		}
 	}
 }
-
 func getUnitExitStatus(unit string) int {
 	cmd := exec.Command("systemctl", "show", unit, "--property=ExecMainStatus")
 	output, err := cmd.Output()
