@@ -175,17 +175,6 @@
   let currentOperation = null;
 let currentAction = null;
 
-async function checkSystemdStatus() {
-    try {
-        const response = await fetch('/systemd-status');
-        const data = await response.json();
-        return data.isRunning;
-    } catch (error) {
-        console.error('Error checking systemd status:', error);
-        return false;
-    }
-}
-
 function showProgress(show = true) {
     const display = document.getElementById('progressDisplay');
     const executeButton = document.getElementById('executeButton');
@@ -239,12 +228,6 @@ async function executeSelectedAction() {
         return;
     }
 
-    // Check if systemd is running before proceeding
-    const systemdRunning = await checkSystemdStatus();
-    if (!systemdRunning) {
-        alert('System service is not running. Please ensure systemd is active before proceeding.');
-        return;
-    }
 
     if (currentOperation) {
         alert('An operation is already in progress');

@@ -165,19 +165,6 @@ func getActionScript(action string) (string, bool) {
 	return script, reload
 }
 
-// Add this new handler to check systemd status
-func systemdStatusHandler(w http.ResponseWriter, r *http.Request) {
-	isRunning := true
-	if !config.Docker {
-		cmd := exec.Command("systemctl", "is-active", "systemd")
-		err := cmd.Run()
-		isRunning = err == nil
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"isRunning": isRunning})
-}
-
 func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -1967,7 +1954,6 @@ func main() {
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
 	http.HandleFunc("/system", authMiddleware(systemInfoHandler))
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
-	http.HandleFunc("/systemd-status", authMiddleware(systemdStatusHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
 
