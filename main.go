@@ -112,6 +112,173 @@ type ServiceConfig struct {
 
 var systemInfo SystemInfo
 
+type OperationProgress struct {
+	cmd    *exec.Cmd
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+var activeOperations sync.Map
+
+func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	// Set headers for SSE
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	action := r.URL.Query().Get("action")
+
+	// Create a context that we can cancel
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	// Create command based on action
+	var cmd *exec.Cmd
+	var reload bool
+
+	switch action {
+	case "system-update":
+		cmd = exec.Command("apt", "update", "-y")
+	case "ais-update-prebuilt":
+		cmd = exec.Command("bash", "-c",
+			`wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p`)
+	case "ais-update-source":
+		cmd = exec.Command("bash", "-c",
+			`wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash`)
+	case "control-update":
+		cmd = exec.Command("bash", "-c",
+			`wget -qO-  https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash`)
+	case "system-reboot":
+		cmd = exec.Command("reboot")
+		reload = true
+	case "update-all":
+		cmd = exec.Command("bash", "-c", `
+            echo "Installing AIS-catcher..." &&
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p &&
+			echo "Installing AIS-catcher Control..." &&
+			wget -qO-  https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash 
+        `)
+		reload = true
+	case "update-all-reboot":
+		cmd = exec.Command("bash", "-c", `
+            echo "Installing AIS-catcher..." &&
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p &&
+			echo "Installing AIS-catcher Control..." &&
+			wget -qO-  https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash &&
+            echo "Preparing for reboot..." &&
+            sudo reboot
+        `)
+		reload = true
+	default:
+		http.Error(w, "Invalid action", http.StatusBadRequest)
+		return
+	}
+
+	// Create pipes for stdout and stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to create stdout pipe: %v", err))
+		return
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to create stderr pipe: %v", err))
+		return
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to start command: %v", err))
+		return
+	}
+
+	// Store the operation in our map
+	op := &OperationProgress{cmd: cmd, ctx: ctx, cancel: cancel}
+	activeOperations.Store(cmd.Process.Pid, op)
+	defer activeOperations.Delete(cmd.Process.Pid)
+
+	// Create a WaitGroup to wait for both pipes to be processed
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Process stdout
+	go func() {
+		defer wg.Done()
+		reader := bufio.NewReader(stdout)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					sendSSEMessage(w, flusher, "error", fmt.Sprintf("stdout error: %v", err))
+				}
+				return
+			}
+			sendSSEMessage(w, flusher, "output", line)
+		}
+	}()
+
+	// Process stderr
+	go func() {
+		defer wg.Done()
+		reader := bufio.NewReader(stderr)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					sendSSEMessage(w, flusher, "error", fmt.Sprintf("stderr error: %v", err))
+				}
+				return
+			}
+			sendSSEMessage(w, flusher, "output", "Error: "+line)
+		}
+	}()
+
+	// Wait for command to complete
+	err = cmd.Wait()
+	wg.Wait()
+
+	if err != nil {
+		sendSSEMessage(w, flusher, "error", fmt.Sprintf("Command failed: %v", err))
+	} else {
+		sendSSEMessage(w, flusher, "complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
+	}
+}
+
+func systemActionCancelHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	activeOperations.Range(func(key, value interface{}) bool {
+		if op, ok := value.(*OperationProgress); ok {
+			op.cancel()
+			if op.cmd.Process != nil {
+				op.cmd.Process.Kill()
+			}
+		}
+		return true
+	})
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func sendSSEMessage(w http.ResponseWriter, flusher http.Flusher, messageType string, content string) {
+	fmt.Fprintf(w, "data: {\"type\": \"%s\", \"content\": %s}\n\n",
+		messageType, strconv.Quote(content))
+	flusher.Flush()
+}
+
+func sendSSEError(w http.ResponseWriter, flusher http.Flusher, message string) {
+	sendSSEMessage(w, flusher, "error", message)
+}
+
 func findAISCatcherPID() (int32, error) {
 	processes, err := process.Processes()
 	if err != nil {
@@ -1682,6 +1849,8 @@ func main() {
 	http.HandleFunc("/editjson", authMiddleware(editConfigJSONHandler))
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
 	http.HandleFunc("/system", authMiddleware(systemInfoHandler))
+	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
+	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)

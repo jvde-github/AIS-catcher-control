@@ -1,23 +1,73 @@
 {{define "system"}}
 <div class="max-w-4xl mx-auto p-4">
+
+  <!-- System Actions Box -->
+  <div class="mb-8 bg-white rounded-lg p-6 border border-gray-200">
+    <h2 class="text-2xl font-bold text-gray-800 mb-6">System Actions</h2>
+
+    <div class="flex space-x-4">
+      <!-- Action Selection -->
+      <select id="actionSelect"
+        class="flex-1 rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">        
+        <option value="update-all">Update All</option>
+        <option value="update-all-reboot">Update All and Reboot</option>
+        <option value="system-update">System Update</option>
+        <option value="ais-update-prebuilt">Update AIS-catcher (Pre-built)</option>
+        <option value="ais-update-source">Update AIS-catcher (From Source)</option>
+        <option value="control-update">Update AIS-catcher Control</option>        
+        <option value="system-reboot">System Reboot - Restart the system</option>
+      </select>
+
+      <!-- Execute Button -->
+      <button onclick="executeSelectedAction()"
+        class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors">
+        Execute
+      </button>
+    </div>
+
+    <!-- Progress Display -->
+    <div id="progressDisplay" class="mt-6 hidden">
+      <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="text-base font-medium text-gray-800" id="progressTitle">Operation in Progress</h4>
+          <span class="px-3 py-1 text-xs rounded-full bg-blue-100 text-blue-800" id="progressStatus">Running</span>
+        </div>
+        <div class="space-y-3">
+          <div class="h-64 overflow-y-auto bg-white p-3 rounded border border-gray-200 font-mono text-sm"
+              id="progressOutput">
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span id="progressTime" class="text-gray-600">Time elapsed: 0s</span>
+            <button onclick="cancelOperation()"
+              class="text-red-600 hover:text-red-700 font-medium hover:underline transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="mb-8 bg-white rounded-lg p-6 border border-gray-200">
     <h2 class="text-2xl font-bold text-gray-800 mb-6">Support</h2>
     <div class="flex flex-col md:flex-row items-start md:items-center gap-3 mb-4">
-        <svg class="flex-shrink-0 w-10 h-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#5f6368"><path d="m480-80-10-120h-10q-142 0-241-99t-99-241q0-142 99-241t241-99q71 0 132.5 26.5t108 73q46.5 46.5 73 108T800-540q0 75-24.5 144t-67 128q-42.5 59-101 107T480-80Zm80-146q71-60 115.5-140.5T720-540q0-109-75.5-184.5T460-800q-109 0-184.5 75.5T200-540q0 109 75.5 184.5T460-280h100v54Zm-101-95q17 0 29-12t12-29q0-17-12-29t-29-12q-17 0-29 12t-12 29q0 17 12 29t29 12Zm-29-127h60q0-30 6-42t38-44q18-18 30-39t12-45q0-51-34.5-76.5T460-720q-44 0-74 24.5T344-636l56 22q5-17 19-33.5t41-16.5q27 0 40.5 15t13.5 33q0 17-10 30.5T480-558q-35 30-42.5 47.5T430-448Zm30-65Z"/></svg>
-        <div class="flex-1 text-gray-700 text-sm md:text-base">
-          Need help? Read the 
-          <a href="https://docs.aiscatcher.org/usage/gui/" 
-             class="inline-flex items-center text-blue-600 hover:underline font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors">
-            documentation 
-          </a> 
-          to learn more about AIS-catcher. Visit our 
-          <a href="https://github.com/jvde-github/AIS-catcher/discussions" 
-             class="inline-flex items-center text-blue-600 hover:underline font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors">
-            community forum 
-          </a> 
-          for support and discussions.
-        </div>
+      <svg class="flex-shrink-0 w-10 h-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#5f6368">
+        <path d="m480-80-10-120h-10q-142 0-241-99t-99-241q0-142 99-241t241-99q71 0 132.5 26.5t108 73q46.5 46.5 73 108T800-540q0 75-24.5 144t-67 128q-42.5 59-101 107T480-80Zm80-146q71-60 115.5-140.5T720-540q0-109-75.5-184.5T460-800q-109 0-184.5 75.5T200-540q0 109 75.5 184.5T460-280h100v54Zm-101-95q17 0 29-12t12-29q0-17-12-29t-29-12q-17 0-29 12t-12 29q0 17 12 29t29 12Zm-29-127h60q0-30 6-42t38-44q18-18 30-39t12-45q0-51-34.5-76.5T460-720q-44 0-74 24.5T344-636l56 22q5-17 19-33.5t41-16.5q27 0 40.5 15t13.5 33q0 17-10 30.5T480-558q-35 30-42.5 47.5T430-448Zm30-65Z" />
+      </svg>
+      <div class="flex-1 text-gray-700 text-sm md:text-base">
+        Need help? Read the
+        <a href="https://docs.aiscatcher.org/usage/gui/"
+          class="text-blue-600 hover:underline font-medium transition-colors">
+          documentation
+        </a>
+        to learn more about AIS-catcher. Visit our
+        <a href="https://github.com/jvde-github/AIS-catcher/discussions"
+          class="text-blue-600 hover:underline font-medium transition-colors">
+          community forum
+        </a>
+        for support and discussions.
       </div>
+    </div>
   </div>
 
   <div class="bg-white shadow-sm rounded-lg border">
@@ -38,15 +88,18 @@
           </div>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Version</p>
-            <p class="text-gray-800">{{if not .SystemInfo.AISCatcherAvailable}}< 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
+            <p class="text-gray-800">{{if not .SystemInfo.AISCatcherAvailable}}< 0.61{{else if eq
+                .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
           </div>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Version Code</p>
-            <p class="text-gray-800">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}-{{else}}{{.SystemInfo.AISCatcherVersionCode}}{{end}}</p>
+            <p class="text-gray-800">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode
+              -1)}}-{{else}}{{.SystemInfo.AISCatcherVersionCode}}{{end}}</p>
           </div>
           <div class="md:col-span-2">
             <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Version Details</p>
-            <p class="text-gray-800">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}-{{else}}{{.SystemInfo.AISCatcherDescribe}}{{end}}</p>
+            <p class="text-gray-800">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode
+              -1)}}-{{else}}{{.SystemInfo.AISCatcherDescribe}}{{end}}</p>
           </div>
         </div>
       </div>
@@ -61,23 +114,28 @@
           </div>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Memory Usage</p>
-            <p class="text-gray-800">{{if lt .SystemInfo.ProcessMemoryUsage 0.01}}-{{else}}{{printf "%.2f MB" .SystemInfo.ProcessMemoryUsage}}{{end}}</p>
+            <p class="text-gray-800">{{if lt .SystemInfo.ProcessMemoryUsage 0.01}}-{{else}}{{printf "%.2f MB"
+              .SystemInfo.ProcessMemoryUsage}}{{end}}</p>
           </div>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">CPU Usage</p>
-            <p class="text-gray-800">{{if lt .SystemInfo.ProcessCPUUsage 0.01}}-{{else}}{{printf "%.1f%%" .SystemInfo.ProcessCPUUsage}}{{end}}</p>
+            <p class="text-gray-800">{{if lt .SystemInfo.ProcessCPUUsage 0.01}}-{{else}}{{printf "%.1f%%"
+              .SystemInfo.ProcessCPUUsage}}{{end}}</p>
           </div>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">System CPU Usage</p>
-            <p class="text-gray-800">{{if lt .SystemInfo.SystemCPUUsage 0.01}}-{{else}}{{printf "%.1f%%" .SystemInfo.SystemCPUUsage}}{{end}}</p>
+            <p class="text-gray-800">{{if lt .SystemInfo.SystemCPUUsage 0.01}}-{{else}}{{printf "%.1f%%"
+              .SystemInfo.SystemCPUUsage}}{{end}}</p>
           </div>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Thread Count</p>
-            <p class="text-gray-800">{{if eq .SystemInfo.ProcessThreadCount 0}}-{{else}}{{.SystemInfo.ProcessThreadCount}}{{end}}</p>
+            <p class="text-gray-800">{{if eq .SystemInfo.ProcessThreadCount
+              0}}-{{else}}{{.SystemInfo.ProcessThreadCount}}{{end}}</p>
           </div>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Running Since</p>
-            <p class="text-gray-800">{{if .SystemInfo.ProcessStartTime.IsZero}}-{{else}}{{.SystemInfo.ProcessStartTime.Format "Jan 02, 15:04:05"}}{{end}}</p>
+            <p class="text-gray-800">{{if
+              .SystemInfo.ProcessStartTime.IsZero}}-{{else}}{{.SystemInfo.ProcessStartTime.Format "Jan 02, 15:04:05"}}{{end}}</p>
           </div>
         </div>
       </div>
@@ -119,4 +177,208 @@
     </div>
   </div>
 </div>
+
+<script>
+let currentOperation = null;
+
+// Add change event listener to select element
+document.addEventListener('DOMContentLoaded', function() {
+    const select = document.getElementById('actionSelect');
+    select.addEventListener('change', function() {
+        if (currentOperation) {
+            closeOperation();
+            updateStatus('Ready');
+        }
+    });
+});
+let startTime = null;
+let timerInterval = null;
+
+let lastExecutedAction = null;
+
+function executeSelectedAction() {
+    const select = document.getElementById('actionSelect');
+    const action = select.value;
+
+    // Close any existing EventSource
+    if (currentOperation) {
+        closeOperation();
+    }
+    lastExecutedAction = action;
+    
+    if (!action) {
+        alert('Please select an action first');
+        return;
+    }
+
+    if (action === 'system-reboot' || action === 'update-all-reboot') {
+        confirmReboot();
+    } else {
+        performAction(action);
+    }
+}
+
+function updateTimer() {
+    if (!startTime) return;
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    document.getElementById('progressTime').textContent = 
+        `Time elapsed: ${minutes}m ${seconds}s`;
+}
+
+function showProgress(show = true) {
+    const display = document.getElementById('progressDisplay');
+    const cancelButton = document.querySelector('[onclick="cancelOperation()"]');
+    
+    if (show) {
+        display.classList.remove('hidden');
+        startTime = Date.now();
+        timerInterval = setInterval(updateTimer, 1000);
+        if (cancelButton) cancelButton.style.display = 'block';
+    } else {
+        display.classList.add('hidden');
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        startTime = null;
+        if (cancelButton) cancelButton.style.display = 'none';
+    }
+}
+
+function appendOutput(text) {
+    const output = document.getElementById('progressOutput');
+    const wasScrolledToBottom = output.scrollHeight - output.clientHeight <= output.scrollTop + 1;
+    
+    output.innerHTML += text.replace(/\n/g, '<br>');
+    
+    if (wasScrolledToBottom) {
+        output.scrollTop = output.scrollHeight;
+    }
+}
+
+function updateStatus(status, isError = false) {
+    const statusElement = document.getElementById('progressStatus');
+    statusElement.className = `px-3 py-1 text-xs rounded-full ${
+        isError ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+    }`;
+    statusElement.textContent = status;
+}
+
+function finishOperation(status, isError = false) {
+    const cancelButton = document.querySelector('[onclick="cancelOperation()"]');
+    if (cancelButton) cancelButton.style.display = 'none';
+    
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+    
+    updateStatus(status, isError);
+    
+    // Stop any ongoing EventSource
+    if (currentOperation) {
+        closeOperation();
+    }
+    
+    currentOperation = null;
+}
+
+function performAction(action) {
+    if (currentOperation) {
+        alert('An operation is already in progress');
+        return;
+    }
+    
+    // Check if this is a new action
+    if (lastExecutedAction !== action) {
+        lastExecutedAction = action;
+    }
+
+    document.getElementById('progressOutput').innerHTML = '';
+    document.getElementById('progressTitle').textContent = getActionTitle(action);
+    updateStatus('Running');
+    showProgress(true);
+
+    currentOperation = new EventSource(`/system-action-progress?action=${action}`);
+    
+    currentOperation.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'output') {
+            appendOutput(data.content + '\n');
+        } else if (data.type === 'status') {
+            updateStatus(data.content);
+        } else if (data.type === 'complete') {
+            appendOutput('\nOperation completed successfully\n');
+            finishOperation('Completed', false);
+            
+            // First close the EventSource to stop status updates
+            closeOperation();
+            
+            // Handle reboot if needed
+            if (data.reload) {
+                appendOutput('\nSystem will reboot in 5 seconds...');
+                setTimeout(() => window.location.reload(), 5000);
+            }
+            
+            // Clear the selection
+            document.getElementById('actionSelect').value = '';
+        } else if (data.type === 'error') {
+            appendOutput('\nError: ' + data.content + '\n');
+            finishOperation('Failed', true);
+            closeOperation();
+        }
+    };
+
+    currentOperation.onerror = () => {
+        finishOperation('Connection Lost', true);
+        closeOperation();
+    };
+}
+
+function getActionTitle(action) {
+    const titles = {
+        'system-update': 'System Update',
+        'ais-update-prebuilt': 'AIS-catcher Update (Pre-built)',
+        'ais-update-source': 'AIS-catcher Update (Source)',
+        'system-reboot': 'System Reboot',
+        'update-all': 'Full System Update'
+    };
+    return titles[action] || 'System Operation';
+}
+
+function closeOperation() {
+    if (currentOperation) {
+        currentOperation.close();
+        currentOperation = null;
+    }
+}
+
+function cancelOperation() {
+    if (currentOperation && confirm('Are you sure you want to cancel the current operation?')) {
+        fetch('/system-action-cancel', {
+            method: 'POST',
+            credentials: 'same-origin'
+        }).then(() => {
+            appendOutput('\nOperation cancelled by user\n');
+            finishOperation('Cancelled', true);
+            closeOperation();
+        });
+    }
+}
+
+function confirmReboot() {
+    if (confirm('Are you sure you want to reboot the system? This will disconnect all users and stop AIS-catcher.')) {
+        performAction('system-reboot');
+    }
+}
+
+function confirmUpdateAll() {
+    if (confirm('Are you sure you want to perform all updates? This will update the system, update AIS-catcher, and then reboot. This may take several minutes.')) {
+        performAction('update-all');
+    }
+}
+</script>
 {{end}}
