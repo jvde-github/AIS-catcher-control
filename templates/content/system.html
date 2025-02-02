@@ -8,7 +8,7 @@
     <div class="flex space-x-4">
       <!-- Action Selection -->
       <select id="actionSelect"
-        class="flex-1 rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">                
+        class="flex-1 rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
         <option value="system-update">System Update (apt-get update)</option>
         <option value="ais-update-prebuilt">Update AIS-catcher</option>
         <option value="ais-update-source">Update AIS-catcher from Source</option>
@@ -18,7 +18,7 @@
       </select>
 
       <!-- Execute Button -->
-      <button onclick="executeSelectedAction()"
+      <button onclick="executeSelectedAction()" id="executeButton"
         class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors">
         Execute
       </button>
@@ -33,14 +33,7 @@
         </div>
         <div class="space-y-3">
           <div class="h-64 overflow-y-auto bg-white p-3 rounded border border-gray-200 font-mono text-sm"
-              id="progressOutput">
-          </div>
-          <div class="flex justify-between items-center text-sm">
-            <span id="progressTime" class="text-gray-600">Time elapsed: 0s</span>
-            <button onclick="cancelOperation()"
-              class="text-red-600 hover:text-red-700 font-medium hover:underline transition-colors">
-              Cancel
-            </button>
+            id="progressOutput">
           </div>
         </div>
       </div>
@@ -51,7 +44,8 @@
     <h2 class="text-2xl font-bold text-gray-800 mb-6">Support</h2>
     <div class="flex flex-col md:flex-row items-start md:items-center gap-3 mb-4">
       <svg class="flex-shrink-0 w-10 h-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#5f6368">
-        <path d="m480-80-10-120h-10q-142 0-241-99t-99-241q0-142 99-241t241-99q71 0 132.5 26.5t108 73q46.5 46.5 73 108T800-540q0 75-24.5 144t-67 128q-42.5 59-101 107T480-80Zm80-146q71-60 115.5-140.5T720-540q0-109-75.5-184.5T460-800q-109 0-184.5 75.5T200-540q0 109 75.5 184.5T460-280h100v54Zm-101-95q17 0 29-12t12-29q0-17-12-29t-29-12q-17 0-29 12t-12 29q0 17 12 29t29 12Zm-29-127h60q0-30 6-42t38-44q18-18 30-39t12-45q0-51-34.5-76.5T460-720q-44 0-74 24.5T344-636l56 22q5-17 19-33.5t41-16.5q27 0 40.5 15t13.5 33q0 17-10 30.5T480-558q-35 30-42.5 47.5T430-448Zm30-65Z" />
+        <path
+          d="m480-80-10-120h-10q-142 0-241-99t-99-241q0-142 99-241t241-99q71 0 132.5 26.5t108 73q46.5 46.5 73 108T800-540q0 75-24.5 144t-67 128q-42.5 59-101 107T480-80Zm80-146q71-60 115.5-140.5T720-540q0-109-75.5-184.5T460-800q-109 0-184.5 75.5T200-540q0 109 75.5 184.5T460-280h100v54Zm-101-95q17 0 29-12t12-29q0-17-12-29t-29-12q-17 0-29 12t-12 29q0 17 12 29t29 12Zm-29-127h60q0-30 6-42t38-44q18-18 30-39t12-45q0-51-34.5-76.5T460-720q-44 0-74 24.5T344-636l56 22q5-17 19-33.5t41-16.5q27 0 40.5 15t13.5 33q0 17-10 30.5T480-558q-35 30-42.5 47.5T430-448Zm30-65Z" />
       </svg>
       <div class="flex-1 text-gray-700 text-sm md:text-base">
         Need help? Read the
@@ -178,70 +172,32 @@
 </div>
 
 <script>
-let currentOperation = null;
-let startTime = null;
-let timerInterval = null;
-let lastExecutedAction = null;
+  let currentOperation = null;
+let currentAction = null;
 
-// Add change event listener to select element
-document.addEventListener('DOMContentLoaded', function() {
-    const select = document.getElementById('actionSelect');
-    select.addEventListener('change', function() {
-        if (currentOperation) {
-            closeOperation();
-            updateStatus('Ready');
-        }
-    });
-});
-
-function executeSelectedAction() {
-    const select = document.getElementById('actionSelect');
-    const action = select.value;
-
-    // Close any existing EventSource
-    if (currentOperation) {
-        closeOperation();
+async function checkSystemdStatus() {
+    try {
+        const response = await fetch('/systemd-status');
+        const data = await response.json();
+        return data.isRunning;
+    } catch (error) {
+        console.error('Error checking systemd status:', error);
+        return false;
     }
-    lastExecutedAction = action;
-    
-    if (!action) {
-        alert('Please select an action first');
-        return;
-    }
-
-    if (action === 'system-reboot' || action === 'update-all-reboot') {
-        confirmReboot();
-    } else {
-        performAction(action);
-    }
-}
-
-function updateTimer() {
-    if (!startTime) return;
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = elapsed % 60;
-    document.getElementById('progressTime').textContent = 
-        `Time elapsed: ${minutes}m ${seconds}s`;
 }
 
 function showProgress(show = true) {
     const display = document.getElementById('progressDisplay');
-    const cancelButton = document.querySelector('[onclick="cancelOperation()"]');
+    const executeButton = document.getElementById('executeButton');
     
     if (show) {
         display.classList.remove('hidden');
-        startTime = Date.now();
-        timerInterval = setInterval(updateTimer, 1000);
-        if (cancelButton) cancelButton.style.display = 'block';
+        executeButton.disabled = true;
+        executeButton.classList.add('opacity-50', 'cursor-not-allowed');
     } else {
         display.classList.add('hidden');
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-        }
-        startTime = null;
-        if (cancelButton) cancelButton.style.display = 'none';
+        executeButton.disabled = false;
+        executeButton.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 }
 
@@ -265,39 +221,50 @@ function updateStatus(status, isError = false) {
 }
 
 function finishOperation(status, isError = false) {
-    const cancelButton = document.querySelector('[onclick="cancelOperation()"]');
-    if (cancelButton) cancelButton.style.display = 'none';
-    
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-    }
-    
     updateStatus(status, isError);
-    
-    // For actions other than system-update, close the EventSource.
-    if (lastExecutedAction !== 'system-update' && currentOperation) {
-        closeOperation();
-    }
-    
-    // For system-update, we keep streaming the logs.
-    if (lastExecutedAction !== 'system-update') {
+    if (currentOperation) {
+        currentOperation.close();
         currentOperation = null;
     }
+    currentAction = null;
+    showProgress(false);
 }
 
-function performAction(action) {
+async function executeSelectedAction() {
+    const select = document.getElementById('actionSelect');
+    const action = select.value;
+    
+    if (!action) {
+        alert('Please select an action first');
+        return;
+    }
+
+    // Check if systemd is running before proceeding
+    const systemdRunning = await checkSystemdStatus();
+    if (!systemdRunning) {
+        alert('System service is not running. Please ensure systemd is active before proceeding.');
+        return;
+    }
+
     if (currentOperation) {
         alert('An operation is already in progress');
         return;
     }
 
+    // Handle reboot confirmations
+    if (action === 'system-reboot' || action === 'update-all-reboot') {
+        if (!confirm('Are you sure you want to reboot the system? This will disconnect all users and stop AIS-catcher.')) {
+            return;
+        }
+    }
+
+    currentAction = action;
     document.getElementById('progressOutput').innerHTML = '';
     document.getElementById('progressTitle').textContent = getActionTitle(action);
     updateStatus('Running');
     showProgress(true);
 
-    // For system-update, use the dedicated endpoint to always stream update-script logs.
+    // For system-update, use the dedicated endpoint to always stream update-script logs
     if (action === 'system-update') {
         currentOperation = new EventSource(`/update-script-logs`);
     } else {
@@ -312,29 +279,22 @@ function performAction(action) {
         } else if (data.type === 'status') {
             updateStatus(data.content);
         } else if (data.type === 'complete') {
-            // For non-system-update actions, complete the operation.
-            if (lastExecutedAction !== 'system-update') {
-                appendOutput('\nOperation completed successfully\n');
-                finishOperation('Completed', false);
-                if (data.reload) {
-                    appendOutput('\nSystem will reboot in 5 seconds...');
-                    setTimeout(() => window.location.reload(), 5000);
-                }
-            } else {
-                // For system-update, simply log that the update completed,
-                // but keep the connection open to display any further logs.
-                appendOutput('\nOperation completed, continuing to stream logs...\n');
+            appendOutput('\nOperation completed successfully\n');
+            if (data.reload) {
+                appendOutput('\nSystem will reboot in 5 seconds...');
+                setTimeout(() => window.location.reload(), 5000);
             }
+            finishOperation('Completed', false);
         } else if (data.type === 'error') {
             appendOutput('\nError: ' + data.content + '\n');
             finishOperation('Failed', true);
-            closeOperation();
         }
     };
 
     currentOperation.onerror = () => {
-        finishOperation('Connection Lost', true);
-        closeOperation();
+        if (currentAction) {  // Only show error if we haven't finished normally
+            finishOperation('Connection Lost', true);
+        }
     };
 }
 
@@ -348,38 +308,6 @@ function getActionTitle(action) {
         'system-reboot': 'System Reboot'
     };
     return titles[action] || 'System Operation';
-}
-
-function closeOperation() {
-    if (currentOperation) {
-        currentOperation.close();
-        currentOperation = null;
-    }
-}
-
-function cancelOperation() {
-    if (currentOperation && confirm('Are you sure you want to cancel the current operation?')) {
-        fetch('/system-action-cancel', {
-            method: 'POST',
-            credentials: 'same-origin'
-        }).then(() => {
-            appendOutput('\nOperation cancelled by user\n');
-            finishOperation('Cancelled', true);
-            closeOperation();
-        });
-    }
-}
-
-function confirmReboot() {
-    if (confirm('Are you sure you want to reboot the system? This will disconnect all users and stop AIS-catcher.')) {
-        performAction('system-reboot');
-    }
-}
-
-function confirmUpdateAll() {
-    if (confirm('Are you sure you want to perform all updates? This will update the system, update AIS-catcher, and then reboot. This may take several minutes.')) {
-        performAction('update-all');
-    }
 }
 </script>
 {{end}}

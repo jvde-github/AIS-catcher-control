@@ -165,6 +165,19 @@ func getActionScript(action string) (string, bool) {
 	return script, reload
 }
 
+// Add this new handler to check systemd status
+func systemdStatusHandler(w http.ResponseWriter, r *http.Request) {
+	isRunning := true
+	if !config.Docker {
+		cmd := exec.Command("systemctl", "is-active", "systemd")
+		err := cmd.Run()
+		isRunning = err == nil
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"isRunning": isRunning})
+}
+
 func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -172,7 +185,6 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -185,115 +197,109 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create a context that we can cancel
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
+	// Create unique identifier for this update script
+	scriptID := fmt.Sprintf("update-script-%d", time.Now().UnixNano())
+	unitName := scriptID + ".service"
 
-	// Create log file and wrap script
-	logFile := fmt.Sprintf("/tmp/%s.log", action)
+	// Use /tmp for unit file
+	unitFile := fmt.Sprintf("/tmp/%s", unitName)
+	unitContent := fmt.Sprintf(`[Unit]
+Description=AIS-catcher Update Script (%s)
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '%s'
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal`, scriptID, script)
 
-	// Create empty log file first
-	if err := ioutil.WriteFile(logFile, []byte(""), 0644); err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to create log file: %v", err))
+	// Write unit file
+	err := ioutil.WriteFile(unitFile, []byte(unitContent), 0644)
+	if err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to create unit file: %v", err))
 		return
 	}
-	defer os.Remove(logFile)
+	defer os.Remove(unitFile)
 
-	wrappedScript := fmt.Sprintf(`#!/bin/bash
-    # Start the update command in a new transient systemd unit.
-    # Its output will go to the journal.
-    systemd-run --unit=update-script -- /bin/bash -c '%s'
-    echo "Running as unit: update-script.service"
-    
-    # Follow the logs for update-script.service in real time.
-    journalctl -f -u update-script.service
-    
-    if [ $? -eq 0 ]; then
-        echo "Operation completed successfully"
-    else
-        echo "Operation failed"
-        exit 1
-    fi
-    `, script)
-
-	// Write script to temporary file
-	tmpfile := fmt.Sprintf("/tmp/%s.sh", action)
-	if err := ioutil.WriteFile(tmpfile, []byte(wrappedScript), 0755); err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to create script: %v", err))
+	// Copy unit file to systemd directory
+	copyCmd := exec.Command("sudo", "cp", unitFile, "/etc/systemd/system/")
+	if err := copyCmd.Run(); err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to install unit file: %v", err))
 		return
 	}
-	defer os.Remove(tmpfile)
+	defer exec.Command("sudo", "rm", "/etc/systemd/system/"+unitName).Run()
 
-	cmd := exec.Command("sudo", "bash", tmpfile)
+	// Reload systemd
+	reloadCmd := exec.Command("sudo", "systemctl", "daemon-reload")
+	if err := reloadCmd.Run(); err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to reload systemd: %v", err))
+		return
+	}
 
-	// Create pipes for stdout and stderr
+	// Start the unit
+	startCmd := exec.Command("sudo", "systemctl", "start", unitName)
+	if err := startCmd.Run(); err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to start update script: %v", err))
+		return
+	}
+
+	// Stream logs
+	cmd := exec.Command("journalctl", "-f", "-u", unitName, "--no-pager", "--output=cat")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		sendSSEError(w, flusher, fmt.Sprintf("Failed to create stdout pipe: %v", err))
 		return
 	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to create stderr pipe: %v", err))
-		return
-	}
 
-	// Start the command
 	if err := cmd.Start(); err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to start command: %v", err))
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to start journalctl: %v", err))
 		return
 	}
 
-	// Store the operation in our map
-	op := &OperationProgress{cmd: cmd, ctx: ctx, cancel: cancel}
-	activeOperations.Store(cmd.Process.Pid, op)
-	defer activeOperations.Delete(cmd.Process.Pid)
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 
-	// Create a WaitGroup to wait for both pipes to be processed
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	// Process stdout
+	// Monitor service status
 	go func() {
-		defer wg.Done()
-		reader := bufio.NewReader(stdout)
 		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err != io.EOF {
-					sendSSEMessage(w, flusher, "error", fmt.Sprintf("stdout error: %v", err))
-				}
+			select {
+			case <-ctx.Done():
 				return
+			case <-time.After(1 * time.Second):
+				status := getUnitStatus(unitName)
+				if status == "failed" {
+					sendSSEMessage(w, flusher, "error", "Service failed")
+					cancel()
+					return
+				} else if status == "inactive" || status == "dead" {
+					// Clean up the unit file
+					exec.Command("sudo", "systemctl", "disable", unitName).Run()
+					exec.Command("sudo", "rm", "/etc/systemd/system/"+unitName).Run()
+					exec.Command("sudo", "systemctl", "daemon-reload").Run()
+
+					sendSSEMessage(w, flusher, "complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
+					cancel()
+					return
+				}
 			}
-			sendSSEMessage(w, flusher, "output", line)
 		}
 	}()
 
-	// Process stderr
-	go func() {
-		defer wg.Done()
-		reader := bufio.NewReader(stderr)
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err != io.EOF {
-					sendSSEMessage(w, flusher, "error", fmt.Sprintf("stderr error: %v", err))
-				}
-				return
-			}
-			sendSSEMessage(w, flusher, "output", "Error: "+line)
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			sendSSEMessage(w, flusher, "output", scanner.Text())
 		}
-	}()
-
-	// Wait for command to complete
-	err = cmd.Wait()
-	wg.Wait()
-
-	if err != nil {
-		sendSSEMessage(w, flusher, "error", fmt.Sprintf("Command failed: %v", err))
-	} else {
-		sendSSEMessage(w, flusher, "complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
 	}
+}
+
+// Helper function to get systemd unit status
+func getUnitStatus(unit string) string {
+	cmd := exec.Command("systemctl", "is-active", unit)
+	output, _ := cmd.Output()
+	return strings.TrimSpace(string(output))
 }
 
 func systemActionCancelHandler(w http.ResponseWriter, r *http.Request) {
@@ -302,15 +308,18 @@ func systemActionCancelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	activeOperations.Range(func(key, value interface{}) bool {
-		if op, ok := value.(*OperationProgress); ok {
-			op.cancel()
-			if op.cmd.Process != nil {
-				op.cmd.Process.Kill()
+	// Find and stop all update-script services
+	cmd := exec.Command("systemctl", "list-units", "--type=service", "update-script-*", "--no-pager", "--no-legend")
+	output, err := cmd.Output()
+	if err == nil {
+		units := strings.Split(string(output), "\n")
+		for _, unit := range units {
+			if strings.TrimSpace(unit) != "" {
+				unitName := strings.Fields(unit)[0]
+				exec.Command("sudo", "systemctl", "stop", unitName).Run()
 			}
 		}
-		return true
-	})
+	}
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -1958,6 +1967,7 @@ func main() {
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
 	http.HandleFunc("/system", authMiddleware(systemInfoHandler))
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
+	http.HandleFunc("/systemd-status", authMiddleware(systemdStatusHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
 
