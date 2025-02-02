@@ -126,71 +126,53 @@ func getActionScript(action string) (string, bool) {
 
 	switch action {
 	case "system-update":
-		script = `
-            echo "Starting system update..."
-            apt-get update -y
-            echo "System update completed"`
+		script = `echo "Starting system update..." && \
+        apt-get update -y && \
+        echo "System update completed"`
 
 	case "ais-update-prebuilt":
-		script = `
-            echo "Starting AIS-catcher prebuilt update..."
-            echo "Downloading and executing installation script..."
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p
-            echo "AIS-catcher installation completed"`
+		script = `echo "Starting AIS-catcher prebuilt update..." && \
+        echo "Downloading and executing installation script..." && \
+        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
+        echo "AIS-catcher installation completed"`
 
 	case "ais-update-source":
-		script = `
-            echo "Starting AIS-catcher source update..."
-            echo "Downloading and executing installation script..."
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash
-            echo "AIS-catcher installation completed"`
+		script = `echo "Starting AIS-catcher source update..." && \
+        echo "Downloading and executing installation script..." && \
+        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash && \
+        echo "AIS-catcher installation completed"`
 
 	case "control-update":
-		script = `
-            echo "Starting AIS-catcher Control update..."
-            echo "Downloading and executing installation script..."
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash
-            echo "AIS-catcher Control installation completed"`
+		script = `echo "Starting AIS-catcher Control update..." && \
+        echo "Downloading and executing installation script..." && \
+        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
+        echo "AIS-catcher Control installation completed"`
 		reload = true
 
 	case "system-reboot":
-		script = `
-            echo "Initiating system reboot..."
-            reboot`
+		script = `echo "Initiating system reboot..." && reboot`
 		reload = true
 
 	case "update-all":
-		script = `
-            echo "Starting full system update..."
-            echo "Step 1: Installing AIS-catcher..."
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p
-            echo "AIS-catcher installation completed"
-            echo "Step 2: Installing AIS-catcher Control..."
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash
-            echo "Full system update completed"`
+		script = `echo "Starting full system update..." && \
+        echo "Step 1: Installing AIS-catcher..." && \
+        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
+        echo "Step 2: Installing AIS-catcher Control..." && \
+        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
+        echo "Full system update completed"`
 		reload = true
 
 	case "update-all-reboot":
-		script = `
-            echo "Starting full system update with reboot..."
-            echo "Step 1: Installing AIS-catcher..."
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p
-            echo "AIS-catcher installation completed"
-            echo "Step 2: Installing AIS-catcher Control..."
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash
-            echo "Full system update completed"
-            echo "Step 3: Preparing for reboot..."
-            reboot`
+		script = `echo "Starting full system update with reboot..." && \
+        echo "Step 1: Installing AIS-catcher..." && \
+        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
+        echo "Step 2: Installing AIS-catcher Control..." && \
+        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
+        echo "Full system update completed" && \
+        echo "Step 3: Preparing for reboot..." && \
+        reboot`
 		reload = true
 	}
-
-	// Wrap the script to ensure proper output capturing
-	script = fmt.Sprintf(`
-        exec 1> >(sed "s/^/[stdout] /")
-        exec 2> >(sed "s/^/[stderr] /" >&2)
-        set -x
-        %s
-    `, script)
 
 	return script, reload
 }
@@ -221,11 +203,14 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// Start the command with systemd-run
+	// Set proper unit properties for systemd-run
 	runCmd := exec.Command("systemd-run",
 		"--unit="+unitName,
-		"--collect", // Collect logs even after command finishes
-		"--pipe",    // Connect stdout/stderr to journal
+		"--property=Type=oneshot",
+		"--property=RemainAfterExit=yes",
+		"--property=StandardOutput=journal",
+		"--property=StandardError=journal",
+		"--collect",
 		"/bin/bash", "-c", script)
 
 	if err := runCmd.Start(); err != nil {
@@ -235,7 +220,11 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Start log streaming immediately
 	logChan := make(chan string, 100)
-	go streamJournalLogs(ctx, unitName, logChan)
+	go func() {
+		// Wait a brief moment for the unit to be created
+		time.Sleep(100 * time.Millisecond)
+		streamJournalLogs(ctx, unitName, logChan)
+	}()
 
 	// Monitor status and handle logs
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -246,7 +235,13 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case log := <-logChan:
-			sendSSEMessage(w, flusher, "output", log)
+			// Only send non-empty, relevant output
+			if log != "" && !strings.Contains(log, "pam_unix") &&
+				!strings.Contains(log, "Missing '='") &&
+				!strings.Contains(log, "PWD=") &&
+				!strings.Contains(log, "USER=root") {
+				sendSSEMessage(w, flusher, "output", log)
+			}
 		case <-ticker.C:
 			status := getUnitStatus(unitName)
 			if status == "inactive" || status == "dead" {
@@ -266,7 +261,12 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- string) {
-	cmd := exec.Command("journalctl", "-u", unitName, "-f", "--no-pager", "--output=cat")
+	cmd := exec.Command("journalctl",
+		"-u", unitName,
+		"-f",
+		"--no-pager",
+		"--output=cat")
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Printf("Failed to create stdout pipe: %v", err)
@@ -295,6 +295,7 @@ func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- stri
 		}
 	}
 }
+
 func getUnitExitStatus(unit string) int {
 	cmd := exec.Command("systemctl", "show", unit, "--property=ExecMainStatus")
 	output, err := cmd.Output()
