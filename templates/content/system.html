@@ -172,163 +172,162 @@
 </div>
 
 <script>
- // Add this to your existing script section, replacing the existing variables
-let currentOperation = null;
-let currentAction = null;
+  let currentOperation = null;
+  let currentAction = null;
 
-// Functions to control UI elements
-function showProgress(show = true) {
+  // Show or hide the progress display and update the execute button state.
+  function showProgress(show) {
     const display = document.getElementById('progressDisplay');
     const executeButton = document.getElementById('executeButton');
-    
     if (show) {
-        display.classList.remove('hidden');
-        executeButton.disabled = true;
-        executeButton.classList.add('opacity-50', 'cursor-not-allowed');
+      display.classList.remove('hidden');
+      executeButton.disabled = true;
+      executeButton.classList.add('opacity-50', 'cursor-not-allowed');
     } else {
-        display.classList.add('hidden');
-        executeButton.disabled = false;
-        executeButton.classList.remove('opacity-50', 'cursor-not-allowed');
+      display.classList.add('hidden');
+      executeButton.disabled = false;
+      executeButton.classList.remove('opacity-50', 'cursor-not-allowed');
     }
-}
+  }
 
-function appendOutput(text) {
+  // Append text to the progress output area, preserving scroll position.
+  function appendOutput(text) {
     const output = document.getElementById('progressOutput');
     const wasScrolledToBottom = output.scrollHeight - output.clientHeight <= output.scrollTop + 1;
     output.innerHTML += text.replace(/\n/g, '<br>');
     if (wasScrolledToBottom) {
-        output.scrollTop = output.scrollHeight;
+      output.scrollTop = output.scrollHeight;
     }
-}
+  }
 
-function updateStatus(status, isError = false) {
+  // Update the status badge with a message and change its color based on error state.
+  function updateStatus(status, isError = false) {
     const statusElement = document.getElementById('progressStatus');
     statusElement.className = `px-3 py-1 text-xs rounded-full ${
-        isError ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+      isError ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
     }`;
     statusElement.textContent = status;
-}
+  }
 
-async function checkProcessStatus() {
+  // Periodically check whether any update process is running.
+  async function checkProcessStatus() {
     try {
-        const response = await fetch('/check-system-run');
-        const data = await response.json();
-        
-        // Re-enable button and hide progress if there's an error or not running
-        if (data.error || !data.is_running) {
-            if (currentOperation) {
-                currentOperation.close();
-                currentOperation = null;
-            }
-            showProgress(false);
-        } else if (data.is_running) {
-            // Process is running, show progress and disable button
-            if (!currentOperation) {
-                currentOperation = new EventSource('/system-action-progress?action=check');
-                setupEventHandlers();
-            }
-            showProgress(true);
-            updateStatus(data.status);
-        }
-    } catch (error) {
-        // On any error, enable button and hide progress
+      const response = await fetch('/check-system-run');
+      const data = await response.json();
+
+      if (data.error || !data.is_running) {
         if (currentOperation) {
-            currentOperation.close();
-            currentOperation = null;
+          currentOperation.close();
+          currentOperation = null;
         }
         showProgress(false);
-        console.error('Error checking status:', error);
-    }
-}
-
-
-function setupEventHandlers() {
-    if (!currentOperation) return;
-    
-    currentOperation.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'output') {
-            appendOutput(data.content + '\n');
-        } else if (data.type === 'complete') {
-            appendOutput('\nOperation completed successfully\n');
-            if (data.content && JSON.parse(data.content).reload) {
-                appendOutput('\nSystem will reboot in 5 seconds...');
-                setTimeout(() => window.location.reload(), 5000);
-            }
-            finishOperation('Completed', false);
-        } else if (data.type === 'error') {
-            appendOutput('\nError: ' + data.content + '\n');
-            finishOperation('Failed', true);
+      } else if (data.is_running) {
+        if (!currentOperation) {
+          // Optionally, you can use a "check" action to monitor an already running update.
+          currentOperation = new EventSource('/system-action-progress?action=check');
+          setupEventHandlers();
         }
+        showProgress(true);
+        updateStatus(data.status);
+      }
+    } catch (error) {
+      if (currentOperation) {
+        currentOperation.close();
+        currentOperation = null;
+      }
+      showProgress(false);
+      console.error('Error checking process status:', error);
+    }
+  }
+
+  // Setup EventSource event handlers to process messages from the backend.
+  function setupEventHandlers() {
+    if (!currentOperation) return;
+    currentOperation.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'output') {
+        appendOutput(data.content + '\n');
+      } else if (data.type === 'complete') {
+        appendOutput('\nOperation completed successfully.\n');
+        // If the response indicates a reboot is needed, notify the user.
+        const content = JSON.parse(data.content);
+        if (content.reload) {
+          appendOutput('\nSystem will reboot in 5 seconds...');
+          setTimeout(() => window.location.reload(), 5000);
+        }
+        finishOperation('Completed', false);
+      } else if (data.type === 'error') {
+        appendOutput('\nError: ' + data.content + '\n');
+        finishOperation('Failed', true);
+      }
     };
 
     currentOperation.onerror = () => {
-        currentOperation.close();
-        currentOperation = null;
-        checkProcessStatus(); // Recheck status after error
+      currentOperation.close();
+      currentOperation = null;
+      checkProcessStatus();
     };
-}
+  }
 
-function finishOperation(status, isError = false) {
+  // Clean up the current operation and re-enable the execute button.
+  function finishOperation(status, isError = false) {
     updateStatus(status, isError);
     if (currentOperation) {
-        currentOperation.close();
-        currentOperation = null;
+      currentOperation.close();
+      currentOperation = null;
     }
     currentAction = null;
-    
     const executeButton = document.getElementById('executeButton');
     executeButton.disabled = false;
     executeButton.classList.remove('opacity-50', 'cursor-not-allowed');
-}
+  }
 
-async function executeSelectedAction() {
+  // When the user clicks "Execute", start the requested action.
+  async function executeSelectedAction() {
     const select = document.getElementById('actionSelect');
     const action = select.value;
-    
     if (!action) {
-        alert('Please select an action first');
-        return;
+      alert('Please select an action first.');
+      return;
     }
-
     if (currentOperation) {
-        alert('An operation is already in progress');
-        return;
+      alert('An operation is already in progress.');
+      return;
     }
-
     if (action === 'system-reboot' || action === 'update-all-reboot') {
-        if (!confirm('Are you sure you want to reboot the system? This will disconnect all users and stop AIS-catcher.')) {
-            return;
-        }
+      if (!confirm('Are you sure you want to reboot the system? This will disconnect all users and stop AIS-catcher.')) {
+        return;
+      }
     }
-
     currentAction = action;
     document.getElementById('progressOutput').innerHTML = '';
     document.getElementById('progressTitle').textContent = getActionTitle(action);
     updateStatus('Running');
     showProgress(true);
 
+    // Open an EventSource connection with the selected action.
     currentOperation = new EventSource(`/system-action-progress?action=${action}`);
     setupEventHandlers();
-}
+  }
 
-function getActionTitle(action) {
+  // Map the action value to a more user-friendly title.
+  function getActionTitle(action) {
     const titles = {
-        'system-update': 'System Update',
-        'ais-update-prebuilt': 'AIS-catcher Update (Pre-built)',
-        'ais-update-source': 'AIS-catcher Update (Source)',
-        'control-update': 'AIS-catcher Control Update',
-        'update-all-reboot': 'Full System Update & Reboot',
-        'system-reboot': 'System Reboot'
+      'system-update': 'System Update',
+      'ais-update-prebuilt': 'AIS-catcher Update (Pre-built)',
+      'ais-update-source': 'AIS-catcher Update (Source)',
+      'control-update': 'AIS-catcher Control Update',
+      'update-all-reboot': 'Full System Update & Reboot',
+      'system-reboot': 'System Reboot'
     };
     return titles[action] || 'System Operation';
-}
+  }
 
-// Start checking status when page loads
-document.addEventListener('DOMContentLoaded', () => {
+  // Begin checking status once the page is fully loaded.
+  document.addEventListener('DOMContentLoaded', () => {
     checkProcessStatus();
-    setInterval(checkProcessStatus, 1000); 
-});
+    setInterval(checkProcessStatus, 1000);
+  });
 </script>
+
 {{end}}

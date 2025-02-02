@@ -177,6 +177,15 @@ func getActionScript(action string) (string, bool) {
 	return script, reload
 }
 
+func isUpdateInProgress() bool {
+	cmd := exec.Command("systemctl", "list-units", "--type=service", "ais-update-*", "--state=active,activating", "--no-legend")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(output)) != ""
+}
+
 func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -190,27 +199,25 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 
 	action := r.URL.Query().Get("action")
 	script, reload := getActionScript(action)
-
 	if script == "" {
 		http.Error(w, "Invalid action", http.StatusBadRequest)
 		return
 	}
 
-	// Check if an update is already running
-	status := getUnitStatus("ais-update")
-	if status == "active" || status == "activating" {
+	// If any update unit is already active, don’t allow a new one.
+	if isUpdateInProgress() {
 		sendSSEError(w, flusher, "Another update is already in progress")
 		return
 	}
 
-	// Create context with cancellation
+	// Generate a unique unit name (e.g. using a timestamp)
+	unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
+
+	// Create a cancellable context for log streaming
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// Use fixed unit name
-	const unitName = "ais-update"
-
-	// Set proper unit properties for systemd-run
+	// Run systemd-run with the unique unit name
 	runCmd := exec.Command("systemd-run",
 		"--unit="+unitName,
 		"--property=Type=oneshot",
@@ -219,21 +226,18 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		"--property=StandardError=journal",
 		"--collect",
 		"/bin/bash", "-c", script)
-
 	if err := runCmd.Start(); err != nil {
 		sendSSEError(w, flusher, fmt.Sprintf("Failed to start command: %v", err))
 		return
 	}
 
-	// Start log streaming immediately
+	// Start streaming journal logs for this specific unit
 	logChan := make(chan string, 100)
 	go func() {
-		// Wait a brief moment for the unit to be created
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond) // Allow unit to be created
 		streamJournalLogs(ctx, unitName, logChan)
 	}()
 
-	// Monitor status and handle logs
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -242,7 +246,7 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case log := <-logChan:
-			// Only send non-empty, relevant output
+			// Filter out unwanted log lines
 			if log != "" && !strings.Contains(log, "pam_unix") &&
 				!strings.Contains(log, "Missing '='") &&
 				!strings.Contains(log, "PWD=") &&
@@ -252,7 +256,6 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		case <-ticker.C:
 			status := getUnitStatus(unitName)
 			if status == "inactive" || status == "dead" {
-				// Check exit status
 				if getUnitExitStatus(unitName) == 0 {
 					sendSSEMessage(w, flusher, "complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
 				} else {
@@ -273,7 +276,7 @@ func checkSystemRunHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("systemctl", "is-active", "ais-update")
+	cmd := exec.Command("systemctl", "list-units", "--type=service", "ais-update-*", "--state=active,activating", "--no-legend")
 	output, err := cmd.Output()
 	status := strings.TrimSpace(string(output))
 
@@ -282,10 +285,9 @@ func checkSystemRunHandler(w http.ResponseWriter, r *http.Request) {
 		Status    string `json:"status"`
 		Error     string `json:"error,omitempty"`
 	}{
-		IsRunning: status == "active" || status == "activating",
+		IsRunning: status != "",
 		Status:    status,
 	}
-
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			response.Error = string(exitErr.Stderr)
@@ -293,7 +295,6 @@ func checkSystemRunHandler(w http.ResponseWriter, r *http.Request) {
 			response.Error = err.Error()
 		}
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
