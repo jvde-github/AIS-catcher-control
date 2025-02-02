@@ -126,7 +126,7 @@ func getActionScript(action string) (string, bool) {
 
 	switch action {
 	case "system-update":
-		script = "apt-get update -y"
+		script = "stdbuf -oL apt-get update -y"
 
 	case "ais-update-prebuilt":
 		script = `wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p`
