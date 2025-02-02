@@ -177,15 +177,6 @@ func getActionScript(action string) (string, bool) {
 	return script, reload
 }
 
-func isUpdateInProgress() bool {
-	cmd := exec.Command("systemctl", "list-units", "--type=service", "ais-update-*", "--state=active,activating", "--no-legend")
-	output, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(string(output)) != ""
-}
-
 func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -199,84 +190,52 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 
 	action := r.URL.Query().Get("action")
 	script, reload := getActionScript(action)
+
 	if script == "" {
 		http.Error(w, "Invalid action", http.StatusBadRequest)
 		return
 	}
 
-	// If any update unit is already active, don't allow a new one
-	if isUpdateInProgress() {
-		sendSSEError(w, flusher, "Another update is already in progress")
-		return
-	}
-
-	// Generate a unique unit name using timestamp
+	// Create a unique unit name for this execution
 	unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
 
-	// Create a cancellable context for log streaming
+	// Create context with cancellation
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// Create a temporary script file
-	tmpFile, err := ioutil.TempFile("", "update-script-*.sh")
-	if err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to create temporary script: %v", err))
-		return
-	}
-	defer os.Remove(tmpFile.Name())
-
-	// Add error handling and logging to the script
-	scriptWithLogging := fmt.Sprintf(`#!/bin/bash
-set -e
-exec 1> >(logger -s -t $(basename $0)) 2>&1
-
-%s
-`, script)
-
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(scriptWithLogging), 0755); err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to write script: %v", err))
-		return
-	}
-
-	// Run systemd-run with the unique unit name
+	// Set proper unit properties for systemd-run
 	runCmd := exec.Command("systemd-run",
 		"--unit="+unitName,
 		"--property=Type=oneshot",
+		"--property=RemainAfterExit=yes",
 		"--property=StandardOutput=journal",
 		"--property=StandardError=journal",
 		"--collect",
-		tmpFile.Name())
+		"/bin/bash", "-c", script)
 
 	if err := runCmd.Start(); err != nil {
 		sendSSEError(w, flusher, fmt.Sprintf("Failed to start command: %v", err))
 		return
 	}
 
-	// Start streaming journal logs for this specific unit
+	// Start log streaming immediately
 	logChan := make(chan string, 100)
-	errChan := make(chan error, 1)
 	go func() {
-		time.Sleep(100 * time.Millisecond) // Allow unit to be created
-		errChan <- streamJournalLogs(ctx, unitName, logChan)
+		// Wait a brief moment for the unit to be created
+		time.Sleep(100 * time.Millisecond)
+		streamJournalLogs(ctx, unitName, logChan)
 	}()
 
+	// Monitor status and handle logs
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
-
-	lastStatus := ""
-	retryCount := 0
-	maxRetries := 10
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case err := <-errChan:
-			if err != nil {
-				sendSSEError(w, flusher, fmt.Sprintf("Error streaming logs: %v", err))
-				return
-			}
 		case log := <-logChan:
+			// Only send non-empty, relevant output
 			if log != "" && !strings.Contains(log, "pam_unix") &&
 				!strings.Contains(log, "Missing '='") &&
 				!strings.Contains(log, "PWD=") &&
@@ -285,18 +244,9 @@ exec 1> >(logger -s -t $(basename $0)) 2>&1
 			}
 		case <-ticker.C:
 			status := getUnitStatus(unitName)
-
-			if status == lastStatus {
-				retryCount++
-			} else {
-				retryCount = 0
-				lastStatus = status
-			}
-
 			if status == "inactive" || status == "dead" {
+				// Check exit status
 				if getUnitExitStatus(unitName) == 0 {
-					// Send any remaining logs before completing
-					time.Sleep(500 * time.Millisecond)
 					sendSSEMessage(w, flusher, "complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
 				} else {
 					sendSSEMessage(w, flusher, "error", "Command failed")
@@ -306,60 +256,26 @@ exec 1> >(logger -s -t $(basename $0)) 2>&1
 				sendSSEMessage(w, flusher, "error", "Command failed")
 				return
 			}
-
-			// If we've seen the same status too many times, assume something's wrong
-			if retryCount > maxRetries {
-				sendSSEMessage(w, flusher, "error", "Operation timed out")
-				return
-			}
 		}
 	}
 }
 
-func checkSystemRunHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	cmd := exec.Command("systemctl", "list-units", "--type=service", "ais-update-*", "--state=active,activating", "--no-legend")
-	output, err := cmd.Output()
-	status := strings.TrimSpace(string(output))
-
-	response := struct {
-		IsRunning bool   `json:"is_running"`
-		Status    string `json:"status"`
-		Error     string `json:"error,omitempty"`
-	}{
-		IsRunning: status != "",
-		Status:    status,
-	}
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			response.Error = string(exitErr.Stderr)
-		} else {
-			response.Error = err.Error()
-		}
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- string) error {
+func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- string) {
 	cmd := exec.Command("journalctl",
 		"-u", unitName,
 		"-f",
 		"--no-pager",
-		"--output=cat",
-		"-n", "all")
+		"--output=cat")
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %v", err)
+		log.Printf("Failed to create stdout pipe: %v", err)
+		return
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start journalctl: %v", err)
+		log.Printf("Failed to start journalctl: %v", err)
+		return
 	}
 
 	go func() {
@@ -373,17 +289,11 @@ func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- stri
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			return nil
+			return
 		default:
 			logChan <- scanner.Text()
 		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("error reading logs: %v", err)
-	}
-
-	return nil
 }
 
 func getUnitExitStatus(unit string) int {
@@ -2074,7 +1984,6 @@ func main() {
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
-	http.HandleFunc("/check-system-run", authMiddleware(checkSystemRunHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)
