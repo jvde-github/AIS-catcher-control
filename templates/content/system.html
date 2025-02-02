@@ -180,6 +180,9 @@
 
 <script>
 let currentOperation = null;
+let startTime = null;
+let timerInterval = null;
+let lastExecutedAction = null;
 
 // Add change event listener to select element
 document.addEventListener('DOMContentLoaded', function() {
@@ -191,10 +194,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
-let startTime = null;
-let timerInterval = null;
-
-let lastExecutedAction = null;
 
 function executeSelectedAction() {
     const select = document.getElementById('actionSelect');
@@ -290,11 +289,6 @@ function performAction(action) {
         alert('An operation is already in progress');
         return;
     }
-    
-    // Check if this is a new action
-    if (lastExecutedAction !== action) {
-        lastExecutedAction = action;
-    }
 
     document.getElementById('progressOutput').innerHTML = '';
     document.getElementById('progressTitle').textContent = getActionTitle(action);
@@ -314,17 +308,12 @@ function performAction(action) {
             appendOutput('\nOperation completed successfully\n');
             finishOperation('Completed', false);
             
-            // First close the EventSource to stop status updates
             closeOperation();
             
-            // Handle reboot if needed
             if (data.reload) {
                 appendOutput('\nSystem will reboot in 5 seconds...');
                 setTimeout(() => window.location.reload(), 5000);
             }
-            
-            // Clear the selection
-            document.getElementById('actionSelect').value = '';
         } else if (data.type === 'error') {
             appendOutput('\nError: ' + data.content + '\n');
             finishOperation('Failed', true);

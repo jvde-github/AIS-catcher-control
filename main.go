@@ -120,6 +120,59 @@ type OperationProgress struct {
 
 var activeOperations sync.Map
 
+func getActionScript(action string) (string, bool) {
+	var script string
+	var reload bool
+
+	switch action {
+	case "system-update":
+		script = "apt update -y"
+
+	case "ais-update-prebuilt":
+		script = `wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p`
+
+	case "ais-update-source":
+		script = `wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash`
+
+	case "control-update":
+		script = `
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash && \
+            /usr/bin/AIS-catcher-control -overwrite-hashes && \
+            systemctl daemon-reload && \
+            systemctl restart ais-catcher-control.service`
+		reload = true
+
+	case "system-reboot":
+		script = "reboot"
+		reload = true
+
+	case "update-all":
+		script = `
+            echo "Installing AIS-catcher..." && \
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p && \
+            echo "Installing AIS-catcher Control..." && \
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash && \
+            echo "Running hash reset..." && \
+            /usr/bin/AIS-catcher-control -overwrite-hashes && \
+            echo "Restarting services..." && \
+            systemctl daemon-reload && \
+            systemctl restart ais-catcher.service && \
+            systemctl restart ais-catcher-control.service`
+		reload = true
+
+	case "update-all-reboot":
+		script = `
+            echo "Installing AIS-catcher..." && \
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p && \
+            echo "Installing AIS-catcher Control..." && \
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash && \
+            echo "Preparing for reboot..." && \
+            sudo reboot`
+		reload = true
+	}
+
+	return script, reload
+}
 func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -133,52 +186,44 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 
 	action := r.URL.Query().Get("action")
+	script, reload := getActionScript(action)
+
+	if script == "" {
+		http.Error(w, "Invalid action", http.StatusBadRequest)
+		return
+	}
 
 	// Create a context that we can cancel
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// Create command based on action
-	var cmd *exec.Cmd
-	var reload bool
+	// Create log file and wrap script
+	logFile := fmt.Sprintf("/tmp/%s.log", action)
 
-	switch action {
-	case "system-update":
-		cmd = exec.Command("apt", "update", "-y")
-	case "ais-update-prebuilt":
-		cmd = exec.Command("bash", "-c",
-			`wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p`)
-	case "ais-update-source":
-		cmd = exec.Command("bash", "-c",
-			`wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash`)
-	case "control-update":
-		cmd = exec.Command("bash", "-c",
-			`wget -qO-  https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash`)
-	case "system-reboot":
-		cmd = exec.Command("reboot")
-		reload = true
-	case "update-all":
-		cmd = exec.Command("bash", "-c", `
-            echo "Installing AIS-catcher..." &&
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p &&
-			echo "Installing AIS-catcher Control..." &&
-			wget -qO-  https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash 
-        `)
-		reload = true
-	case "update-all-reboot":
-		cmd = exec.Command("bash", "-c", `
-            echo "Installing AIS-catcher..." &&
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p &&
-			echo "Installing AIS-catcher Control..." &&
-			wget -qO-  https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash &&
-            echo "Preparing for reboot..." &&
-            sudo reboot
-        `)
-		reload = true
-	default:
-		http.Error(w, "Invalid action", http.StatusBadRequest)
+	// Create empty log file first
+	if err := ioutil.WriteFile(logFile, []byte(""), 0644); err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to create log file: %v", err))
 		return
 	}
+	defer os.Remove(logFile) // Clean up log file when done
+
+	wrappedScript := fmt.Sprintf(`#!/bin/bash
+(
+    %s
+) > %s 2>&1 &
+pid=$!
+disown -h $pid
+tail -f --pid=$pid %s`, script, logFile, logFile)
+
+	// Write script to temporary file
+	tmpfile := fmt.Sprintf("/tmp/%s.sh", action)
+	if err := ioutil.WriteFile(tmpfile, []byte(wrappedScript), 0755); err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to create script: %v", err))
+		return
+	}
+	defer os.Remove(tmpfile)
+
+	cmd := exec.Command("sudo", "bash", tmpfile)
 
 	// Create pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
@@ -1335,6 +1380,22 @@ func inputSelectionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func webviewerHandler(w http.ResponseWriter, r *http.Request) {
+
+	if true && configIntegrityError {
+		data := map[string]interface{}{
+			"Title":           "Configuration Integrity Error",
+			"ContentTemplate": "integrity-error",
+			"CssVersion":      cssVersion,
+			"JsVersion":       jsVersion,
+		}
+		err := templates.ExecuteTemplate(w, "layout.html", data)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("Template execution error for integrity-error: %v", err)
+		}
+		return
+	}
+
 	jsonContent, err := readConfigJSON()
 	if err != nil {
 		log.Printf("Error reading config.json: %v", err)
