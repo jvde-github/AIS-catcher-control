@@ -136,10 +136,7 @@ func getActionScript(action string) (string, bool) {
 
 	case "control-update":
 		script = `
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash && \
-            /usr/bin/AIS-catcher-control -overwrite-hashes && \
-            systemctl daemon-reload && \
-            systemctl restart ais-catcher-control.service`
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash`
 		reload = true
 
 	case "system-reboot":
@@ -151,13 +148,7 @@ func getActionScript(action string) (string, bool) {
             echo "Installing AIS-catcher..." && \
             wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | sudo bash -s -- _ -p && \
             echo "Installing AIS-catcher Control..." && \
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash && \
-            echo "Running hash reset..." && \
-            /usr/bin/AIS-catcher-control -overwrite-hashes && \
-            echo "Restarting services..." && \
-            systemctl daemon-reload && \
-            systemctl restart ais-catcher.service && \
-            systemctl restart ais-catcher-control.service`
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash`
 		reload = true
 
 	case "update-all-reboot":
