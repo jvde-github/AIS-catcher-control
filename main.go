@@ -200,19 +200,16 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	defer os.Remove(logFile)
 
 	wrappedScript := fmt.Sprintf(`#!/bin/bash
-    # Run the update command in a new transient systemd unit and pipe its output through tee to logFile
-    systemd-run --unit=update-script -- /bin/bash -c '%s' 2>&1 | tee %s
-    echo "Running as unit: update-script.service" >> %s
+    # Start the update command in a new transient systemd unit.
+    # Its output will go to the journal.
+    systemd-run --unit=update-script -- /bin/bash -c '%s'
+    echo "Running as unit: update-script.service"
     
-    # Get the PID of the systemd unit
-    pid=$(systemctl show -p MainPID update-script.service | cut -d= -f2)
+    # Follow the logs for update-script.service in real time.
+    journalctl -f -u update-script.service
     
-    # Follow the log file from the beginning while the process is running
-    tail -n +1 -f --pid=$pid %s
-    
-    # After process completion
-    echo "Operation completed successfully" >> %s
-    `, script, logFile, logFile, logFile, logFile)
+    echo "Operation completed successfully"
+    `, script)
 
 	// Write script to temporary file
 	tmpfile := fmt.Sprintf("/tmp/%s.sh", action)
