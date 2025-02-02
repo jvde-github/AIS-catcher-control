@@ -136,7 +136,6 @@ func getActionScript(action string) (string, bool) {
 
 	case "control-update":
 		script = `
-            # Stop the service before update
             systemctl stop ais-catcher-control && \
             # Run the update script
             wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash && \
@@ -209,12 +208,11 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	defer os.Remove(logFile) // Clean up log file when done
 
 	wrappedScript := fmt.Sprintf(`#!/bin/bash
-(
-    %s
-) > %s 2>&1 &
-pid=$!
-disown -h $pid
-tail -f --pid=$pid %s`, script, logFile, logFile)
+	# Launch the update command in a completely detached session.
+	nohup setsid bash -c '%s' > %s 2>&1 &
+	pid=$!
+	tail -f --pid=$pid %s
+	`, script, logFile, logFile)
 
 	// Write script to temporary file
 	tmpfile := fmt.Sprintf("/tmp/%s.sh", action)
