@@ -173,6 +173,7 @@ func getActionScript(action string) (string, bool) {
 
 	return script, reload
 }
+
 func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -205,14 +206,24 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		sendSSEError(w, flusher, fmt.Sprintf("Failed to create log file: %v", err))
 		return
 	}
-	defer os.Remove(logFile) // Clean up log file when done
+	defer os.Remove(logFile)
 
+	// Modify the wrapped script to capture and log the systemd-run output
 	wrappedScript := fmt.Sprintf(`#!/bin/bash
-	# Run the update command in a new transient systemd unit.
-	systemd-run --unit=update-script -- /bin/bash -c '%s' > %s 2>&1 &
-	pid=$!
-	tail -f --pid=$pid %s
-	`, script, logFile, logFile)
+    # Run the update command in a new transient systemd unit
+    UNIT_OUTPUT=$(systemd-run --unit=update-script -- /bin/bash -c '%s' 2>&1)
+    echo "$UNIT_OUTPUT" > %s
+    echo "Running as unit: update-script.service" >> %s
+    
+    # Get the PID of the systemd unit
+    pid=$(systemctl show -p MainPID update-script.service | cut -d= -f2)
+    
+    # Follow the log file while the process is running
+    tail -f --pid=$pid %s
+    
+    # After process completion
+    echo "Operation completed successfully" >> %s
+    `, script, logFile, logFile, logFile, logFile)
 
 	// Write script to temporary file
 	tmpfile := fmt.Sprintf("/tmp/%s.sh", action)
