@@ -275,12 +275,15 @@ function finishOperation(status, isError = false) {
     
     updateStatus(status, isError);
     
-    // Stop any ongoing EventSource
-    if (currentOperation) {
+    // For actions other than system-update, close the EventSource.
+    if (lastExecutedAction !== 'system-update' && currentOperation) {
         closeOperation();
     }
     
-    currentOperation = null;
+    // For system-update, we keep streaming the logs.
+    if (lastExecutedAction !== 'system-update') {
+        currentOperation = null;
+    }
 }
 
 function performAction(action) {
@@ -294,7 +297,12 @@ function performAction(action) {
     updateStatus('Running');
     showProgress(true);
 
-    currentOperation = new EventSource(`/system-action-progress?action=${action}`);
+    // For system-update, use the dedicated endpoint to always stream update-script logs.
+    if (action === 'system-update') {
+        currentOperation = new EventSource(`/update-script-logs`);
+    } else {
+        currentOperation = new EventSource(`/system-action-progress?action=${action}`);
+    }
     
     currentOperation.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -304,14 +312,18 @@ function performAction(action) {
         } else if (data.type === 'status') {
             updateStatus(data.content);
         } else if (data.type === 'complete') {
-            appendOutput('\nOperation completed successfully\n');
-            finishOperation('Completed', false);
-            
-            closeOperation();
-            
-            if (data.reload) {
-                appendOutput('\nSystem will reboot in 5 seconds...');
-                setTimeout(() => window.location.reload(), 5000);
+            // For non-system-update actions, complete the operation.
+            if (lastExecutedAction !== 'system-update') {
+                appendOutput('\nOperation completed successfully\n');
+                finishOperation('Completed', false);
+                if (data.reload) {
+                    appendOutput('\nSystem will reboot in 5 seconds...');
+                    setTimeout(() => window.location.reload(), 5000);
+                }
+            } else {
+                // For system-update, simply log that the update completed,
+                // but keep the connection open to display any further logs.
+                appendOutput('\nOperation completed, continuing to stream logs...\n');
             }
         } else if (data.type === 'error') {
             appendOutput('\nError: ' + data.content + '\n');
@@ -331,8 +343,9 @@ function getActionTitle(action) {
         'system-update': 'System Update',
         'ais-update-prebuilt': 'AIS-catcher Update (Pre-built)',
         'ais-update-source': 'AIS-catcher Update (Source)',
-        'system-reboot': 'System Reboot',
-        'update-all': 'Full System Update'
+        'control-update': 'AIS-catcher Control Update',
+        'update-all-reboot': 'Full System Update & Reboot',
+        'system-reboot': 'System Reboot'
     };
     return titles[action] || 'System Operation';
 }

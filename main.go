@@ -315,6 +315,52 @@ func systemActionCancelHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func updateScriptLogsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	ctx := r.Context()
+	// Tail the logs from update-script.service indefinitely.
+	cmd := exec.Command("journalctl", "-f", "-u", "update-script.service", "--no-pager", "--output=cat")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		http.Error(w, "Failed to create stdout pipe: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := cmd.Start(); err != nil {
+		http.Error(w, "Failed to start journalctl: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Ensure the command is killed if the client disconnects.
+	go func() {
+		<-ctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		// Send each log line as an SSE message.
+		line := scanner.Text()
+		fmt.Fprintf(w, "data: %s\n\n", strconv.Quote(line))
+		flusher.Flush()
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Printf("Error reading update-script logs: %v", err)
+	}
+}
+
 func sendSSEMessage(w http.ResponseWriter, flusher http.Flusher, messageType string, content string) {
 	fmt.Fprintf(w, "data: {\"type\": \"%s\", \"content\": %s}\n\n",
 		messageType, strconv.Quote(content))
@@ -1913,6 +1959,7 @@ func main() {
 	http.HandleFunc("/system", authMiddleware(systemInfoHandler))
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
+	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)
