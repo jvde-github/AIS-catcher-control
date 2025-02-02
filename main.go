@@ -208,7 +208,12 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
     # Follow the logs for update-script.service in real time.
     journalctl -f -u update-script.service
     
-    echo "Operation completed successfully"
+    if [ $? -eq 0 ]; then
+        echo "Operation completed successfully"
+    else
+        echo "Operation failed"
+        exit 1
+    fi
     `, script)
 
 	// Write script to temporary file
