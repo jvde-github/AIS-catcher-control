@@ -219,7 +219,7 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
     pid=$(systemctl show -p MainPID update-script.service | cut -d= -f2)
     
     # Follow the log file while the process is running
-    tail -f --pid=$pid %s
+    tail -n +1 -f --pid=$pid %s
     
     # After process completion
     echo "Operation completed successfully" >> %s
