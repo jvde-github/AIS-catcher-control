@@ -136,16 +136,7 @@ func getActionScript(action string) (string, bool) {
 
 	case "control-update":
 		script = `
-            systemctl stop ais-catcher-control && \
-            # Run the update script
-            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash && \
-            # Force reload systemd daemon
-            systemctl daemon-reload && \
-            # Start the service again
-            systemctl start ais-catcher-control && \
-            # Wait to ensure service is running
-            sleep 3 && \
-            systemctl is-active --quiet ais-catcher-control`
+            wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | sudo bash `
 		reload = true
 
 	case "system-reboot":
@@ -208,17 +199,15 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.Remove(logFile)
 
-	// Modify the wrapped script to capture and log the systemd-run output
 	wrappedScript := fmt.Sprintf(`#!/bin/bash
-    # Run the update command in a new transient systemd unit
-    UNIT_OUTPUT=$(systemd-run --unit=update-script -- /bin/bash -c '%s' 2>&1)
-    echo "$UNIT_OUTPUT" > %s
+    # Run the update command in a new transient systemd unit and pipe its output through tee to logFile
+    systemd-run --unit=update-script -- /bin/bash -c '%s' 2>&1 | tee %s
     echo "Running as unit: update-script.service" >> %s
     
     # Get the PID of the systemd unit
     pid=$(systemctl show -p MainPID update-script.service | cut -d= -f2)
     
-    # Follow the log file while the process is running
+    # Follow the log file from the beginning while the process is running
     tail -n +1 -f --pid=$pid %s
     
     # After process completion
