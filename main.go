@@ -211,7 +211,8 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate a unique unit name (e.g. using a timestamp)
-	unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
+	// unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
+	unitName := "ais-update"
 
 	// Create a cancellable context for log streaming
 	ctx, cancel := context.WithCancel(r.Context())
