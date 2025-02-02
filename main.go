@@ -204,19 +204,39 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If any update unit is already active, don’t allow a new one.
+	// If any update unit is already active, don't allow a new one
 	if isUpdateInProgress() {
 		sendSSEError(w, flusher, "Another update is already in progress")
 		return
 	}
 
-	// Generate a unique unit name (e.g. using a timestamp)
-	// unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
-	unitName := "ais-update"
+	// Generate a unique unit name using timestamp
+	unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
 
 	// Create a cancellable context for log streaming
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+
+	// Create a temporary script file
+	tmpFile, err := ioutil.TempFile("", "update-script-*.sh")
+	if err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to create temporary script: %v", err))
+		return
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Add error handling and logging to the script
+	scriptWithLogging := fmt.Sprintf(`#!/bin/bash
+set -e
+exec 1> >(logger -s -t $(basename $0)) 2>&1
+
+%s
+`, script)
+
+	if err := ioutil.WriteFile(tmpFile.Name(), []byte(scriptWithLogging), 0755); err != nil {
+		sendSSEError(w, flusher, fmt.Sprintf("Failed to write script: %v", err))
+		return
+	}
 
 	// Run systemd-run with the unique unit name
 	runCmd := exec.Command("systemd-run",
@@ -225,7 +245,8 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		"--property=StandardOutput=journal",
 		"--property=StandardError=journal",
 		"--collect",
-		"/bin/bash", "-c", script)
+		tmpFile.Name())
+
 	if err := runCmd.Start(); err != nil {
 		sendSSEError(w, flusher, fmt.Sprintf("Failed to start command: %v", err))
 		return
@@ -233,20 +254,29 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Start streaming journal logs for this specific unit
 	logChan := make(chan string, 100)
+	errChan := make(chan error, 1)
 	go func() {
 		time.Sleep(100 * time.Millisecond) // Allow unit to be created
-		streamJournalLogs(ctx, unitName, logChan)
+		errChan <- streamJournalLogs(ctx, unitName, logChan)
 	}()
 
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
+	lastStatus := ""
+	retryCount := 0
+	maxRetries := 10
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case err := <-errChan:
+			if err != nil {
+				sendSSEError(w, flusher, fmt.Sprintf("Error streaming logs: %v", err))
+				return
+			}
 		case log := <-logChan:
-			// Filter out unwanted log lines
 			if log != "" && !strings.Contains(log, "pam_unix") &&
 				!strings.Contains(log, "Missing '='") &&
 				!strings.Contains(log, "PWD=") &&
@@ -255,8 +285,18 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-ticker.C:
 			status := getUnitStatus(unitName)
+
+			if status == lastStatus {
+				retryCount++
+			} else {
+				retryCount = 0
+				lastStatus = status
+			}
+
 			if status == "inactive" || status == "dead" {
 				if getUnitExitStatus(unitName) == 0 {
+					// Send any remaining logs before completing
+					time.Sleep(500 * time.Millisecond)
 					sendSSEMessage(w, flusher, "complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
 				} else {
 					sendSSEMessage(w, flusher, "error", "Command failed")
@@ -264,6 +304,12 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			} else if status == "failed" {
 				sendSSEMessage(w, flusher, "error", "Command failed")
+				return
+			}
+
+			// If we've seen the same status too many times, assume something's wrong
+			if retryCount > maxRetries {
+				sendSSEMessage(w, flusher, "error", "Operation timed out")
 				return
 			}
 		}
@@ -299,22 +345,21 @@ func checkSystemRunHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- string) {
+func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- string) error {
 	cmd := exec.Command("journalctl",
 		"-u", unitName,
 		"-f",
 		"--no-pager",
-		"--output=cat")
+		"--output=cat",
+		"-n", "all")
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Printf("Failed to create stdout pipe: %v", err)
-		return
+		return fmt.Errorf("failed to create stdout pipe: %v", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		log.Printf("Failed to start journalctl: %v", err)
-		return
+		return fmt.Errorf("failed to start journalctl: %v", err)
 	}
 
 	go func() {
@@ -328,11 +373,17 @@ func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- stri
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		default:
 			logChan <- scanner.Text()
 		}
 	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading logs: %v", err)
+	}
+
+	return nil
 }
 
 func getUnitExitStatus(unit string) int {
