@@ -221,7 +221,6 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	runCmd := exec.Command("systemd-run",
 		"--unit="+unitName,
 		"--property=Type=oneshot",
-		"--property=RemainAfterExit=yes",
 		"--property=StandardOutput=journal",
 		"--property=StandardError=journal",
 		"--collect",
