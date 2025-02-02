@@ -209,15 +209,6 @@ function updateStatus(status, isError = false) {
     statusElement.textContent = status;
 }
 
-function finishOperation(status, isError = false) {
-    updateStatus(status, isError);
-    if (currentOperation) {
-        currentOperation.close();
-        currentOperation = null;
-    }
-    currentAction = null;
-    showProgress(false);
-}
 
 async function executeSelectedAction() {
     const select = document.getElementById('actionSelect');
@@ -227,7 +218,6 @@ async function executeSelectedAction() {
         alert('Please select an action first');
         return;
     }
-
 
     if (currentOperation) {
         alert('An operation is already in progress');
@@ -247,12 +237,7 @@ async function executeSelectedAction() {
     updateStatus('Running');
     showProgress(true);
 
-    // For system-update, use the dedicated endpoint to always stream update-script logs
-    if (action === 'system-update') {
-        currentOperation = new EventSource(`/update-script-logs`);
-    } else {
-        currentOperation = new EventSource(`/system-action-progress?action=${action}`);
-    }
+    currentOperation = new EventSource(`/system-action-progress?action=${action}`);
     
     currentOperation.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -275,10 +260,31 @@ async function executeSelectedAction() {
     };
 
     currentOperation.onerror = () => {
-        if (currentAction) {  // Only show error if we haven't finished normally
+        // Only show error if we haven't finished normally
+        if (currentAction) {
             finishOperation('Connection Lost', true);
         }
     };
+}
+
+function finishOperation(status, isError = false) {
+    updateStatus(status, isError);
+    if (currentOperation) {
+        currentOperation.close();
+        currentOperation = null;
+    }
+    currentAction = null;
+    
+    // Always re-enable the button
+    const executeButton = document.getElementById('executeButton');
+    executeButton.disabled = false;
+    executeButton.classList.remove('opacity-50', 'cursor-not-allowed');
+    
+    // Keep the progress display visible but mark it as complete
+    const progressDisplay = document.getElementById('progressDisplay');
+    if (progressDisplay) {
+        progressDisplay.classList.remove('hidden');
+    }
 }
 
 function getActionTitle(action) {

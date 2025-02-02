@@ -183,7 +183,6 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid action", http.StatusBadRequest)
 		return
 	}
-
 	// Create unique identifier for this update script
 	scriptID := fmt.Sprintf("update-script-%d", time.Now().UnixNano())
 	unitName := scriptID + ".service"
@@ -195,9 +194,9 @@ Description=AIS-catcher Update Script (%s)
 [Service]
 Type=oneshot
 ExecStart=/bin/bash -c '%s'
-RemainAfterExit=yes
 StandardOutput=journal
-StandardError=journal`, scriptID, script)
+StandardError=journal
+RemainAfterExit=yes`, scriptID, script)
 
 	// Write unit file
 	err := ioutil.WriteFile(unitFile, []byte(unitContent), 0644)
@@ -207,13 +206,18 @@ StandardError=journal`, scriptID, script)
 	}
 	defer os.Remove(unitFile)
 
-	// Copy unit file to systemd directory
+	// Copy unit file to systemd directory and enable it
 	copyCmd := exec.Command("sudo", "cp", unitFile, "/etc/systemd/system/")
 	if err := copyCmd.Run(); err != nil {
 		sendSSEError(w, flusher, fmt.Sprintf("Failed to install unit file: %v", err))
 		return
 	}
-	defer exec.Command("sudo", "rm", "/etc/systemd/system/"+unitName).Run()
+	defer func() {
+		exec.Command("sudo", "systemctl", "stop", unitName).Run()
+		exec.Command("sudo", "systemctl", "disable", unitName).Run()
+		exec.Command("sudo", "rm", "/etc/systemd/system/"+unitName).Run()
+		exec.Command("sudo", "systemctl", "daemon-reload").Run()
+	}()
 
 	// Reload systemd
 	reloadCmd := exec.Command("sudo", "systemctl", "daemon-reload")
@@ -229,45 +233,59 @@ StandardError=journal`, scriptID, script)
 		return
 	}
 
-	// Stream logs
+	// Create a context with cancellation
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	// Start log streaming in a goroutine
+	logChan := make(chan string, 100)
+	go streamJournalLogs(ctx, unitName, logChan)
+
+	// Monitor status and handle logs
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case log := <-logChan:
+			sendSSEMessage(w, flusher, "output", log)
+		case <-ticker.C:
+			status := getUnitStatus(unitName)
+			switch status {
+			case "failed":
+				sendSSEMessage(w, flusher, "error", "Service failed")
+				return
+			case "inactive", "dead":
+				if getUnitExitStatus(unitName) == 0 {
+					sendSSEMessage(w, flusher, "complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
+				} else {
+					sendSSEMessage(w, flusher, "error", "Service failed")
+				}
+				return
+			}
+		}
+	}
+}
+
+func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- string) {
 	cmd := exec.Command("journalctl", "-f", "-u", unitName, "--no-pager", "--output=cat")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to create stdout pipe: %v", err))
+		log.Printf("Failed to create stdout pipe: %v", err)
 		return
 	}
 
 	if err := cmd.Start(); err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to start journalctl: %v", err))
+		log.Printf("Failed to start journalctl: %v", err)
 		return
 	}
 
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	// Monitor service status
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(1 * time.Second):
-				status := getUnitStatus(unitName)
-				if status == "failed" {
-					sendSSEMessage(w, flusher, "error", "Service failed")
-					cancel()
-					return
-				} else if status == "inactive" || status == "dead" {
-					// Clean up the unit file
-					exec.Command("sudo", "systemctl", "disable", unitName).Run()
-					exec.Command("sudo", "rm", "/etc/systemd/system/"+unitName).Run()
-					exec.Command("sudo", "systemctl", "daemon-reload").Run()
-
-					sendSSEMessage(w, flusher, "complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
-					cancel()
-					return
-				}
-			}
+		<-ctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
 		}
 	}()
 
@@ -277,9 +295,23 @@ StandardError=journal`, scriptID, script)
 		case <-ctx.Done():
 			return
 		default:
-			sendSSEMessage(w, flusher, "output", scanner.Text())
+			logChan <- scanner.Text()
 		}
 	}
+}
+
+func getUnitExitStatus(unit string) int {
+	cmd := exec.Command("systemctl", "show", unit, "--property=ExecMainStatus")
+	output, err := cmd.Output()
+	if err != nil {
+		return -1
+	}
+	status := strings.TrimSpace(strings.TrimPrefix(string(output), "ExecMainStatus="))
+	exitStatus, err := strconv.Atoi(status)
+	if err != nil {
+		return -1
+	}
+	return exitStatus
 }
 
 // Helper function to get systemd unit status
