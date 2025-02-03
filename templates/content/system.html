@@ -16,6 +16,7 @@
         <option value="control-update">Upgrade AIS-catcher Control</option>
         <option value="update-all-reboot">Upgrade All and Reboot</option>
         <option value="system-reboot">System Reboot</option>
+        <option value="system-halt">System Halt</option>
       </select>
 
       <!-- Execute Button -->
@@ -295,7 +296,8 @@ function getActionTitle(action) {
         'ais-update-source': 'AIS-catcher Update (Source)',
         'control-update': 'AIS-catcher Control Update',
         'update-all-reboot': 'Full System Update & Reboot',
-        'system-reboot': 'System Reboot'
+        'system-reboot': 'System Reboot',
+        'system-halt': 'System Halt'
     };
     return titles[action] || 'System Operation';
 }
