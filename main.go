@@ -153,6 +153,10 @@ func getActionScript(action string) (string, bool) {
 		script = `echo "Initiating system reboot..." && reboot`
 		reload = true
 
+	case "system-halt":
+		script = `echo "Initiating system reboot..." && shutdown`
+		reload = true
+		
 	case "update-all":
 		script = `echo "Starting full system update..." && \
         echo "Step 1: Installing AIS-catcher..." && \
