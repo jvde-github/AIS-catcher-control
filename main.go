@@ -133,19 +133,19 @@ func getActionScript(action string) (string, bool) {
 	case "ais-update-prebuilt":
 		script = `echo "Starting AIS-catcher prebuilt update..." && \
         echo "Downloading and executing installation script..." && \
-        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
         echo "AIS-catcher installation completed"`
 
 	case "ais-update-source":
 		script = `echo "Starting AIS-catcher source update..." && \
         echo "Downloading and executing installation script..." && \
-        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash && \
         echo "AIS-catcher installation completed"`
 
 	case "control-update":
 		script = `echo "Starting AIS-catcher Control update..." && \
         echo "Downloading and executing installation script..." && \
-        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
         echo "AIS-catcher Control installation completed"`
 		reload = true
 
@@ -160,18 +160,18 @@ func getActionScript(action string) (string, bool) {
 	case "update-all":
 		script = `echo "Starting full system update..." && \
         echo "Step 1: Installing AIS-catcher..." && \
-        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
         echo "Step 2: Installing AIS-catcher Control..." && \
-        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
         echo "Full system update completed"`
 		reload = true
 
 	case "update-all-reboot":
 		script = `echo "Starting full system update with reboot..." && \
         echo "Step 1: Installing AIS-catcher..." && \
-        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
         echo "Step 2: Installing AIS-catcher Control..." && \
-        wget -qO- https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
         echo "Full system update completed" && \
         echo "Step 3: Preparing for reboot..." && \
         reboot`
