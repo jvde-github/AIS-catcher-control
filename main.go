@@ -1180,7 +1180,13 @@ func NewBroadcaster() *Broadcaster {
 }
 
 func (b *Broadcaster) Run() {
-	go b.collectJournalctlLogs()
+
+	if config.Docker {
+		go b.collectLogTxtLogs()
+	} else {
+		go b.collectJournalctlLogs()
+	}
+
 	go b.collectLogTxtLogs()
 
 	for {
