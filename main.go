@@ -1187,8 +1187,6 @@ func (b *Broadcaster) Run() {
 		go b.collectJournalctlLogs()
 	}
 
-	go b.collectLogTxtLogs()
-
 	for {
 		select {
 		case journalLine := <-b.journalChan:
