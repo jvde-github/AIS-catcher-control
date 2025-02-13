@@ -156,7 +156,7 @@ func getActionScript(action string) (string, bool) {
 	case "system-halt":
 		script = `echo "Initiating system reboot..." && shutdown`
 		reload = true
-		
+
 	case "update-all":
 		script = `echo "Starting full system update..." && \
         echo "Step 1: Installing AIS-catcher..." && \
@@ -973,6 +973,10 @@ func getServiceLogs(lines int) []string {
 }
 
 func getLogTxtLogs(lines int) []string {
+
+	if !config.Docker {
+		return []string{""}
+	}
 
 	cmd := exec.Command("tail", "-n", fmt.Sprintf("%d", lines), logTxtFilePath)
 
