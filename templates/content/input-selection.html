@@ -162,11 +162,11 @@
     const deviceInput = document.getElementById('device-input');
     const serialKeyInput = document.getElementById('serial-key');
 
-    deviceInput.value = device.input.toUpperCase() || '';
-    serialKeyInput.value = device.serial || '';
-
-    jsonData.input = device.input || '';
-    jsonData.serial = device.serial || '';
+    const changeEvent = new Event('change', { bubbles: true });
+    deviceInput.dispatchEvent(changeEvent);
+  
+    const inputEvent = new Event('input', { bubbles: true });
+    serialKeyInput.dispatchEvent(inputEvent);
 
     handleUnsavedChanges(true, 'Device selection has been updated. Please save your changes.');
     updateJsonTextarea();
