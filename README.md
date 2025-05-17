@@ -6,4 +6,3 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-cat
 ```
 
 Manage your system by visiting `http://<IP address RPI>:8110`
-
