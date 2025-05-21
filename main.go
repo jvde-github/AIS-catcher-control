@@ -561,6 +561,7 @@ func init() {
 		"templates/content/system.html",
 		"templates/content/edit-config-json.html",
 		"templates/content/edit-config-cmd.html",
+		"templates/content/tcp-servers.html",
 	)
 	if err != nil {
 		log.Fatalf("Failed to parse templates: %v", err)
@@ -864,6 +865,26 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Printf("Template execution error: %v", err)
+	}
+}
+
+func tcpServersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		log.Printf("Received GET request for /tcp-servers")
+		renderTemplateWithConfig(w, "TCP Servers", "tcp-servers")
+
+	} else if r.Method == http.MethodPost {
+		err := saveConfigJSON(w, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Configuration saved successfully."))
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
 	}
 }
 
@@ -1995,6 +2016,7 @@ func main() {
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
+	http.HandleFunc("/tcp-servers", authMiddleware(tcpServersHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)
