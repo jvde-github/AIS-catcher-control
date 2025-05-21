@@ -1,0 +1,367 @@
+{{ define "tcp-servers" }}
+<div id="tcp-servers-setup" class="max-w-4xl mx-auto p-4 md:p-6 bg-white rounded-lg shadow-md">
+    <h3 class="text-lg text-xl font-semibold text-gray-800 mb-4">TCP Server Configurations</h3>
+    <p class="text-gray-600 mb-6">Configure TCP servers to listen for incoming connections from other AIS sources.</p>
+
+    <form id="tcp-servers-form" class="space-y-6">
+        <div id="tcp-servers-configurations">
+            <!-- TCP Server Configuration Entries Will Appear Here -->
+        </div>
+
+        <div class="flex justify-end">
+            <button type="button" id="add-tcp-server-btn" onclick="addTcpServerConfiguration()"
+                class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors">Add TCP Server</button>
+        </div>
+    </form>
+
+    <hr class="my-6 border-gray-300">
+    <!-- Submit Button -->
+    <div class="flex justify-end">
+        <button id="save-button"
+            class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-200"
+            onclick="saveData()">Save</button>
+    </div>
+    
+    <!-- Collapsible Section -->
+    <div class="mt-4">
+        <!-- Toggle Button -->
+        <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-800 focus:outline-none">
+            <!-- Chevron Icon -->
+            <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
+                xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+            <span class="ml-2 font-medium">Show JSON Content</span>
+        </button>
+        <!-- Collapsible Content -->
+        <div id="json-content-container" class="mt-2 hidden">
+            <div id="json_content" name="json_content"
+                class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 focus:outline-none focus:ring-2 focus:ring-yellow-500 overflow-x-auto"
+                readonly>{{.JsonContent}}</div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Disable styles for inputs and selects when disabled */
+    input:disabled,
+    select:disabled {
+        background-color: #f9f9f9;
+        color: #a0aec0;
+        cursor: not-allowed;
+    }
+
+    .peer:disabled~div {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    label[for]:disabled {
+        color: #a0aec0;
+    }
+
+    @media (max-width: 640px) {
+        #tcp-servers-setup {
+            padding: 1rem;
+        }
+    }
+</style>
+
+<script>
+
+    function updateJsonTextarea() {
+        const jsonContent = document.getElementById('json_content');
+        if (jsonContent) {
+            jsonContent.textContent = JSON.stringify(jsonData, null, 2);
+        }
+    }
+
+    function addTcpServerConfiguration() {
+        const configurationsContainer = document.getElementById('tcp-servers-configurations');
+
+        if (!jsonData.tcp_listener) {
+            jsonData.tcp_listener = [];
+        }
+
+        const configIndex = jsonData.tcp_listener.length;
+
+        const configDiv = document.createElement('div');
+        configDiv.className = 'border p-4 rounded-md relative';
+        configDiv.id = `tcp-server-config-${configIndex}`;
+
+        // Remove Button
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'absolute top-2 right-2 text-red-500 hover:text-red-700';
+        removeBtn.onclick = () => removeTcpServerConfiguration(configIndex);
+        removeBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        `;
+        configDiv.appendChild(removeBtn);
+
+        // Port Field
+        configDiv.appendChild(createInputField(`tcp_listener[${configIndex}].port`, 'Port', 'number', '5012', true, { min: 1, max: 65535 }));
+
+        // Active Toggle
+        configDiv.appendChild(createToggleField(`tcp_listener[${configIndex}].active`, 'Enable Server'));
+
+        configurationsContainer.appendChild(configDiv);
+
+        // Initialize the corresponding JSON object
+        jsonData.tcp_listener.push({
+            port: 5012,
+            active: true
+        });
+
+        handleUnsavedChanges(true, 'Added a new TCP server configuration. Please save your changes.');
+        updateJsonTextarea();
+    }
+
+    function removeTcpServerConfiguration(index) {
+        const configDiv = document.getElementById(`tcp-server-config-${index}`);
+        if (configDiv) {
+            // Optional: Add confirmation before removing
+            if (!confirm('Are you sure you want to remove this TCP server configuration?')) {
+                return;
+            }
+
+            configDiv.remove();
+            jsonData.tcp_listener.splice(index, 1);
+            // Re-render configurations to update indices
+            renderTcpServerConfigurations();
+            handleUnsavedChanges(true, 'Removed a TCP server configuration. Please save your changes.');
+            updateJsonTextarea();
+        }
+    }
+
+    function createInputField(name, label, type, placeholder, required = false, attributes = {}) {
+        const fieldContainer = document.createElement('div');
+        fieldContainer.className = 'max-w-md mb-4';
+
+        const labelElement = document.createElement('label');
+        labelElement.htmlFor = name;
+        labelElement.className = 'block text-gray-700 text-sm font-medium mb-2';
+        labelElement.textContent = `${label}:`;
+        fieldContainer.appendChild(labelElement);
+
+        const input = document.createElement('input');
+        input.type = type;
+        input.id = name;
+        input.name = name;
+        input.placeholder = placeholder;
+        input.required = required;
+        input.className = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
+
+        // Set additional attributes
+        for (const attr in attributes) {
+            input.setAttribute(attr, attributes[attr]);
+        }
+
+        // Set initial value from jsonData
+        const value = getValueFromJsonTcpListenerPath(jsonData, name);
+        if (value !== undefined) {
+            input.value = value;
+        }
+
+        // Event Listener
+        input.addEventListener('input', (e) => {
+            let value = e.target.value;
+            if (type === 'number') {
+                value = parseInt(value, 10) || 0;
+            }
+            setValueInJsonTcpListenerPath(jsonData, name, value);
+            handleUnsavedChanges(true, 'TCP server configurations have changed. Please save your changes.');
+            updateJsonTextarea();
+        });
+
+        fieldContainer.appendChild(input);
+        return fieldContainer;
+    }
+
+    function createToggleField(name, label) {
+        const fieldContainer = document.createElement('div');
+        fieldContainer.className = 'max-w-md mb-4 flex items-center';
+
+        const labelElement = document.createElement('label');
+        labelElement.htmlFor = name;
+        labelElement.className = 'block text-gray-700 text-sm font-medium mr-2';
+        labelElement.textContent = `${label}:`;
+        fieldContainer.appendChild(labelElement);
+
+        const toggleContainer = document.createElement('label');
+        toggleContainer.className = 'relative inline-flex items-center cursor-pointer';
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = name;
+        input.name = name;
+        input.className = 'sr-only peer';
+
+        const toggleUI = document.createElement('div');
+        toggleUI.className = "w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500";
+
+        // Set initial value from jsonData
+        const value = getValueFromJsonTcpListenerPath(jsonData, name);
+        if (value !== undefined) {
+            input.checked = value;
+        }
+
+        // Event Listener
+        input.addEventListener('change', (e) => {
+            setValueInJsonTcpListenerPath(jsonData, name, e.target.checked);
+            handleUnsavedChanges(true, 'TCP server configurations have changed. Please save your changes.');
+            updateJsonTextarea();
+        });
+
+        toggleContainer.appendChild(input);
+        toggleContainer.appendChild(toggleUI);
+        fieldContainer.appendChild(toggleContainer);
+
+        return fieldContainer;
+    }
+
+    function getValueFromJsonTcpListenerPath(obj, path) {
+        // Expecting path in the format "tcp_listener[index].key"
+        const regex = /^tcp_listener\[(\d+)\]\.(\w+)$/;
+        const match = path.match(regex);
+        if (!match) return undefined;
+        const index = parseInt(match[1], 10);
+        const key = match[2];
+        
+        if (obj.tcp_listener && obj.tcp_listener[index]) {
+            const value = obj.tcp_listener[index][key];
+            // If key is 'active' and value is undefined, default to true
+            if (key === 'active' && value === undefined) {
+                return true;
+            }
+            return value;
+        }
+        
+        // If key is 'active' and config doesn't exist, default to true
+        if (key === 'active') {
+            return true;
+        }
+        
+        return undefined;
+    }
+
+    function setValueInJsonTcpListenerPath(obj, path, value) {
+        const regex = /^tcp_listener\[(\d+)\]\.(\w+)$/;
+        const match = path.match(regex);
+        if (!match) return;
+        const index = parseInt(match[1], 10);
+        const key = match[2];
+        if (!obj.tcp_listener) obj.tcp_listener = [];
+        if (!obj.tcp_listener[index]) {
+            // Initialize with default values if necessary
+            obj.tcp_listener[index] = {
+                port: 5012,
+                active: true
+            };
+        }
+        obj.tcp_listener[index][key] = value;
+    }
+
+    function renderTcpServerConfigurations() {
+        const configurationsContainer = document.getElementById('tcp-servers-configurations');
+        configurationsContainer.innerHTML = '';
+
+        if (!jsonData.tcp_listener || jsonData.tcp_listener.length === 0) {
+            return;
+        }
+
+        jsonData.tcp_listener.forEach((config, index) => {
+            const configDiv = document.createElement('div');
+            configDiv.className = 'border p-4 rounded-md relative';
+            configDiv.id = `tcp-server-config-${index}`;
+
+            // Remove Button
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'absolute top-2 right-2 text-red-500 hover:text-red-700';
+            removeBtn.onclick = () => removeTcpServerConfiguration(index);
+            removeBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            `;
+            configDiv.appendChild(removeBtn);
+
+            // Port Field
+            configDiv.appendChild(createInputField(`tcp_listener[${index}].port`, 'Port', 'number', '5012', true, { min: 1, max: 65535 }));
+
+            // Active Toggle
+            configDiv.appendChild(createToggleField(`tcp_listener[${index}].active`, 'Enable Server'));
+
+            configurationsContainer.appendChild(configDiv);
+        });
+
+        updateJsonTextarea();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Initialize JSON content display
+        const jsonTextarea = document.getElementById('json_content');
+
+        try {
+            jsonData = JSON.parse(jsonTextarea.innerText);
+        } catch (e) {
+            alert("Invalid JSON format. Please check the JSON content.");
+            console.error("JSON Parse Error:", e);
+            return;
+        }
+
+        // Ensure existing tcp_listener entries without 'active' property are set to true
+        if (jsonData.tcp_listener && Array.isArray(jsonData.tcp_listener)) {
+            jsonData.tcp_listener.forEach(config => {
+                if (config.active === undefined) {
+                    config.active = true;
+                }
+            });
+        }
+
+        // Render existing TCP server configurations
+        renderTcpServerConfigurations();
+    });
+
+    function toggleTcpServerJsonContent() {
+        const container = document.getElementById('tcp-server-json-content-container');
+        const icon = document.getElementById('tcp-server-chevron-icon');
+        if (container.classList.contains('hidden')) {
+            container.classList.remove('hidden');
+            icon.classList.add('rotate-180');
+            updateJsonTextarea(); // Ensure JSON is up-to-date when showing
+        } else {
+            container.classList.add('hidden');
+            icon.classList.remove('rotate-180');
+        }
+    }
+
+    // Form Validation Function
+    function validatejsonData() {
+        if (!jsonData.tcp_listener) return true;
+        
+        for (let i = 0; i < jsonData.tcp_listener.length; i++) {
+            const config = jsonData.tcp_listener[i];
+            if (!config.port || config.port <= 0 || config.port > 65535) {
+                alert(`Invalid port in TCP server configuration ${i + 1}. Please enter a valid port number (1-65535).`);
+                return false;
+            }
+        }
+        
+        // Check for duplicate ports
+        const ports = jsonData.tcp_listener.map(config => config.port);
+        const duplicatePorts = ports.filter((port, index) => ports.indexOf(port) !== index);
+        if (duplicatePorts.length > 0) {
+            alert(`Duplicate ports found: ${duplicatePorts.join(', ')}. Each TCP server must have a unique port.`);
+            return false;
+        }
+        
+        return true;
+    }
+</script>
+{{ end }}
