@@ -299,6 +299,136 @@ func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- stri
 	}
 }
 
+func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
+	var config map[string]interface{}
+
+	if err := json.Unmarshal(jsonData, &config); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %v", err)
+	}
+
+	// Validate it's an AIS-catcher config
+	if configType, ok := config["config"].(string); !ok || configType != "aiscatcher" {
+		return nil, fmt.Errorf("not a valid AIS-catcher configuration")
+	}
+
+	if version, ok := config["version"].(float64); !ok || int(version) != 1 {
+		return nil, fmt.Errorf("unsupported configuration version")
+	}
+
+	// If receivers array already exists, no migration needed
+	if _, exists := config["receiver"]; exists {
+		log.Println("Configuration already has receivers array - no migration needed")
+		return json.MarshalIndent(config, "", "  ")
+	}
+
+	// Receiver-related keys that should be moved to receivers array
+	// Based on the C++ Config.cpp parser
+	receiverKeys := []string{
+		"serial", "input", "verbose", "model", "meta", "own_mmsi",
+		"rtlsdr", "rtltcp", "airspy", "airspyhf", "sdrplay", "serialport",
+		"hackrf", "udpserver", "soapysdr", "nmea2000", "file", "zmq",
+		"spyserver", "wavfile",
+	}
+
+	// Extract receiver settings from root
+	receiverConfig := make(map[string]interface{})
+	hasReceiverSettings := false
+
+	for _, key := range receiverKeys {
+		if value, exists := config[key]; exists {
+			receiverConfig[key] = value
+			delete(config, key)
+			hasReceiverSettings = true
+		}
+	}
+
+	// Create receiver array (singular, not plural!)
+	if hasReceiverSettings {
+		// Set default input to "rtlsdr" if neither input nor serial are specified
+		_, hasInput := receiverConfig["input"]
+		_, hasSerial := receiverConfig["serial"]
+		if !hasInput && !hasSerial {
+			receiverConfig["input"] = "rtlsdr"
+			log.Println("No input or serial specified, defaulting to rtlsdr input")
+		}
+
+		config["receiver"] = []interface{}{receiverConfig}
+		log.Printf("Migrated receiver settings from root to receiver array")
+
+		// Log which keys were moved
+		var movedKeys []string
+		for key := range receiverConfig {
+			movedKeys = append(movedKeys, key)
+		}
+		log.Printf("Moved keys: %v", movedKeys)
+	} else {
+		// Create a default receiver with rtlsdr input
+		defaultReceiver := map[string]interface{}{
+			"input": "rtlsdr",
+		}
+		config["receiver"] = []interface{}{defaultReceiver}
+		log.Println("No receiver settings found in root - created default receiver array with rtlsdr input")
+	}
+
+	return json.MarshalIndent(config, "", "  ")
+}
+
+// Add this function to perform one-time migration at startup
+func migrateConfigAtStartup() error {
+	jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+	if err != nil {
+		return err
+	}
+
+	var configMap map[string]interface{}
+	if err := json.Unmarshal(jsonContent, &configMap); err != nil {
+		return nil // Not valid JSON, skip migration
+	}
+
+	// Check if it's an AIS-catcher config and lacks receivers array
+	if configType, ok := configMap["config"].(string); !ok || configType != "aiscatcher" {
+		return nil // Not an AIS-catcher config
+	}
+
+	if _, exists := configMap["receiver"]; exists {
+		return nil // Already has receiver array, no migration needed
+	}
+
+	// Migration needed - show before and after
+	log.Println("=== CONFIG MIGRATION NEEDED ===")
+	log.Println("Original configuration:")
+	log.Printf("%s", string(jsonContent))
+	log.Println("\n" + strings.Repeat("=", 50))
+
+	// Perform migration
+	migratedContent, err := MigrateAISCatcherConfig(jsonContent)
+	if err != nil {
+		log.Printf("Migration failed: %v", err)
+		return err
+	}
+
+	log.Println("Migrated configuration:")
+	log.Printf("%s", string(migratedContent))
+	log.Println(strings.Repeat("=", 50))
+
+	// Save migrated config back to file
+	if err := ioutil.WriteFile(configJSONFilePath, migratedContent, 0644); err != nil {
+		log.Printf("Failed to save migrated config: %v", err)
+		return err
+	}
+
+	log.Println("Migration completed and saved to file")
+
+	// Update hash to prevent integrity error
+	config.ConfigJSONHash = calculate32BitHash(string(migratedContent))
+	if err := saveControlSettings(); err != nil {
+		log.Printf("Failed to update config hash: %v", err)
+		return err
+	}
+
+	return nil
+}
+
 func getUnitExitStatus(unit string) int {
 	cmd := exec.Command("systemctl", "show", unit, "--property=ExecMainStatus")
 	output, err := cmd.Output()
@@ -1954,6 +2084,10 @@ func main() {
 	err = loadControlSettings()
 	if err != nil {
 		log.Fatal("Failed to load configuration:", err)
+	}
+
+	if err := migrateConfigAtStartup(); err != nil {
+		log.Printf("Config migration error: %v", err)
 	}
 
 	// message if running in Docker mode

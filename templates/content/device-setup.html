@@ -1,60 +1,26 @@
 {{ define "device-setup" }}
-<div id="input-selection" class="max-w-2xl mx-auto p-4 md:p-6 bg-white rounded-lg shadow-md">
-    <h3 class="text-lg text-xl font-semibold text-gray-800 mb-4">Input Selection</h3>
+<div id="device-setup" class="max-w-4xl mx-auto p-4 md:p-6 bg-white rounded-lg shadow-md">
+    <h3 class="text-lg text-xl font-semibold text-gray-800 mb-4">Device Configuration - Multiple Receivers</h3>
 
-    <form id="device-form" class="space-y-4">
-        <!-- Device Type Selection -->
-        <div class="space-y-4">
-            <div class="max-w-md mb-4">
-                <label for="device-input" class="block text-gray-700 text-sm font-medium mb-2">Device Type:</label>
-                <div class="flex gap-2">
-                    <select id="device-input" name="device_input" data-jsonpath="input"
-                        class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
-                        <option value="">Select Device</option>
-                        <option value="RTLSDR">RTLSDR</option>
-                        <option value="AIRSPY">AIRSPY</option>
-                        <option value="AIRSPYHF">AIRSPYHF</option>
-                        <option value="HACKRF">HACKRF</option>
-                        <option value="SERIALPORT">SERIAL</option>
-                        <option value="UDPSERVER">UDP Server</option>
-                        <option value="RTLTCP">TCP Client</option>
-                        <option value="SPYSERVER">SPYSERVER</option>
-                        <option value="NMEA2000">NMEA2000</option>
-                    </select>
-                    <button type="button" id="select-device-btn" onclick="openDeviceSelectionModal()"
-                        class="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition duration-200 flex items-center"
-                        title="Get">
-                        <!-- SVG icon -->
-                        <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px"
-                            fill="#FFFFFF">
-                            <path
-                                d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
+    <div id="receivers-container" class="space-y-6">
+        <!-- Receivers will be dynamically populated here -->
+    </div>
 
-            <!-- Serial Key -->
-            <div class="max-w-md mb-4" id="serialKeyContainer">
-                <label for="serial-key" class="block text-gray-700 text-sm font-medium mb-2">Serial Key:</label>
-                <input type="text" id="serial-key" name="serial_key" data-jsonpath="serial"
-                    placeholder="Optional Serial Key"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
-            </div>
-        </div>
-    </form>
-
-    <hr class="my-6 border-gray-300">
-
-    <div id="device-settings" class="mt-6"> </div>
-
-    <div class="flex justify-end mt-6">
-        <button id="save-button"
-            class="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition-colors w-auto">Save</button>
+    <!-- Add Receiver Button -->
+    <div class="mt-6 flex justify-between items-center">
+        <button type="button" id="add-receiver-btn"
+            class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition duration-200">
+            Add Receiver
+        </button>
+        <button type="button" id="save-button"
+            class="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition duration-200">
+            Save Configuration
+        </button>
     </div>
 
     <hr class="my-6 border-gray-300">
 
+    <!-- JSON Content Toggle -->
     <div class="mt-6">
         <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-800 focus:outline-none">
             <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
@@ -72,6 +38,7 @@
     </div>
 </div>
 
+<!-- Modals remain the same -->
 <div id="serial-device-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
     <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 max-w-2xl mx-4">
         <div class="flex justify-between items-center p-4 border-b">
@@ -122,6 +89,7 @@
         </div>
     </div>
 </div>
+
 <style>
     input:disabled,
     select:disabled {
@@ -135,10 +103,6 @@
         cursor: not-allowed;
     }
 
-    label[for]:disabled {
-        color: #a0aec0;
-    }
-
     @media (max-width: 640px) {
         #device-setup {
             padding: 1rem;
@@ -148,6 +112,9 @@
 
 <script>
     let isInitialLoading = true;
+    let jsonData = {};
+    let currentSerialModalReceiver = null;
+    let currentDeviceModalReceiver = null;
 
     const deviceConfigs = {
         RTLSDR: {
@@ -345,7 +312,9 @@
                         { value: "ws", label: "WS" },
                         { value: "wsmqtt", label: "WSMQTT" },
                         { value: "mqtt", label: "MQTT" },
-                        { value: "gpsd", label: "GPSD" }
+                        { value: "gpsd", label: "GPSD" },
+                        { value: "beast", label: "BEAST" },
+                        { value: "basestation", label: "BASESTATION" },
                     ]
                 },
                 {
@@ -661,83 +630,255 @@
         }
     };
 
-    function deepMerge(target, source) {
-        for (const key in source) {
-            if (
-                source[key] &&
-                typeof source[key] === 'object' &&
-                !Array.isArray(source[key])
-            ) {
-                if (!target[key] || typeof target[key] !== 'object') {
-                    target[key] = {};
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function () {
+        loadConfiguration();
+        setupEventListeners();
+    });
+
+    const isValueMatch = (requiredValue, currentValue) => {
+        if (Array.isArray(requiredValue)) {
+            return requiredValue.includes(currentValue);
+        }
+        return currentValue === requiredValue;
+    };
+
+    function loadConfiguration() {
+        try {
+            const jsonContent = document.getElementById('json_content').textContent;
+            jsonData = JSON.parse(jsonContent);
+
+            // Ensure receiver array exists
+            if (!jsonData.receiver || !Array.isArray(jsonData.receiver)) {
+                jsonData.receiver = [{ input: "rtlsdr" }];
+            }
+
+            // Ensure at least one receiver exists
+            if (jsonData.receiver.length === 0) {
+                jsonData.receiver.push({ input: "rtlsdr" });
+            }
+
+            renderReceivers();
+        } catch (error) {
+            console.error('Error loading configuration:', error);
+            jsonData = {
+                config: "aiscatcher",
+                version: 1,
+                receiver: [{ input: "rtlsdr" }]
+            };
+            renderReceivers();
+        }
+    }
+
+    function setupEventListeners() {
+        document.getElementById('add-receiver-btn').addEventListener('click', addReceiver);
+        document.getElementById('save-button').addEventListener('click', saveConfiguration);
+    }
+
+    function renderReceivers() {
+        const container = document.getElementById('receivers-container');
+        container.innerHTML = '';
+
+        jsonData.receiver.forEach((receiver, index) => {
+            const receiverElement = createReceiverElement(receiver, index);
+            container.appendChild(receiverElement);
+        });
+
+        updateJsonDisplay();
+    }
+
+    function createReceiverElement(receiver, index) {
+        const div = document.createElement('div');
+        div.className = 'bg-gray-50 p-6 rounded-lg border';
+        div.innerHTML = `
+            <div class="flex justify-between items-center mb-6">
+                <h4 class="text-lg font-semibold text-gray-800">Receiver ${index + 1}</h4>
+                <button type="button" onclick="removeReceiver(${index})" 
+                        class="text-red-600 hover:text-red-800 ${jsonData.receiver.length <= 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+                        ${jsonData.receiver.length <= 1 ? 'disabled' : ''}>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Device Type Selection -->
+                <div class="max-w-md">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Device Type:</label>
+                    <div class="flex gap-2">
+                        <select id="device-input-${index}" onchange="updateReceiverInput(${index}, this.value)"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
+                            <option value="">Select Device</option>
+                            <option value="rtlsdr" ${receiver.input === 'rtlsdr' ? 'selected' : ''}>RTLSDR</option>
+                            <option value="airspy" ${receiver.input === 'airspy' ? 'selected' : ''}>AIRSPY</option>
+                            <option value="airspyhf" ${receiver.input === 'airspyhf' ? 'selected' : ''}>AIRSPYHF</option>
+                            <option value="hackrf" ${receiver.input === 'hackrf' ? 'selected' : ''}>HACKRF</option>
+                            <option value="serialport" ${receiver.input === 'serialport' ? 'selected' : ''}>SERIAL</option>
+                            <option value="udpserver" ${receiver.input === 'udpserver' ? 'selected' : ''}>UDP Server</option>
+                            <option value="rtltcp" ${receiver.input === 'rtltcp' ? 'selected' : ''}>TCP Client</option>
+                            <option value="spyserver" ${receiver.input === 'spyserver' ? 'selected' : ''}>SPYSERVER</option>
+                            <option value="nmea2000" ${receiver.input === 'nmea2000' ? 'selected' : ''}>NMEA2000</option>
+                        </select>
+                        <button type="button" onclick="openDeviceSelectionModal(${index})"
+                            class="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition duration-200 flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="#FFFFFF">
+                                <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Serial Key -->
+                <div class="max-w-md" id="serialKeyContainer-${index}" style="${shouldShowSerial(receiver.input) ? '' : 'display: none;'}">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Serial Key:</label>
+                    <input type="text" placeholder="Optional Serial Key" value="${receiver.serial || ''}"
+                        onchange="updateReceiverField(${index}, 'serial', this.value)"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
+                </div>
+
+                <!-- Device-specific settings container -->
+                <div id="device-settings-${index}" class="mt-6">
+                    <!-- Device settings will be populated here -->
+                </div>
+            </div>
+        `;
+
+        // After creating the element, update device settings
+        setTimeout(() => {
+            if (receiver.input) {
+                updateDeviceSettings(receiver.input, index);
+            }
+        }, 0);
+
+        return div;
+    }
+
+    function shouldShowSerial(inputType) {
+        const deviceType = inputType?.toUpperCase();
+        return deviceConfigs[deviceType] && deviceConfigs[deviceType].hasSerial;
+    }
+
+    function updateReceiverInput(index, value) {
+        if (!jsonData.receiver[index]) {
+            jsonData.receiver[index] = {};
+        }
+
+        if (value === '') {
+            delete jsonData.receiver[index].input;
+        } else {
+            jsonData.receiver[index].input = value;
+        }
+
+        // Update serial key visibility
+        const serialContainer = document.getElementById(`serialKeyContainer-${index}`);
+        if (serialContainer) {
+            serialContainer.style.display = shouldShowSerial(value) ? 'block' : 'none';
+        }
+
+        updateDeviceSettings(value, index);
+        updateJsonDisplay();
+        handleUnsavedChanges(true, 'Receiver configuration updated. Please save your changes.');
+    }
+
+    function updateReceiverField(index, field, value) {
+        if (!jsonData.receiver[index]) {
+            jsonData.receiver[index] = {};
+        }
+
+        if (value === '') {
+            delete jsonData.receiver[index][field];
+        } else {
+            jsonData.receiver[index][field] = value;
+        }
+
+        updateJsonDisplay();
+        handleUnsavedChanges(true, 'Receiver configuration updated. Please save your changes.');
+    }
+
+    function updateDeviceSettings(deviceType, receiverIndex) {
+        const settingsContainer = document.getElementById(`device-settings-${receiverIndex}`);
+        if (!settingsContainer) return;
+
+        settingsContainer.innerHTML = '';
+
+        if (!deviceType || !deviceConfigs[deviceType.toUpperCase()]) return;
+
+        const config = deviceConfigs[deviceType.toUpperCase()];
+        const receiver = jsonData.receiver[receiverIndex];
+
+        // Add title
+        const title = document.createElement('h5');
+        title.className = 'text-md font-medium text-gray-700 mb-4';
+        title.textContent = config.title;
+        settingsContainer.appendChild(title);
+
+        // Add fields
+        const fieldsContainer = document.createElement('div');
+        fieldsContainer.className = 'space-y-4';
+
+        config.fields.forEach(field => {
+            const fieldElement = createDeviceField(field, receiverIndex, receiver);
+            fieldsContainer.appendChild(fieldElement);
+        });
+
+        settingsContainer.appendChild(fieldsContainer);
+
+        setTimeout(() => {
+            updateFieldDependencies(receiverIndex);
+        }, 10); // Small delay to ensure DOM elements are fully rendered
+    }
+
+    function updateFieldDependencies(receiverIndex) {
+        const receiver = jsonData.receiver[receiverIndex];
+        if (!receiver || !receiver.input) return;
+
+        const config = deviceConfigs[receiver.input.toUpperCase()];
+        if (!config) return;
+
+        // Update visibility for all fields with dependencies
+        config.fields.forEach(field => {
+            if (field.dependsOn) {
+                const controllingInput = document.getElementById(`${field.dependsOn.field}-${receiverIndex}`);
+                const dependentFieldContainer = document.getElementById(`${field.name}-${receiverIndex}`)?.closest('.max-w-md');
+
+                if (controllingInput && dependentFieldContainer) {
+                    const currentValue = controllingInput.type === 'checkbox' ? controllingInput.checked : controllingInput.value;
+                    const requiredValue = field.dependsOn.value;
+
+                    const shouldShow = isValueMatch(requiredValue, currentValue);
+
+                    dependentFieldContainer.style.display = shouldShow ? 'block' : 'none';
+
+                    // Enable/disable the input
+                    const dependentInput = document.getElementById(`${field.name}-${receiverIndex}`);
+                    if (dependentInput) {
+                        dependentInput.disabled = !shouldShow;
+                    }
                 }
-                deepMerge(target[key], source[key]);
-            } else {
-                target[key] = source[key];
             }
-        }
-        return target;
+        });
     }
 
-    function handleFieldChange(fieldId, value) {
-        console.log('Field change:', fieldId, value);
-        const input = document.getElementById(fieldId);
-        if (!input) return;
-        const jsonpath = input.dataset.jsonpath;
-        if (!jsonpath) return;
-
-        const pathSegments = jsonpath.split('.');
-        let current = jsonData;
-
-        for (let i = 0; i < pathSegments.length - 1; i++) {
-            const segment = pathSegments[i];
-            if (!current[segment] || typeof current[segment] !== 'object') {
-                current[segment] = {};
-            }
-            current = current[segment];
-        }
-
-        current[pathSegments[pathSegments.length - 1]] = value;
-
-        updateJsonContent();
-
-        if (!isInitialLoading) {
-            handleUnsavedChanges(true, `Settings have changed. Please save your changes.`);
-        }
-
-    }
-
-    function updateJsonContent() {
-        const jsonContent = document.getElementById('json_content');
-        if (jsonContent) {
-            jsonContent.textContent = JSON.stringify(jsonData, null, 2);
-        }
-    }
-
-    function createField(field) {
+    function createDeviceField(field, receiverIndex, receiver) {
         const fieldContainer = document.createElement('div');
         fieldContainer.className = 'max-w-md mb-4';
 
+        // Handle dependencies - initially hide dependent fields
         if (field.dependsOn) {
-            fieldContainer.dataset.dependsOn = field.dependsOn.field;
-            fieldContainer.dataset.dependsValue = field.dependsOn.value;
             fieldContainer.style.display = 'none';
         }
 
-        // Create the label
+        // Create label
         const label = document.createElement('label');
-        label.htmlFor = field.name;
         label.className = 'block text-gray-700 text-sm font-medium mb-2';
         label.textContent = `${field.label}:`;
         fieldContainer.appendChild(label);
 
-        // Create the input container
-        const inputContainer = document.createElement('div');
-        inputContainer.className = 'flex gap-2';
-
+        // Create input
         let input;
+        const fieldId = `${field.name}-${receiverIndex}`;
 
-        // Create input based on field type
         switch (field.type) {
             case 'select':
                 input = document.createElement('select');
@@ -753,65 +894,20 @@
             case 'toggle':
                 const toggleContainer = document.createElement('label');
                 toggleContainer.className = 'relative inline-flex items-center cursor-pointer';
-
                 input = document.createElement('input');
                 input.type = 'checkbox';
                 input.className = 'sr-only peer';
-
                 const toggleUI = document.createElement('div');
                 toggleUI.className = "w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500";
-
                 toggleContainer.appendChild(input);
                 toggleContainer.appendChild(toggleUI);
-                inputContainer.appendChild(toggleContainer);
-                break;
-
-            case 'number':
-                input = document.createElement('input');
-                input.type = 'number';
-                input.className = 'flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
-                input.placeholder = field.placeholder || '';
-
-                input.inputMode = 'decimal';
-
-                // Adjust pattern based on step value
-                if (field.step && field.step.toString().includes('.')) {
-                    const decimals = field.step.toString().split('.')[1].length;
-                    input.pattern = `^-?\\d*\\.?\\d{0,${decimals}}$`;
-                } else {
-                    input.pattern = '[0-9]*';
-                }
-
-                input.required = true;
-
-                input.onkeypress = (e) => {
-                    if (!/^[0-9]$/.test(e.key) &&
-                        !(e.key === '-' && e.target.value === '') &&
-                        !(e.key === '.' && !e.target.value.includes('.'))) {
-                        e.preventDefault();
-                    }
-                };
-
-                if (field.min !== undefined) input.min = field.min;
-                if (field.max !== undefined) input.max = field.max;
-                if (field.step !== undefined) input.step = field.step;
-
-                input.addEventListener('blur', () => {
-                    if (input.value && field.step) {
-                        const decimals = field.step.toString().split('.')[1]?.length || 0;
-                        const value = parseFloat(input.value);
-                        if (!isNaN(value)) {
-                            input.value = value.toFixed(decimals);
-                        }
-                    }
-                });
-
+                fieldContainer.appendChild(toggleContainer);
                 break;
 
             default:
                 input = document.createElement('input');
                 input.type = field.type;
-                input.className = 'flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
+                input.className = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
                 input.placeholder = field.placeholder || '';
                 if (field.min !== undefined) input.min = field.min;
                 if (field.max !== undefined) input.max = field.max;
@@ -820,16 +916,14 @@
         }
 
         if (field.type !== 'toggle') {
-            inputContainer.appendChild(input);
+            fieldContainer.appendChild(input);
         }
 
-        input.id = field.name;
-        input.name = field.name;
-        input.dataset.jsonpath = field.jsonpath;
+        input.id = fieldId;
 
-        // Set initial value from jsonData if available, otherwise use default value
+        // Set initial value
         const pathSegments = field.jsonpath.split('.');
-        let current = jsonData;
+        let current = receiver;
         for (let i = 0; i < pathSegments.length; i++) {
             if (current && current[pathSegments[i]] !== undefined) {
                 current = current[pathSegments[i]];
@@ -846,346 +940,123 @@
                 input.value = current;
             }
         } else if (field.defaultValue !== undefined) {
-            // Set default value in both the UI and jsonData
             if (field.type === 'toggle') {
                 input.checked = field.defaultValue;
             } else {
                 input.value = field.defaultValue;
             }
-
-            // Update jsonData with default value
-            let currentObj = jsonData;
-            for (let i = 0; i < pathSegments.length - 1; i++) {
-                if (!currentObj[pathSegments[i]]) {
-                    currentObj[pathSegments[i]] = {};
-                }
-                currentObj = currentObj[pathSegments[i]];
-            }
-            currentObj[pathSegments[pathSegments.length - 1]] = field.defaultValue;
         }
 
-        // Add event listeners to update jsonData
-        if (input) {
-            input.addEventListener('change', () => {
-                handleFieldChange(input.id, field.type === 'toggle' ? input.checked : input.value);
-            });
+        // Add event listeners - UPDATED to include dependency updates
+        input.addEventListener('change', () => {
+            const value = field.type === 'toggle' ? input.checked : input.value;
+            updateDeviceFieldValue(receiverIndex, field.jsonpath, value);
 
-            if (field.type === 'text' || field.type === 'number') {
-                input.addEventListener('input', () => {
-                    handleFieldChange(input.id, input.value);
-                });
-            }
-        }
+            // Update dependent fields when this field changes
+            updateFieldDependencies(receiverIndex);
+        });
 
-        // Add button if needed
-        if (field.withButton) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center';
-            button.setAttribute('onclick', field.withButton.onClick);
-            button.title = field.withButton.label || '';
-
-            if (field.withButton.icon) {
-                button.innerHTML = `${field.withButton.icon}${field.withButton.label ? `<span>${field.withButton.label}</span>` : ''}`;
-            } else {
-                button.textContent = field.withButton.label || '';
-            }
-
-            inputContainer.appendChild(button);
-        }
-
-        fieldContainer.appendChild(inputContainer);
         return fieldContainer;
     }
 
-    function updateDeviceSettings(deviceType) {
-        // Helper function to check value matches
-        const isValueMatch = (requiredValue, currentValue) => {
-            if (Array.isArray(requiredValue)) {
-                return requiredValue.includes(currentValue);
-            }
-            return currentValue === requiredValue;
-        };
+    function updateDeviceFieldValue(receiverIndex, jsonpath, value) {
+        const pathSegments = jsonpath.split('.');
+        let current = jsonData.receiver[receiverIndex];
 
-        // Handle serial container visibility
-        if (deviceType && deviceConfigs[deviceType] && 'hasSerial' in deviceConfigs[deviceType]) {
-            serialKeyContainer.style.display = deviceConfigs[deviceType].hasSerial ? 'block' : 'none';
-        } else {
-            serialKeyContainer.style.display = 'none';
+        for (let i = 0; i < pathSegments.length - 1; i++) {
+            const segment = pathSegments[i];
+            if (!current[segment] || typeof current[segment] !== 'object') {
+                current[segment] = {};
+            }
+            current = current[segment];
         }
 
-        const settingsContainer = document.getElementById('device-settings');
-        settingsContainer.innerHTML = '';
-
-        if (!deviceType || !deviceConfigs[deviceType]) return;
-
-        const config = deviceConfigs[deviceType];
-
-        // Add title
-        const title = document.createElement('h3');
-        title.className = 'text-xl font-semibold text-gray-800 mb-4';
-        title.textContent = config.title;
-        settingsContainer.appendChild(title);
-
-        // Add fields
-        const fieldsContainer = document.createElement('div');
-        fieldsContainer.className = 'space-y-4';
-
-        // Create a map of fields that control other fields
-        const controllingFields = new Map();
-        config.fields.forEach(field => {
-            if (field.dependsOn) {
-                const controller = field.dependsOn.field;
-                if (!controllingFields.has(controller)) {
-                    controllingFields.set(controller, []);
-                }
-                controllingFields.get(controller).push({
-                    fieldName: field.name,
-                    requiredValue: field.dependsOn.value
-                });
-            }
-        });
-
-        // First, create all fields
-        const allFields = new Map();
-        config.fields.forEach(field => {
-            const fieldElement = createField(field);
-            allFields.set(field.name, fieldElement);
-            fieldsContainer.appendChild(fieldElement);
-        });
-
-        // Then, set up values and event listeners
-        config.fields.forEach(field => {
-            const fieldElement = allFields.get(field.name);
-            const input = fieldElement.querySelector(`#${field.name}`);
-
-            if (input) {
-                // Set initial value from jsonData if available
-                const deviceKey = deviceType.toLowerCase();
-                let initialValue;
-
-                if (jsonData[deviceKey] && jsonData[deviceKey][field.name] !== undefined) {
-                    initialValue = jsonData[deviceKey][field.name];
-                } else if (field.defaultValue !== undefined) {
-                    initialValue = field.defaultValue;
-                } else if (field.type === 'select' && field.options.length > 0) {
-                    // For select elements, use the first option as default
-                    initialValue = field.options[0].value;
-                }
-
-                if (initialValue !== undefined) {
-                    if (field.type === 'toggle') {
-                        input.checked = initialValue;
-                    } else {
-                        input.value = initialValue;
-                    }
-                    // Trigger initial field change to update jsonData
-                    handleFieldChange(field.name, initialValue);
-                }
-
-                // Add change event listener for value changes
-                input.addEventListener('change', () => {
-                    handleFieldChange(field.name, field.type === 'toggle' ? input.checked : input.value);
-                });
-
-                // Add input event listener for text/number fields
-                if (field.type === 'text' || field.type === 'number') {
-                    input.addEventListener('input', () => {
-                        handleFieldChange(field.name, input.value);
-                    });
-                }
-
-                // Add dependency event listeners
-                if (controllingFields.has(field.name)) {
-                    const updateDependentFields = () => {
-                        const currentValue = field.type === 'toggle' ? input.checked : input.value;
-                        const dependentFields = controllingFields.get(field.name);
-
-                        dependentFields.forEach(({ fieldName, requiredValue }) => {
-                            const dependentElement = document.getElementById(fieldName)?.closest('.max-w-md');
-                            if (dependentElement) {
-                                const isVisible = isValueMatch(requiredValue, currentValue);
-                                dependentElement.style.display = isVisible ? 'block' : 'none';
-
-                                // Enable/disable the dependent input
-                                const dependentInput = document.getElementById(fieldName);
-                                if (dependentInput) {
-                                    dependentInput.disabled = !isVisible;
-                                }
-                            }
-                        });
-                    };
-
-                    // Add event listeners for both change and input events
-                    input.addEventListener('change', updateDependentFields);
-                    if (field.type === 'text' || field.type === 'number' || field.type === 'select') {
-                        input.addEventListener('input', updateDependentFields);
-                    }
-
-                    // Run the update immediately to set initial visibility
-                    updateDependentFields();
-                }
-            }
-        });
-
-        settingsContainer.appendChild(fieldsContainer);
-
-        // Final visibility update for all fields
-        config.fields.forEach(field => {
-            if (field.dependsOn) {
-                const controllingInput = document.getElementById(field.dependsOn.field);
-                const currentValue = controllingInput?.value;
-                const fieldElement = document.getElementById(field.name)?.closest('.max-w-md');
-
-                if (fieldElement && currentValue !== undefined) {
-                    const isVisible = isValueMatch(field.dependsOn.value, currentValue);
-                    fieldElement.style.display = isVisible ? 'block' : 'none';
-                    const input = document.getElementById(field.name);
-                    if (input) {
-                        input.disabled = !isVisible;
-                    }
-                }
-            }
-        });
-
-        // Trigger an initial update for all dependent fields
-        config.fields.forEach(field => {
-            if (controllingFields.has(field.name)) {
-                const input = document.getElementById(field.name);
-                if (input) {
-                    const event = new Event('change');
-                    input.dispatchEvent(event);
-                }
-            }
-        });
+        current[pathSegments[pathSegments.length - 1]] = value;
+        updateJsonDisplay();
+        handleUnsavedChanges(true, 'Device settings updated. Please save your changes.');
     }
 
-    function updateDeviceSettingsOld(deviceType) {
+    function addReceiver() {
+        jsonData.receiver.push({ input: "rtlsdr" });
+        renderReceivers();
+        handleUnsavedChanges(true, 'New receiver added. Please save your changes.');
+    }
 
-        if (deviceType && deviceConfigs[deviceType] && 'hasSerial' in deviceConfigs[deviceType]) {
-            serialKeyContainer.style.display = deviceConfigs[deviceType].hasSerial ? 'block' : 'none';
-        } else {
-            serialKeyContainer.style.display = 'none';
+    function removeReceiver(index) {
+        if (jsonData.receiver.length <= 1) {
+            alert('At least one receiver is required.');
+            return;
         }
 
-        const settingsContainer = document.getElementById('device-settings');
-        settingsContainer.innerHTML = '';
-
-        if (!deviceType || !deviceConfigs[deviceType]) return;
-
-        const config = deviceConfigs[deviceType];
-
-        // Add title
-        const title = document.createElement('h3');
-        title.className = 'text-xl font-semibold text-gray-800 mb-4';
-        title.textContent = config.title;
-        settingsContainer.appendChild(title);
-
-        // Add fields
-        const fieldsContainer = document.createElement('div');
-        fieldsContainer.className = 'space-y-4';
-
-        config.fields.forEach(field => {
-            const fieldElement = createField(field);
-            const input = fieldElement.querySelector(`#${field.name}`);
-
-            if (input) {
-                // Set initial value from jsonData if available
-                const deviceKey = deviceType.toLowerCase();
-                if (jsonData[deviceKey] && jsonData[deviceKey][field.name] !== undefined) {
-                    if (field.type === 'toggle') {
-                        input.checked = jsonData[deviceKey][field.name];
-                    } else {
-                        input.value = jsonData[deviceKey][field.name];
-                    }
-                }
-
-                // Add change event listener
-                input.addEventListener('change', () => {
-                    handleFieldChange(field.name, field.type === 'toggle' ? input.checked : input.value);
-                });
-
-                if (field.type === 'text' || field.type === 'number') {
-                    input.addEventListener('input', () => {
-                        handleFieldChange(field.name, input.value);
-                    });
-                }
-            }
-
-            fieldsContainer.appendChild(fieldElement);
-        });
-
-        settingsContainer.appendChild(fieldsContainer);
+        jsonData.receiver.splice(index, 1);
+        renderReceivers();
+        handleUnsavedChanges(true, 'Receiver removed. Please save your changes.');
     }
 
-
-    document.addEventListener('DOMContentLoaded', function () {
-
-        isInitialLoading = true;
-
+    function updateJsonDisplay() {
         const jsonContent = document.getElementById('json_content');
-        if (jsonContent && jsonContent.textContent.trim()) {
-            try {
-                jsonData = JSON.parse(jsonContent.textContent);
+        jsonContent.textContent = JSON.stringify(jsonData, null, 2);
+    }
 
-                const deviceInput = document.getElementById('device-input');
-                const serialKey = document.getElementById('serial-key');
+    function saveConfiguration() {
+        fetch('/device', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(jsonData)
+        })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.text();
+            })
+            .then(data => {
+                handleUnsavedChanges(false);
+                alert('Configuration saved successfully!');
+            })
+            .catch(error => {
+                console.error('Error saving configuration:', error);
+                alert('Error saving configuration: ' + error.message);
+            });
+    }
 
-                if (jsonData.input) {
-                    deviceInput.value = jsonData.input;
-                    updateDeviceSettings(jsonData.input);
-                }
+    // Keep your existing modal functions exactly as they are
+    function openSerialDeviceModal() {
+        fetchSerialDevices();
+        document.getElementById('serial-device-modal').classList.remove('hidden');
+    }
 
-                if (jsonData.serial) {
-                    serialKey.value = jsonData.serial;
-                }
-            } catch (e) {
-                console.error('Error parsing initial JSON content:', e);
-                jsonData = {};
-            }
+    function closeSerialDeviceModal() {
+        document.getElementById('serial-device-modal').classList.add('hidden');
+    }
+
+    function openDeviceSelectionModal(receiverIndex) {
+        currentDeviceModalReceiver = receiverIndex;
+        document.getElementById('device-selection-modal').classList.remove('hidden');
+        fetchDeviceList();
+    }
+
+    function closeDeviceSelectionModal() {
+        document.getElementById('device-selection-modal').classList.add('hidden');
+        currentDeviceModalReceiver = null;
+    }
+
+    // Keep all your existing modal and utility functions...
+    function toggleJsonContent() {
+        const container = document.getElementById('json-content-container');
+        const chevron = document.getElementById('chevron-icon');
+
+        if (container.classList.contains('hidden')) {
+            container.classList.remove('hidden');
+            chevron.classList.add('rotate-180');
+        } else {
+            container.classList.add('hidden');
+            chevron.classList.remove('rotate-180');
         }
+    }
 
-        const deviceInput = document.getElementById('device-input');
-        deviceInput.addEventListener('change', function (e) {
-            handleFieldChange('device-input', e.target.value);
-            document.getElementById('serial-key').value = '';
-            handleFieldChange('serial-key', '');
-            updateDeviceSettings(e.target.value);
-        });
-
-        const serialKey = document.getElementById('serial-key');
-        serialKey.addEventListener('input', function (e) {
-            handleFieldChange('serial-key', e.target.value);
-        });
-
-        updateJsonContent();
-
-        isInitialLoading = false;
-
-    });
-
-    function updateFieldVisibility(deviceType) {
-        if (!deviceType || !deviceConfigs[deviceType]) return;
-
-        const config = deviceConfigs[deviceType];
-        const fields = document.querySelectorAll('[data-depends-on]');
-
-        fields.forEach(field => {
-            const dependentField = field.dataset.dependsOn;
-            const requiredValue = field.dataset.dependsValue;
-            const controllingInput = document.getElementById(dependentField);
-
-            if (controllingInput) {
-                const shouldShow = controllingInput.value === requiredValue;
-                field.style.display = shouldShow ? 'block' : 'none';
-
-                // Disable inputs when hidden
-                const inputs = field.querySelectorAll('input, select');
-                inputs.forEach(input => {
-                    input.disabled = !shouldShow;
-                });
-            }
-        });
+    function handleUnsavedChanges(hasChanges, message = '') {
+        if (hasChanges && message) {
+            console.log(message);
+        }
     }
 
     function openSerialDeviceModal() {
@@ -1249,6 +1120,7 @@
         deviceSelectionModal.classList.add('hidden');
     }
 
+
     function fetchDeviceList() {
         const deviceList = document.getElementById('device-list');
         fetch('/device-list')
@@ -1307,5 +1179,7 @@
 
         updateDeviceSettings(device.input.toUpperCase(), true);
     }
+
+
 </script>
 {{ end }}
