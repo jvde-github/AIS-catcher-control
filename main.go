@@ -348,7 +348,7 @@ func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
 		_, hasInput := receiverConfig["input"]
 		_, hasSerial := receiverConfig["serial"]
 		if !hasInput && !hasSerial {
-			receiverConfig["input"] = "rtlsdr"
+			receiverConfig["input"] = "RTLSDR"
 			log.Println("No input or serial specified, defaulting to rtlsdr input")
 		}
 

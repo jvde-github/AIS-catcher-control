@@ -648,14 +648,13 @@
             const jsonContent = document.getElementById('json_content').textContent;
             jsonData = JSON.parse(jsonContent);
 
-            // Ensure receiver array exists
             if (!jsonData.receiver || !Array.isArray(jsonData.receiver)) {
-                jsonData.receiver = [{ input: "rtlsdr" }];
+                jsonData.receiver = [{ input: "RTLSDR" }];
             }
 
             // Ensure at least one receiver exists
             if (jsonData.receiver.length === 0) {
-                jsonData.receiver.push({ input: "rtlsdr" });
+                jsonData.receiver.push({ input: "RTLSDR" });
             }
 
             renderReceivers();
@@ -710,15 +709,15 @@
                         <select id="device-input-${index}" onchange="updateReceiverInput(${index}, this.value)"
                             class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
                             <option value="">Select Device</option>
-                            <option value="rtlsdr" ${receiver.input === 'rtlsdr' ? 'selected' : ''}>RTLSDR</option>
-                            <option value="airspy" ${receiver.input === 'airspy' ? 'selected' : ''}>AIRSPY</option>
-                            <option value="airspyhf" ${receiver.input === 'airspyhf' ? 'selected' : ''}>AIRSPYHF</option>
-                            <option value="hackrf" ${receiver.input === 'hackrf' ? 'selected' : ''}>HACKRF</option>
-                            <option value="serialport" ${receiver.input === 'serialport' ? 'selected' : ''}>SERIAL</option>
-                            <option value="udpserver" ${receiver.input === 'udpserver' ? 'selected' : ''}>UDP Server</option>
-                            <option value="rtltcp" ${receiver.input === 'rtltcp' ? 'selected' : ''}>TCP Client</option>
-                            <option value="spyserver" ${receiver.input === 'spyserver' ? 'selected' : ''}>SPYSERVER</option>
-                            <option value="nmea2000" ${receiver.input === 'nmea2000' ? 'selected' : ''}>NMEA2000</option>
+                            <option value="RTLSDR" ${receiver.input === 'RTLSDR' ? 'selected' : ''}>RTLSDR</option>
+                            <option value="AIRSPY" ${receiver.input === 'AIRSPY' ? 'selected' : ''}>AIRSPY</option>
+                            <option value="AIRSPYHF" ${receiver.input === 'AIRSPYHF' ? 'selected' : ''}>AIRSPYHF</option>
+                            <option value="HACKRF" ${receiver.input === 'HACKRF' ? 'selected' : ''}>HACKRF</option>
+                            <option value="SERIALPORT" ${receiver.input === 'SERIALPORT' ? 'selected' : ''}>SERIAL</option>
+                            <option value="UDPSERVER" ${receiver.input === 'UDPSERVER' ? 'selected' : ''}>UDP Server</option>
+                            <option value="RTLTCP" ${receiver.input === 'RTLTCP' ? 'selected' : ''}>TCP Client</option>
+                            <option value="SPYSERVER" ${receiver.input === 'SPYSERVER' ? 'selected' : ''}>SPYSERVER</option>
+                            <option value="NMEA2000" ${receiver.input === 'NMEA2000' ? 'selected' : ''}>NMEA2000</option>
                         </select>
                         <button type="button" onclick="openDeviceSelectionModal(${index})"
                             class="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition duration-200 flex items-center">
@@ -755,8 +754,7 @@
     }
 
     function shouldShowSerial(inputType) {
-        const deviceType = inputType?.toUpperCase();
-        return deviceConfigs[deviceType] && deviceConfigs[deviceType].hasSerial;
+        return deviceConfigs[inputType] && deviceConfigs[inputType].hasSerial;
     }
 
     function updateReceiverInput(index, value) {
@@ -796,15 +794,16 @@
         handleUnsavedChanges(true, 'Receiver configuration updated. Please save your changes.');
     }
 
+
     function updateDeviceSettings(deviceType, receiverIndex) {
         const settingsContainer = document.getElementById(`device-settings-${receiverIndex}`);
         if (!settingsContainer) return;
 
         settingsContainer.innerHTML = '';
 
-        if (!deviceType || !deviceConfigs[deviceType.toUpperCase()]) return;
+        if (!deviceType || !deviceConfigs[deviceType]) return;
 
-        const config = deviceConfigs[deviceType.toUpperCase()];
+        const config = deviceConfigs[deviceType];
         const receiver = jsonData.receiver[receiverIndex];
 
         // Add title
@@ -977,7 +976,7 @@
     }
 
     function addReceiver() {
-        jsonData.receiver.push({ input: "rtlsdr" });
+        jsonData.receiver.push({ input: "RTLSDR" });
         renderReceivers();
         handleUnsavedChanges(true, 'New receiver added. Please save your changes.');
     }
