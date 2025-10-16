@@ -130,7 +130,7 @@
         configDiv.appendChild(removeBtn);
 
         // URL Field
-        configDiv.appendChild(createSelectField(`http[${configIndex}].protocol`, 'Protocol', ['AISCATCHER', 'APRS', 'LIST', 'AIRFRAMES'], true));
+        configDiv.appendChild(createSelectField(`http[${configIndex}].protocol`, 'Protocol', ['AISCATCHER', 'APRS', 'LIST', 'AIRFRAMES', 'NMEA'], true));
 
         configDiv.appendChild(createInputField(`http[${configIndex}].url`, 'URL', 'text', 'https://example.com', true));
         configDiv.appendChild(createInputField(`http[${configIndex}].id`, 'ID', 'text', 'id', true));
@@ -368,7 +368,7 @@
             configDiv.appendChild(removeBtn);
 
             // Protocol Field
-            configDiv.appendChild(createSelectField(`http[${index}].protocol`, 'Protocol', ['AISCATCHER', 'APRS', 'LIST', 'AIRFRAMES'], true));
+            configDiv.appendChild(createSelectField(`http[${index}].protocol`, 'Protocol', ['AISCATCHER', 'APRS', 'LIST', 'AIRFRAMES', 'NMEA'], true));
 
             // URL Field
             configDiv.appendChild(createInputField(`http[${index}].url`, 'URL', 'text', 'https://example.com', true));
