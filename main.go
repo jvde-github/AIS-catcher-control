@@ -1225,7 +1225,7 @@ func parseJournalLine(line string) string {
 		// If JSON parsing fails, return the line as-is
 		return line
 	}
-	
+
 	// Extract timestamp and message
 	timestamp := ""
 	if ts, ok := entry["__REALTIME_TIMESTAMP"].(string); ok {
@@ -1235,21 +1235,21 @@ func parseJournalLine(line string) string {
 			timestamp = t.Format("2006-01-02T15:04:05-0700")
 		}
 	}
-	
+
 	message := ""
 	if msg, ok := entry["MESSAGE"].(string); ok {
 		message = msg
 	}
-	
+
 	if timestamp != "" && message != "" {
 		return timestamp + " " + message
 	}
-	
+
 	// Fallback to just the message if timestamp parsing failed
 	if message != "" {
 		return message
 	}
-	
+
 	return line
 }
 
