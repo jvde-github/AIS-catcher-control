@@ -268,7 +268,7 @@ func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- stri
 		"-u", unitName,
 		"-f",
 		"--no-pager",
-		"--output=cat")
+		"--output=json")
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -294,7 +294,7 @@ func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- stri
 		case <-ctx.Done():
 			return
 		default:
-			logChan <- scanner.Text()
+			logChan <- parseJournalLine(scanner.Text())
 		}
 	}
 }
@@ -485,7 +485,7 @@ func updateScriptLogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	// Tail the logs from update-script.service indefinitely.
-	cmd := exec.Command("journalctl", "-f", "-u", "update-script.service", "--no-pager", "--output=cat")
+	cmd := exec.Command("journalctl", "-f", "-u", "update-script.service", "--no-pager", "--output=json")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		http.Error(w, "Failed to create stdout pipe: "+err.Error(), http.StatusInternalServerError)
@@ -508,7 +508,7 @@ func updateScriptLogsHandler(w http.ResponseWriter, r *http.Request) {
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		// Send each log line as an SSE message.
-		line := scanner.Text()
+		line := parseJournalLine(scanner.Text())
 		fmt.Fprintf(w, "data: %s\n\n", strconv.Quote(line))
 		flusher.Flush()
 	}
@@ -1113,13 +1113,19 @@ func getServiceLogs(lines int) []string {
 		return []string{""}
 	}
 
-	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", fmt.Sprintf("%d", lines), "--no-pager", "--output=cat")
+	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", fmt.Sprintf("%d", lines), "--no-pager", "--output=json")
 	output, err := cmd.Output()
 	if err != nil {
 		return []string{"Unable to retrieve logs"}
 	}
 
-	logLines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	jsonLines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	logLines := make([]string, 0, len(jsonLines))
+	for _, line := range jsonLines {
+		if line != "" {
+			logLines = append(logLines, parseJournalLine(line))
+		}
+	}
 	return logLines
 }
 
@@ -1210,6 +1216,41 @@ func sanitizeLogLine(line string) string {
 		}
 	}
 	return sanitized.String()
+}
+
+func parseJournalLine(line string) string {
+	// Parse JSON output from journalctl
+	var entry map[string]interface{}
+	if err := json.Unmarshal([]byte(line), &entry); err != nil {
+		// If JSON parsing fails, return the line as-is
+		return line
+	}
+	
+	// Extract timestamp and message
+	timestamp := ""
+	if ts, ok := entry["__REALTIME_TIMESTAMP"].(string); ok {
+		// Convert microseconds timestamp to readable format
+		if usec, err := strconv.ParseInt(ts, 10, 64); err == nil {
+			t := time.Unix(usec/1000000, (usec%1000000)*1000)
+			timestamp = t.Format("2006-01-02T15:04:05-0700")
+		}
+	}
+	
+	message := ""
+	if msg, ok := entry["MESSAGE"].(string); ok {
+		message = msg
+	}
+	
+	if timestamp != "" && message != "" {
+		return timestamp + " " + message
+	}
+	
+	// Fallback to just the message if timestamp parsing failed
+	if message != "" {
+		return message
+	}
+	
+	return line
 }
 
 func readConfigJSON() ([]byte, error) {
@@ -1357,7 +1398,7 @@ func (b *Broadcaster) Run() {
 }
 
 func (b *Broadcaster) collectJournalctlLogs() {
-	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", "0", "-f", "--no-pager", "--output=cat")
+	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", "0", "-f", "--no-pager", "--output=json")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Printf("Error obtaining stdout pipe for journalctl: %v", err)
@@ -1371,7 +1412,7 @@ func (b *Broadcaster) collectJournalctlLogs() {
 
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
-		line := scanner.Text()
+		line := parseJournalLine(scanner.Text())
 		b.journalChan <- line
 	}
 
