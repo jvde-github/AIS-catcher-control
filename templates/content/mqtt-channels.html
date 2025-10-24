@@ -155,7 +155,7 @@
         const configDiv = document.getElementById(`mqtt-config-${index}`);
         if (configDiv) {
             // Optional: Add confirmation before removing
-            if (!confirm('Are you sure you want to remove this HTTP configuration?')) {
+            if (!confirm('Are you sure you want to remove this MQTT configuration?')) {
                 return;
             }
 
@@ -163,7 +163,7 @@
             jsonData.mqtt.splice(index, 1);
             // Re-render configurations to update indices
             renderMQTTConfigurations();
-            handleUnsavedChanges(true, 'Removed an HTTP configuration. Please save your changes.');
+            handleUnsavedChanges(true, 'Removed an MQTT configuration. Please save your changes.');
             updateJsonTextarea();
         }
     }
@@ -200,7 +200,7 @@
         // Event Listener
         input.addEventListener('input', (e) => {
             setValueInJsonMQTTPath(jsonData, name, e.target.value);
-            handleUnsavedChanges(true, 'HTTP configurations have changed. Please save your changes.');
+            handleUnsavedChanges(true, 'MQTT configurations have changed. Please save your changes.');
             updateJsonTextarea();
         });
 
@@ -243,7 +243,7 @@
         // Event Listener
         select.addEventListener('change', (e) => {
             setValueInJsonMQTTPath(jsonData, name, e.target.value);
-            handleUnsavedChanges(true, 'HTTP configurations have changed. Please save your changes.');
+            handleUnsavedChanges(true, 'MQTT configurations have changed. Please save your changes.');
             updateJsonTextarea();
         });
 
@@ -283,7 +283,7 @@
         // Event Listener
         input.addEventListener('change', (e) => {
             setValueInJsonMQTTPath(jsonData, name, e.target.checked);
-            handleUnsavedChanges(true, 'HTTP configurations have changed. Please save your changes.');
+            handleUnsavedChanges(true, 'MQTT configurations have changed. Please save your changes.');
             updateJsonTextarea();
         });
 
@@ -378,7 +378,7 @@
             return;
         }
 
-        // Render existing HTTP configurations
+        // Render existing MQTT configurations
         renderMQTTConfigurations();
 
 
@@ -439,7 +439,7 @@
 
         // Render the updated configurations
         renderMQTTConfigurations();
-        handleUnsavedChanges(true, 'Selected an HTTP configuration. Please save your changes.');
+        handleUnsavedChanges(true, 'Selected an MQTT configuration. Please save your changes.');
     }
 
     // Utility Function to Escape HTML (to prevent XSS)
@@ -459,11 +459,11 @@
         for (let i = 0; i < jsonData.mqtt.length; i++) {
             const config = jsonData.mqtt[i];
             if (!config.url || !isValidURL(config.url)) {
-                alert(`Invalid URL in HTTP configuration ${i + 1}. Please enter a valid URL.`);
+                alert(`Invalid URL in MQTT configuration ${i + 1}. Please enter a valid URL.`);
                 return false;
             }
             if (config.interval <= 0 || isNaN(config.interval)) {
-                alert(`Invalid interval in HTTP configuration ${i + 1}. Please enter a positive number.`);
+                alert(`Invalid interval in MQTT configuration ${i + 1}. Please enter a positive number.`);
                 return false;
             }
             // Add more validation rules as needed
