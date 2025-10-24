@@ -34,15 +34,9 @@ function populateChannels(channelType) {
 
   if (Array.isArray(jsonData[channelType])) {
     jsonData[channelType].forEach((channel, channelIndex) => {
-      const propertiesListId = `${channelType}-properties-list-${channelIndex}`;
-      const toggleButtonId = `${channelType}-toggle-btn-${channelIndex}`;
-
       const channelDiv = document.createElement('div');
       channelDiv.className = `${channelType}-channel border p-4 rounded-md mb-4`;
       channelDiv.setAttribute('data-index', channelIndex);
-
-      const openChannelKey = `${channelType}-${channelIndex}`;
-      const shouldShowProperties = openPropertiesChannels.has(openChannelKey);
 
       // Determine if the channel is active
       let isActive = true;
@@ -58,6 +52,81 @@ function populateChannels(channelType) {
         }
       }
 
+      // Build the fixed fields row based on channel type
+      let fixedFieldsHtml = '';
+      if (channelType === 'udp') {
+        fixedFieldsHtml = `
+        <!-- Fixed Fields Row for UDP -->
+        <div class="flex flex-wrap md:flex-nowrap items-end space-y-2 md:space-y-0 md:space-x-4 mt-4">
+          <!-- Broadcast Checkbox -->
+          <div class="flex flex-col w-1/2 md:w-1/4">
+            <label class="block text-gray-500 text-sm mb-1">Broadcast</label>
+            <div class="flex items-center h-[38px] px-4 py-2 border border-gray-300 rounded-md bg-white">
+              <input type="checkbox" class="${channelType}-broadcast-checkbox" ${channel.broadcast === true || channel.broadcast === 'true' || channel.broadcast === 'on' ? 'checked' : ''}>
+              <span class="ml-2 text-sm text-gray-600">${channel.broadcast === true || channel.broadcast === 'true' || channel.broadcast === 'on' ? 'On' : 'Off'}</span>
+            </div>
+          </div>
+          
+          <!-- Message Format Select -->
+          <div class="flex flex-col w-1/2 md:w-1/4">
+            <label class="block text-gray-500 text-sm mb-1">Message Format</label>
+            <select class="${channelType}-msgformat-select block w-full px-4 py-2 border border-gray-300 rounded-md bg-white">
+              <option value="NMEA" ${(channel.msgformat || 'NMEA') === 'NMEA' ? 'selected' : ''}>NMEA</option>
+              <option value="JSON_NMEA" ${channel.msgformat === 'JSON_NMEA' ? 'selected' : ''}>JSON with NMEA</option>
+              <option value="JSON_FULL" ${channel.msgformat === 'JSON_FULL' ? 'selected' : ''}>JSON Full</option>
+            </select>
+          </div>
+        </div>`;
+      } else if (channelType === 'tcp') {
+        // Default persist to true if not defined
+        const isPersist = channel.persist !== false && channel.persist !== 'false' && channel.persist !== 'off';
+        fixedFieldsHtml = `
+        <!-- Fixed Fields Row for TCP -->
+        <div class="flex flex-wrap md:flex-nowrap items-end space-y-2 md:space-y-0 md:space-x-4 mt-4">
+          <!-- Auto Reconnect Checkbox -->
+          <div class="flex flex-col w-1/2 md:w-1/4">
+            <label class="block text-gray-500 text-sm mb-1">Auto Reconnect</label>
+            <div class="flex items-center h-[38px] px-4 py-2 border border-gray-300 rounded-md bg-white">
+              <input type="checkbox" class="${channelType}-persist-checkbox" ${isPersist ? 'checked' : ''}>
+              <span class="ml-2 text-sm text-gray-600">${isPersist ? 'On' : 'Off'}</span>
+            </div>
+          </div>
+          
+          <!-- Message Format Select -->
+          <div class="flex flex-col w-1/2 md:w-1/4">
+            <label class="block text-gray-500 text-sm mb-1">Message Format</label>
+            <select class="${channelType}-msgformat-select block w-full px-4 py-2 border border-gray-300 rounded-md bg-white">
+              <option value="NMEA" ${(channel.msgformat || 'NMEA') === 'NMEA' ? 'selected' : ''}>NMEA</option>
+              <option value="JSON_NMEA" ${channel.msgformat === 'JSON_NMEA' ? 'selected' : ''}>JSON with NMEA</option>
+              <option value="JSON_FULL" ${channel.msgformat === 'JSON_FULL' ? 'selected' : ''}>JSON Full</option>
+            </select>
+          </div>
+          
+          <!-- Keep Alive Checkbox -->
+          <div class="flex flex-col w-1/2 md:w-1/4">
+            <label class="block text-gray-500 text-sm mb-1">Keep Alive</label>
+            <div class="flex items-center h-[38px] px-4 py-2 border border-gray-300 rounded-md bg-white">
+              <input type="checkbox" class="${channelType}-keepalive-checkbox" ${channel.keep_alive === true || channel.keep_alive === 'true' || channel.keep_alive === 'on' ? 'checked' : ''}>
+              <span class="ml-2 text-sm text-gray-600">${channel.keep_alive === true || channel.keep_alive === 'true' || channel.keep_alive === 'on' ? 'On' : 'Off'}</span>
+            </div>
+          </div>
+        </div>`;
+      } else if (channelType === 'tcp_listener') {
+        fixedFieldsHtml = `
+        <!-- Fixed Fields Row for TCP Listener -->
+        <div class="flex flex-wrap md:flex-nowrap items-end space-y-2 md:space-y-0 md:space-x-4 mt-4">
+          <!-- Message Format Select -->
+          <div class="flex flex-col w-1/2 md:w-1/4">
+            <label class="block text-gray-500 text-sm mb-1">Message Format</label>
+            <select class="${channelType}-msgformat-select block w-full px-4 py-2 border border-gray-300 rounded-md bg-white">
+              <option value="NMEA" ${(channel.msgformat || 'NMEA') === 'NMEA' ? 'selected' : ''}>NMEA</option>
+              <option value="JSON_NMEA" ${channel.msgformat === 'JSON_NMEA' ? 'selected' : ''}>JSON with NMEA</option>
+              <option value="JSON_FULL" ${channel.msgformat === 'JSON_FULL' ? 'selected' : ''}>JSON Full</option>
+            </select>
+          </div>
+        </div>`;
+      }
+
       channelDiv.innerHTML = `
       <div class="flex flex-col space-y-4">
         <!-- Mobile Controls Top -->
@@ -68,12 +137,6 @@ function populateChannels(channelType) {
               <input type="checkbox" class="${channelType}-active-checkbox" ${isActive ? 'checked' : ''}>
               <span class="ml-2 text-sm text-gray-600">Active</span>
             </div>
-            <!-- Toggle Properties Button -->
-            <button type="button" class="${channelType}-toggle-properties-btn text-gray-600 hover:text-gray-800" id="${toggleButtonId}">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transition-transform duration-200 ${shouldShowProperties ? 'transform rotate-180' : ''}" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z" clip-rule="evenodd" />
-              </svg>
-            </button>
           </div>
           <!-- Delete Channel Button -->
           <button type="button" class="${channelType}-delete-channel-btn text-red-600 hover:text-red-800">
@@ -90,6 +153,7 @@ function populateChannels(channelType) {
             <input type="checkbox" class="${channelType}-active-checkbox mr-2" ${isActive ? 'checked' : ''}>
           </div>
           
+          ${channelType === 'tcp_listener' ? '' : `
           <!-- Host Input -->
           <div class="flex flex-col w-full md:w-1/4">
             <label class="block text-gray-500 text-sm mb-1">Host</label>
@@ -97,9 +161,10 @@ function populateChannels(channelType) {
               class="${channelType}-host-input block w-full px-4 py-2 border border-gray-300 rounded-md" 
               placeholder="e.g., 192.168.1.101">
           </div>
+          `}
           
           <!-- Port Input -->
-          <div class="flex flex-col w-1/2 md:w-1/6">
+          <div class="flex flex-col ${channelType === 'tcp_listener' ? 'w-full md:w-1/4' : 'w-1/2 md:w-1/6'}">
             <label class="block text-gray-500 text-sm mb-1">Port</label>
             <input type="number" value="${escapeHtml(channel.port || '')}" 
               class="${channelType}-port-input block w-full px-4 py-2 border border-gray-300 rounded-md" 
@@ -115,13 +180,8 @@ function populateChannels(channelType) {
               placeholder="Optional description">
           </div>
           
-          <!-- Desktop Action Buttons - Hidden on Mobile -->
-          <div class="hidden md:flex items-center space-x-2 h-[38px]">
-            <button type="button" class="${channelType}-toggle-properties-btn text-gray-600 hover:text-gray-800" id="${toggleButtonId}">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transition-transform duration-200 ${shouldShowProperties ? 'transform rotate-180' : ''}" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z" clip-rule="evenodd" />
-              </svg>
-            </button>
+          <!-- Desktop Delete Button - Hidden on Mobile -->
+          <div class="hidden md:flex items-center h-[38px]">
             <button type="button" class="${channelType}-delete-channel-btn text-red-600 hover:text-red-800">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 -960 960 960" fill="currentColor">
                 <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/>
@@ -129,35 +189,10 @@ function populateChannels(channelType) {
             </button>
           </div>
         </div>
-      </div>
-    
-      <!-- Properties Badges -->
-      <div class="flex flex-wrap items-center space-x-2 mt-2 ${shouldShowProperties ? '' : 'hidden'}" id="${propertiesListId}">
+        
+        ${fixedFieldsHtml}
       </div>
       `;
-
-      // Get the properties container
-      const propertiesContainer = channelDiv.querySelector(`#${propertiesListId}`);
-
-      // Add "Add Property" Button before the badges
-      const addPropertyBtn = document.createElement('button');
-      addPropertyBtn.type = 'button';
-      addPropertyBtn.className = `${channelType}-add-property-btn flex items-center justify-center bg-white text-gray-600 hover:text-gray-800 border border-gray-300 rounded-full mr-2 mb-2 h-6 w-6`;
-      addPropertyBtn.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"><path d="M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z"/></svg>
-      `;
-      addPropertyBtn.addEventListener('click', () => {
-        addChannelProperty(channelType, channelIndex);
-      });
-      propertiesContainer.appendChild(addPropertyBtn);
-
-      // Append Properties as Badges (excluding specific keys)
-      for (const [key, value] of Object.entries(channel)) {
-        if (!['host', 'port', 'active', 'description'].includes(key)) {
-          const badge = createChannelPropertyBadge(channelType, channelIndex, key, value);
-          propertiesContainer.appendChild(badge);
-        }
-      }
 
       // Attach event listeners after the channel is added to the DOM
       setTimeout(() => {
@@ -167,42 +202,6 @@ function populateChannels(channelType) {
           deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteChannel(channelType, channelIndex);
-          });
-        });
-
-        // Get both mobile and desktop toggle properties buttons
-        const toggleButtons = channelDiv.querySelectorAll(`.${channelType}-toggle-properties-btn`);
-        const propertiesContainer = channelDiv.querySelector(`#${propertiesListId}`);
-
-        toggleButtons.forEach(toggleBtn => {
-          toggleBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const chevronIcon = toggleBtn.querySelector('svg');
-
-            if (propertiesContainer) {
-              // Toggle visibility
-              if (propertiesContainer.classList.contains('hidden')) {
-                propertiesContainer.classList.remove('hidden');
-                // Update all chevron icons in both mobile and desktop views
-                toggleButtons.forEach(btn => {
-                  const btnChevron = btn.querySelector('svg');
-                  if (btnChevron) {
-                    btnChevron.classList.add('transform', 'rotate-180');
-                  }
-                });
-                openPropertiesChannels.add(openChannelKey);
-              } else {
-                propertiesContainer.classList.add('hidden');
-                // Update all chevron icons in both mobile and desktop views
-                toggleButtons.forEach(btn => {
-                  const btnChevron = btn.querySelector('svg');
-                  if (btnChevron) {
-                    btnChevron.classList.remove('transform', 'rotate-180');
-                  }
-                });
-                openPropertiesChannels.delete(openChannelKey);
-              }
-            }
           });
         });
 
@@ -252,13 +251,61 @@ function populateChannels(channelType) {
           });
         }
 
-        // Initialize the visibility state of the properties container
-        if (shouldShowProperties && propertiesContainer) {
-          propertiesContainer.classList.remove('hidden');
-          toggleButtons.forEach(btn => {
-            const btnChevron = btn.querySelector('svg');
-            if (btnChevron) {
-              btnChevron.classList.add('transform', 'rotate-180');
+        const broadcastCheckbox = channelDiv.querySelector(`.${channelType}-broadcast-checkbox`);
+        if (broadcastCheckbox) {
+          broadcastCheckbox.addEventListener('change', (e) => {
+            if (!isInitializing) {
+              jsonData[channelType][channelIndex].broadcast = e.target.checked;
+              // Update the label text
+              const label = e.target.nextElementSibling;
+              if (label) {
+                label.textContent = e.target.checked ? 'On' : 'Off';
+              }
+              handleUnsavedChanges(true, 'Broadcast setting has been modified. Please save your changes.');
+              updateJsonTextarea();
+            }
+          });
+        }
+
+        const persistCheckbox = channelDiv.querySelector(`.${channelType}-persist-checkbox`);
+        if (persistCheckbox) {
+          persistCheckbox.addEventListener('change', (e) => {
+            if (!isInitializing) {
+              jsonData[channelType][channelIndex].persist = e.target.checked;
+              // Update the label text
+              const label = e.target.nextElementSibling;
+              if (label) {
+                label.textContent = e.target.checked ? 'On' : 'Off';
+              }
+              handleUnsavedChanges(true, 'Auto Reconnect setting has been modified. Please save your changes.');
+              updateJsonTextarea();
+            }
+          });
+        }
+
+        const keepAliveCheckbox = channelDiv.querySelector(`.${channelType}-keepalive-checkbox`);
+        if (keepAliveCheckbox) {
+          keepAliveCheckbox.addEventListener('change', (e) => {
+            if (!isInitializing) {
+              jsonData[channelType][channelIndex].keep_alive = e.target.checked;
+              // Update the label text
+              const label = e.target.nextElementSibling;
+              if (label) {
+                label.textContent = e.target.checked ? 'On' : 'Off';
+              }
+              handleUnsavedChanges(true, 'Keep Alive setting has been modified. Please save your changes.');
+              updateJsonTextarea();
+            }
+          });
+        }
+
+        const msgformatSelect = channelDiv.querySelector(`.${channelType}-msgformat-select`);
+        if (msgformatSelect) {
+          msgformatSelect.addEventListener('change', (e) => {
+            if (!isInitializing) {
+              jsonData[channelType][channelIndex].msgformat = e.target.value;
+              handleUnsavedChanges(true, 'Message format has been modified. Please save your changes.');
+              updateJsonTextarea();
             }
           });
         }
@@ -388,14 +435,27 @@ function addChannel(channelType) {
     jsonData[channelType] = [];
   }
 
-  // Add a new channel with default values
-  jsonData[channelType].push({
-    host: "",
+  // Add a new channel with default values based on type
+  const defaultChannel = {
     port: "",
     active: true,
     description: ""
-    // You can add more default properties here if needed
-  });
+  };
+
+  if (channelType === 'udp') {
+    defaultChannel.host = "";
+    defaultChannel.broadcast = false;
+    defaultChannel.msgformat = "NMEA";
+  } else if (channelType === 'tcp') {
+    defaultChannel.host = "";
+    defaultChannel.persist = true;
+    defaultChannel.msgformat = "NMEA";
+    defaultChannel.keep_alive = false;
+  } else if (channelType === 'tcp_listener') {
+    defaultChannel.msgformat = "NMEA";
+  }
+
+  jsonData[channelType].push(defaultChannel);
 
   // Add to openPropertiesChannels to keep properties visible for the new channel
   const newChannelIndex = jsonData[channelType].length - 1;
@@ -810,6 +870,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     populateChannels('udp');
     populateChannels('tcp');
+    populateChannels('tcp_listener');
     initializeSharingChannel();
     updateJsonTextarea();
 
