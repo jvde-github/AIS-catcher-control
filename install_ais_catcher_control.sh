@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 # Exit immediately if a command exits with a non-zero status
 set -e
 
@@ -228,6 +229,15 @@ if [[ "$EUID" -ne 0 ]]; then
   print_message "Please run this script as root or with sudo."
   exit 1
 fi
+
+# Display license information
+print_message "AIS-catcher Control Installer"
+echo "Copyright (C) 2024 jvde-github"
+echo "This software is licensed under GNU General Public License v3 (GPL v3)"
+echo "This program comes with ABSOLUTELY NO WARRANTY."
+echo "For license details, see: https://www.gnu.org/licenses/gpl-3.0.html"
+echo "========================================"
+echo ""
 
 install_dependencies
 detect_architecture
