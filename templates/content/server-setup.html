@@ -142,6 +142,18 @@
                     </div>
                 </label>
             </div>
+
+            <!-- Decoder Toggle -->
+            <div class="flex items-center">
+                <label for="server-decoder" class="text-gray-700 font-medium">Decoder:</label>
+                <label class="ml-4 relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="server-decoder" name="decoder" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                    after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full 
+                    after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500">
+                    </div>
+                </label>
+            </div>
         </div>
 
         <!-- Context -->
@@ -197,7 +209,8 @@
         "server-cdn": "server.cdn",
         "server-log": "server.log",
         "server-prome": "server.prome",
-        "server-context": "server.context"
+        "server-context": "server.context",
+        "server-decoder": "server.decoder"
     };
 </script>
 {{ end }}
