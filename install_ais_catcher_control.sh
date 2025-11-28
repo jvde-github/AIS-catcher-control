@@ -22,6 +22,9 @@ BIN_NAME="AIS-catcher-control"
 # Installation path
 INSTALL_PATH="/usr/bin/${BIN_NAME}"
 
+# Global flag to track if this is a self-update
+SELF_UPDATE=false
+
 # ============================
 # Function Definitions
 # ============================
