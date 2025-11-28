@@ -123,24 +123,36 @@ download_binary() {
 install_binary() {
   print_message "Installing the binary to ${INSTALL_PATH}..."
 
-  # Stop the ais-catcher-control service if it is active
+  # Check if the service is currently active (we're updating ourselves)
+  SELF_UPDATE=false
   if systemctl is-active --quiet "${SERVICE_NAME}"; then
-    print_message "Stopping existing ${SERVICE_NAME} service..."
-    systemctl stop "${SERVICE_NAME}"
-  fi
-  
-  # Check if port 8110 is free
-  if ss -tulpn | grep -q ":8110"; then
-    print_message "Port 8110 is in use. Please free up the port before proceeding."
-    exit 1
+    SELF_UPDATE=true
+    print_message "Service is running - preparing for self-update..."
+    
+    # Don't stop yet - just move the binary, systemd will handle restart
+    # Use a temporary name first to avoid "text file busy" error
+    mv "${TEMP_DIR}/${BIN_NAME}" "${INSTALL_PATH}.new"
+    chmod +x "${INSTALL_PATH}.new"
+    
+    # Now atomically replace the running binary
+    # The old process keeps running from deleted inode until restart
+    mv -f "${INSTALL_PATH}.new" "${INSTALL_PATH}"
+    
+    print_message "Binary updated. Will restart service after configuration..."
   else
-    print_message "Port 8110 is free."
+    # Fresh install or service not running
+    # Check if port 8110 is free
+    if ss -tulpn | grep -q ":8110"; then
+      print_message "Port 8110 is in use. Please free up the port before proceeding."
+      exit 1
+    else
+      print_message "Port 8110 is free."
+    fi
+    
+    mv "${TEMP_DIR}/${BIN_NAME}" "${INSTALL_PATH}"
+    chmod +x "${INSTALL_PATH}"
+    print_message "Binary installed successfully at ${INSTALL_PATH}."
   fi
-  
-  mv "${TEMP_DIR}/${BIN_NAME}" "${INSTALL_PATH}"
-  chmod +x "${INSTALL_PATH}"
-
-  print_message "Binary installed successfully at ${INSTALL_PATH}."
 }
 
 create_systemd_service() {
@@ -211,13 +223,22 @@ enable_and_start_service() {
   print_message "Enabling ${SERVICE_NAME} service to start on boot..."
   systemctl enable "${SERVICE_NAME}"
 
-  print_message "Starting ${SERVICE_NAME} service..."
-  systemctl start "${SERVICE_NAME}"
+  if [[ "$SELF_UPDATE" == "true" ]]; then
+    print_message "Restarting ${SERVICE_NAME} service to apply update..."
+    # Use restart instead of stop/start for self-update
+    # Schedule restart with a slight delay to let this script finish
+    (sleep 2 && systemctl restart "${SERVICE_NAME}") &
+    print_message "Service restart scheduled. Update will complete in 2 seconds..."
+    print_message "Installation and setup complete. The ${SERVICE_NAME} service will restart momentarily."
+  else
+    print_message "Starting ${SERVICE_NAME} service..."
+    systemctl start "${SERVICE_NAME}"
 
-  print_message "Checking the status of the ${SERVICE_NAME} service..."
-  systemctl status "${SERVICE_NAME}" --no-pager
+    print_message "Checking the status of the ${SERVICE_NAME} service..."
+    systemctl status "${SERVICE_NAME}" --no-pager
 
-  print_message "Installation and setup complete. The ${SERVICE_NAME} service is active and running."
+    print_message "Installation and setup complete. The ${SERVICE_NAME} service is active and running."
+  fi
 }
 
 # ============================

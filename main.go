@@ -331,6 +331,15 @@ func runSystemAction(actionName, script string, reload bool) {
 		runCmd = exec.CommandContext(ctx, "/bin/bash", "-c", script)
 	}
 
+	// Set environment variables for systemctl to work properly
+	// Copy the parent environment and add critical systemd variables
+	runCmd.Env = os.Environ()
+	// Ensure systemctl can communicate with systemd even in non-interactive contexts
+	runCmd.Env = append(runCmd.Env,
+		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"LANG=C.UTF-8",
+	)
+
 	stdout, err := runCmd.StdoutPipe()
 	if err != nil {
 		broadcastResult("error", fmt.Sprintf("Failed to create stdout pipe: %v", err))
