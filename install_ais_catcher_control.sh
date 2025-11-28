@@ -230,9 +230,12 @@ enable_and_start_service() {
     print_message "Restarting ${SERVICE_NAME} service to apply update..."
     # Use restart instead of stop/start for self-update
     # Schedule restart with a slight delay to let this script finish
-    (sleep 2 && systemctl restart "${SERVICE_NAME}") &
+    (sleep 2 && systemctl restart "${SERVICE_NAME}" && echo "Service restarted successfully at $(date)") &
     print_message "Service restart scheduled. Update will complete in 2 seconds..."
-    print_message "Installation and setup complete. The ${SERVICE_NAME} service will restart momentarily."
+    sleep 3
+    print_message "Checking the status of the ${SERVICE_NAME} service..."
+    systemctl status "${SERVICE_NAME}" --no-pager
+    print_message "Installation and setup complete. The ${SERVICE_NAME} service has been restarted."
   else
     print_message "Starting ${SERVICE_NAME} service..."
     systemctl start "${SERVICE_NAME}"
