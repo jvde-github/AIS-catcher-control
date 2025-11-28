@@ -5,17 +5,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ .Title }}</title>
+  <!-- Ensure you have the full Tailwind palette or CDN included -->
   <link rel="stylesheet" href="/static/css/tailwind.css?v={{ .CssVersion }}">
+  
   <style>
-    /* Mobile-first approach */
+    :root {
+      --sidebar-width-mobile: 260px;
+      --sidebar-width-tablet: 5rem; /* 20 (tailwind w-20) */
+      --sidebar-width-desktop: 16rem; /* 64 (tailwind w-64) */
+      --header-height: 4rem; /* 16 (tailwind h-16) */
+      --transition-speed: 0.3s;
+    }
+
+    /* --- Sidebar Transitions --- */
     #sidebar {
+      width: var(--sidebar-width-mobile);
       transform: translateX(-100%);
-      transition: transform 0.3s ease-in-out;
-      width: 260px;
-      height: 100vh;
-      position: fixed;
-      top: 0;
-      left: 0;
+      transition: transform var(--transition-speed) ease-in-out, width var(--transition-speed) ease-in-out;
       z-index: 50;
     }
 
@@ -23,35 +29,50 @@
       transform: translateX(0);
     }
 
-    /* Handle main content area */
     .main-content {
-      transition: margin-left 0.3s ease-in-out;
+      transition: margin-left var(--transition-speed) ease-in-out;
     }
 
-    #output-submenu {
-      overflow: hidden;
-      transition: max-height 0.3s ease-out;
+    /* --- Menu Items & Icons --- */
+    .menu-text {
+      white-space: nowrap;
+      transition: opacity 0.2s, visibility 0.2s;
     }
 
-    #output-submenu.submenu-open {}
+    .nav-icon {
+      min-width: 24px;
+      margin-right: 0;
+      transition: margin-right 0.2s, color 0.2s;
+    }
 
-    /* Tablet styles (md) */
+    .chevron-icon {
+      transition: transform 0.2s;
+    }
+
+    /* --- Tablet (md) Styles --- */
     @media (min-width: 768px) and (max-width: 1023px) {
       #sidebar {
         transform: translateX(0);
-        width: 5rem;
-        transition: width 0.3s ease-in-out;
+        width: var(--sidebar-width-tablet);
       }
 
-      #sidebar:hover {
-        width: 16rem;
+      .main-content {
+        margin-left: var(--sidebar-width-tablet);
       }
 
       #sidebar .menu-text {
         opacity: 0;
         width: 0;
         visibility: hidden;
-        transition: opacity 0.2s, visibility 0.2s;
+      }
+      
+      #sidebar .chevron-icon {
+        display: none;
+      }
+
+      #sidebar:hover {
+        width: var(--sidebar-width-desktop);
+        box-shadow: 4px 0 24px -12px rgba(0, 0, 0, 0.1); /* Soft shadow on expand */
       }
 
       #sidebar:hover .menu-text {
@@ -60,241 +81,209 @@
         visibility: visible;
       }
 
-      /* Ensure icons remain visible in collapsed state */
-      #sidebar svg {
-        min-width: 24px;
-        margin-right: 0;
-      }
-
-      #sidebar:hover svg {
+      #sidebar:hover .nav-icon {
         margin-right: 12px;
       }
-
-      .main-content {
-        margin-left: 5rem;
+      
+      #sidebar:hover .chevron-icon {
+        display: block;
       }
     }
 
-    /* Desktop styles (lg) */
+    /* --- Desktop (lg) Styles --- */
     @media (min-width: 1024px) {
       #sidebar {
         transform: translateX(0);
-        width: 16rem;
-      }
-
-      #sidebar .menu-text {
-        opacity: 1;
-        width: auto;
-        visibility: visible;
-      }
-
-      #sidebar svg {
-        margin-right: 12px;
+        width: var(--sidebar-width-desktop);
       }
 
       .main-content {
-        margin-left: 16rem;
+        margin-left: var(--sidebar-width-desktop);
       }
+
+      #sidebar .nav-icon {
+        margin-right: 12px;
+      }
+    }
+
+    /* Submenu animation */
+    .submenu {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+    .submenu.open {
+      max-height: 500px;
+    }
+    
+    /* Scrollbar refinement for sidebar */
+    #sidebar-scroll::-webkit-scrollbar {
+        width: 5px;
+    }
+    #sidebar-scroll::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1; /* slate-300 */
+        border-radius: 4px;
+    }
+    #sidebar-scroll:hover::-webkit-scrollbar-thumb {
+        background-color: #94a3b8; /* slate-400 */
     }
   </style>
 </head>
 
-<body class="bg-gray-100">
+<!-- Body: changed bg-gray-100 to bg-slate-50 for a cleaner look -->
+<body class="bg-slate-50 text-slate-800 antialiased font-sans">
+
   <!-- Mobile Header -->
-  <header class="fixed top-0 left-0 right-0 bg-white border-b z-40 md:hidden">
-    <div class="flex items-center justify-between p-4">
-      <button id="menu-toggle" class="text-gray-700 focus:outline-none">
+  <header class="fixed top-0 left-0 right-0 bg-white border-b border-slate-200 z-40 md:hidden h-16 shadow-sm">
+    <div class="flex items-center justify-between px-4 h-full">
+      <button id="menu-toggle" class="text-slate-600 focus:outline-none hover:text-slate-900" aria-label="Toggle Sidebar">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
-      <span class="text-lg font-semibold">{{ .Title }}</span>
+      <span class="text-lg font-semibold text-slate-800">{{ .Title }}</span>
     </div>
   </header>
 
   <!-- Sidebar -->
-  <nav id="sidebar" class="bg-white border-r">
-    <div class="flex flex-col h-full">
-      <!-- Logo -->
-      <div class="flex items-center justify-center h-16 border-b">
-        <svg width="40" height="40" viewBox="0 0 106.6292 101.40916" xmlns="http://www.w3.org/2000/svg"
-          class="h-10 w-10" fill="currentColor">
-          <g id="layer1" transform="translate(-2.8209361,-5.104575)">
-            <path
-              d="m 100.93691,53.199478 h -3.5e-4 C 100.93476,65.55799 95.920057,76.733991 87.798759,84.862344 79.670406,92.983642 68.494405,97.998732 56.13554,98.000492 43.776675,97.998732 32.600604,92.983642 24.472392,84.862344 16.350777,76.733991 11.336111,65.55799 11.334171,53.199478 H 2.8209366 c -0.0019,14.691784 5.986745,28.044777 15.6315144,37.682666 9.638277,9.644946 22.991305,15.633696 37.683089,15.631586 14.691785,0.002 28.044777,-5.98664 37.683019,-15.631586 9.644591,-9.637889 15.633351,-22.990882 15.631581,-37.682666 h -8.51323"
-              style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0352778" id="path18" />
-            <path
-              d="m 56.13554,93.172732 c 11.01337,0.0018 21.031202,-4.49051 28.253622,-11.719633 C 91.618284,74.23068 96.11091,64.212848 96.109146,53.199478 h -8.513587 v 0 c -0.0018,8.680098 -3.52037,16.52129 -9.226198,22.233468 -5.712531,5.705828 -13.55337,9.224787 -22.233821,9.226198 -8.680803,-0.0014 -16.52129,-3.520017 -22.233926,-9.226198 -5.705899,-5.712178 -9.224293,-13.55337 -9.226233,-22.233468 h -8.513375 c -0.0019,11.01337 4.490896,21.031202 11.719666,28.253621 7.222561,7.229123 17.240145,11.721393 28.253868,11.719633"
-              style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0352778" id="path20" />
-            <path
-              d="m 29.502933,53.199478 c -0.0017,7.335309 2.994731,14.017626 7.807819,18.824576 4.806456,4.812948 11.489126,7.809795 18.824788,7.807679 7.335662,0.0021 14.017979,-2.994731 18.824929,-7.807679 4.812948,-4.80695 7.809442,-11.489267 7.807679,-18.824576 h -8.513234 -3.53e-4 c -0.0018,5.002389 -2.024239,9.508067 -5.314245,12.804423 -3.296708,3.290359 -7.802034,5.312481 -12.804776,5.314245 -5.002742,-0.0018 -9.508067,-2.023886 -12.804776,-5.314245 -3.290358,-3.296356 -5.312516,-7.802034 -5.314456,-12.804423 h -8.513375"
-              style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0352778" id="path22" />
-            <path
-              d="m 56.13554,47.791042 c 2.986617,0 5.407731,2.421467 5.407731,5.408436 0,2.985911 -2.421114,5.407378 -5.407731,5.407378 -2.986617,0 -5.407731,-2.421467 -5.407731,-5.407378 0,-2.986969 2.421114,-5.408436 5.407731,-5.408436 z m 0,18.246726 c 7.090481,0 12.83829,-5.748162 12.83829,-12.83829 0,-7.090834 -5.747809,-12.838642 -12.83829,-12.838642 -7.090481,0 -12.838643,5.747808 -12.838643,12.838642 0,7.090128 5.748162,12.83829 12.838643,12.83829"
-              style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0352778" id="path24" />
-            <path
-              d="m 56.093215,35.217688 c 9.376964,0 17.180849,6.699603 18.64358,15.449551 H 95.783767 V 29.790202 c 0,0 -24.146095,-2.752373 -39.690552,-8.110362 -15.544456,5.357989 -39.69084,8.110362 -39.69084,8.110362 v 20.877037 h 21.047189 c 1.462803,-8.749948 9.266327,-15.449551 18.643651,-15.449551"
-              style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0357257" id="path26" />
-            <path
-              d="m 55.832189,18.164409 1.182012,0.392995 c 7.439291,2.451805 16.912398,4.355747 24.847568,5.682192 V 10.508778 c 0,0 -16.5073,-1.927578 -26.02958,-5.404203 -9.522657,3.476625 -26.029617,5.404203 -26.029617,5.404203 v 13.730818 c 7.943905,-1.326445 17.42458,-3.238148 24.847605,-5.682192 l 1.182012,-0.392995"
-              style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.036529" id="path28" />
-          </g>
+  <nav id="sidebar" class="fixed top-0 left-0 h-full bg-white border-r border-slate-200 flex flex-col shadow-sm">
+    
+    <!-- Logo -->
+    <div class="flex items-center justify-center h-16 border-b border-slate-100 shrink-0 bg-white">
+      <svg width="36" height="36" viewBox="0 0 106.6292 101.40916" xmlns="http://www.w3.org/2000/svg" class="text-slate-800" fill="currentColor">
+        <!-- SVG Content Preserved -->
+        <g transform="translate(-2.8209361,-5.104575)">
+            <path d="m 100.93691,53.199478 h -3.5e-4 C 100.93476,65.55799 95.920057,76.733991 87.798759,84.862344 79.670406,92.983642 68.494405,97.998732 56.13554,98.000492 43.776675,97.998732 32.600604,92.983642 24.472392,84.862344 16.350777,76.733991 11.336111,65.55799 11.334171,53.199478 H 2.8209366 c -0.0019,14.691784 5.986745,28.044777 15.6315144,37.682666 9.638277,9.644946 22.991305,15.633696 37.683089,15.631586 14.691785,0.002 28.044777,-5.98664 37.683019,-15.631586 9.644591,-9.637889 15.633351,-22.990882 15.631581,-37.682666 h -8.51323" style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0352778" />
+            <path d="m 56.13554,93.172732 c 11.01337,0.0018 21.031202,-4.49051 28.253622,-11.719633 C 91.618284,74.23068 96.11091,64.212848 96.109146,53.199478 h -8.513587 v 0 c -0.0018,8.680098 -3.52037,16.52129 -9.226198,22.233468 -5.712531,5.705828 -13.55337,9.224787 -22.233821,9.226198 -8.680803,-0.0014 -16.52129,-3.520017 -22.233926,-9.226198 -5.705899,-5.712178 -9.224293,-13.55337 -9.226233,-22.233468 h -8.513375 c -0.0019,11.01337 4.490896,21.031202 11.719666,28.253621 7.222561,7.229123 17.240145,11.721393 28.253868,11.719633" style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0352778" />
+            <path d="m 29.502933,53.199478 c -0.0017,7.335309 2.994731,14.017626 7.807819,18.824576 4.806456,4.812948 11.489126,7.809795 18.824788,7.807679 7.335662,0.0021 14.017979,-2.994731 18.824929,-7.807679 4.812948,-4.80695 7.809442,-11.489267 7.807679,-18.824576 h -8.513234 -3.53e-4 c -0.0018,5.002389 -2.024239,9.508067 -5.314245,12.804423 -3.296708,3.290359 -7.802034,5.312481 -12.804776,5.314245 -5.002742,-0.0018 -9.508067,-2.023886 -12.804776,-5.314245 -3.290358,-3.296356 -5.312516,-7.802034 -5.314456,-12.804423 h -8.513375" style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0352778" />
+            <path d="m 56.13554,47.791042 c 2.986617,0 5.407731,2.421467 5.407731,5.408436 0,2.985911 -2.421114,5.407378 -5.407731,5.407378 -2.986617,0 -5.407731,-2.421467 -5.407731,-5.407378 0,-2.986969 2.421114,-5.408436 5.407731,-5.408436 z m 0,18.246726 c 7.090481,0 12.83829,-5.748162 12.83829,-12.83829 0,-7.090834 -5.747809,-12.838642 -12.83829,-12.838642 -7.090481,0 -12.838643,5.747808 -12.838643,12.838642 0,7.090128 5.748162,12.83829 12.838643,12.83829" style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0352778" />
+            <path d="m 56.093215,35.217688 c 9.376964,0 17.180849,6.699603 18.64358,15.449551 H 95.783767 V 29.790202 c 0,0 -24.146095,-2.752373 -39.690552,-8.110362 -15.544456,5.357989 -39.69084,8.110362 -39.69084,8.110362 v 20.877037 h 21.047189 c 1.462803,-8.749948 9.266327,-15.449551 18.643651,-15.449551" style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0357257" />
+            <path d="m 55.832189,18.164409 1.182012,0.392995 c 7.439291,2.451805 16.912398,4.355747 24.847568,5.682192 V 10.508778 c 0,0 -16.5073,-1.927578 -26.02958,-5.404203 -9.522657,3.476625 -26.029617,5.404203 -26.029617,5.404203 v 13.730818 c 7.943905,-1.326445 17.42458,-3.238148 24.847605,-5.682192 l 1.182012,-0.392995" style="fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.036529" />
+        </g>
+      </svg>
+    </div>
 
+    <!-- Menu Items -->
+    <div id="sidebar-scroll" class="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-1">
+      
+      <!-- Control -->
+      <a href="/control" class="flex items-center px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 group transition-colors">
+        <svg class="nav-icon h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 -960 960 960" fill="currentColor">
+          <path d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z" />
         </svg>
+        <span class="menu-text text-sm font-medium">Control</span>
+      </a>
+
+      <!-- System -->
+      <a href="/system" class="flex items-center px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 group transition-colors">
+        <svg class="nav-icon h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 -960 960 960" fill="currentColor">
+          <path d="M686-132 444-376q-20 8-40.5 12t-43.5 4q-100 0-170-70t-70-170q0-36 10-68.5t28-61.5l146 146 72-72-146-146q29-18 61.5-28t68.5-10q100 0 170 70t70 170q0 23-4 43.5T584-516l244 242q12 12 12 29t-12 29l-84 84q-12 12-29 12t-29-12Zm29-85 27-27-256-256q18-20 26-46.5t8-53.5q0-60-38.5-104.5T386-758l74 74q12 12 12 28t-12 28L332-500q-12 12-28 12t-28-12l-74-74q9 57 53.5 95.5T360-440q26 0 52-8t47-25l256 256ZM472-488Z" />
+        </svg>
+        <span class="menu-text text-sm font-medium">System</span>
+      </a>
+
+      <!-- Input -->
+      <a href="/device" class="flex items-center px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 group transition-colors">
+        <svg class="nav-icon h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 -960 960 960" fill="currentColor">
+          <path d="M160-80q-33 0-56.5-23.5T80-160v-480q0-25 13.5-45t36.5-29l506-206 26 66-330 134h468q33 0 56.5 23.5T880-640v480q0 33-23.5 56.5T800-80H160Zm0-80h640v-280H160v280Zm160-40q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29ZM160-520h480v-80h80v80h80v-120H160v120Zm0 360v-280 280Z" />
+        </svg>
+        <span class="menu-text text-sm font-medium">Input</span>
+      </a>
+
+      <!-- Output (Dropdown) -->
+      <div>
+        <button class="submenu-toggle w-full flex items-center px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 focus:outline-none group transition-colors" data-target="output-submenu">
+          <svg class="nav-icon h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 -960 960 960" fill="currentColor">
+            <path d="M680-80q-50 0-85-35t-35-85q0-6 3-28L282-392q-16 15-37 23.5t-45 8.5q-50 0-85-35t-35-85q0-50 35-85t85-35q24 0 45 8.5t37 23.5l281-164q-2-7-2.5-13.5T560-760q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35q-24 0-45-8.5T598-672L317-508q2-7 2.5-13.5t.5-14.5q0-8-.5-14.5T317-452l281 164q16-15 37-23.5t45-8.5q50 0 85 35t35 85q0 50-35 85t-85 35Zm0-80q17 0 28.5-11.5T720-200q0-17-11.5-28.5T680-240q-17 0-28.5 11.5T640-200q0 17 11.5 28.5T680-160ZM200-440q17 0 28.5-11.5T240-480q0-17-11.5-28.5T200-520q-17 0-28.5 11.5T160-480q0 17 11.5 28.5T200-440Zm480-280q17 0 28.5-11.5T720-760q0-17-11.5-28.5T680-800q-17 0-28.5 11.5T640-760q0 17 11.5 28.5T680-720Zm0 520ZM200-480Zm480-280Z" />
+          </svg>
+          <span class="menu-text text-sm font-medium flex-1 text-left">Output</span>
+          <svg class="chevron-icon h-4 w-4 ml-auto text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z" clip-rule="evenodd" />
+          </svg>
+        </button>
+        <div id="output-submenu" class="submenu bg-slate-50/50">
+          <a href="/sharing" class="flex items-center px-8 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-sm transition-colors">Community</a>
+          <a href="/udp" class="flex items-center px-8 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-sm transition-colors">UDP</a>
+          <a href="/tcp" class="flex items-center px-8 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-sm transition-colors">TCP Client</a>
+          <a href="/tcp-servers" class="flex items-center px-8 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-sm transition-colors">TCP Servers</a>
+          <a href="/server" class="flex items-center px-8 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-sm transition-colors">Webviewer</a>
+          <a href="/http" class="flex items-center px-8 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-sm transition-colors">HTTP</a>
+          <a href="/mqtt" class="flex items-center px-8 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-sm transition-colors">MQTT</a>
+        </div>
       </div>
 
-      <!-- Menu Items -->
-      <div class="flex-1 overflow-y-auto">
+      <!-- Webviewer -->
+      <a href="/webviewer" class="flex items-center px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 group transition-colors">
+        <svg class="nav-icon h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 -960 960 960" fill="currentColor">
+          <path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm-40-82v-78q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 121 79.5 212T440-162Zm276-102q20-22 36-47.5t26.5-53q10.5-27.5 16-56.5t5.5-59q0-98-54.5-179T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h240q17 0 28.5 11.5T600-440v120h40q26 0 47 15.5t29 40.5Z" />
+        </svg>
+        <span class="menu-text text-sm font-medium">Webviewer</span>
+      </a>
 
-        <!-- Control -->
-        <a href="/control" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-            class="h-6 w-6">
-            <path d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z" />
+      <!-- Advanced (Dropdown) -->
+      <div>
+        <button class="submenu-toggle w-full flex items-center px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 focus:outline-none group transition-colors" data-target="advanced-submenu">
+          <svg class="nav-icon h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 -960 960 960" fill="currentColor">
+            <path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm0-80q-25 0-42.5-17.5T422-480q0-25 17.5-42.5T482-540q25 0 42.5 17.5T542-480q0 25-17.5 42.5T482-420Zm-2-60Zm-40 320h79-79Z" />
           </svg>
-          <span class="menu-text ml-3 text-sm font-medium">Control</span>
-        </a>
-
-        <!-- Support -->
-        <a href="/system" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368">
-            <path
-              d="M686-132 444-376q-20 8-40.5 12t-43.5 4q-100 0-170-70t-70-170q0-36 10-68.5t28-61.5l146 146 72-72-146-146q29-18 61.5-28t68.5-10q100 0 170 70t70 170q0 23-4 43.5T584-516l244 242q12 12 12 29t-12 29l-84 84q-12 12-29 12t-29-12Zm29-85 27-27-256-256q18-20 26-46.5t8-53.5q0-60-38.5-104.5T386-758l74 74q12 12 12 28t-12 28L332-500q-12 12-28 12t-28-12l-74-74q9 57 53.5 95.5T360-440q26 0 52-8t47-25l256 256ZM472-488Z" />
+          <span class="menu-text text-sm font-medium flex-1 text-left">Advanced</span>
+          <svg class="chevron-icon h-4 w-4 ml-auto text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z" clip-rule="evenodd" />
           </svg>
-          <span class="menu-text ml-3 text-sm font-medium">System</span>
-        </a>
-
-        <!-- Webviewer -->
-        <a href="/device" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-            class="h-6 w-6">
-            <path
-              d="M160-80q-33 0-56.5-23.5T80-160v-480q0-25 13.5-45t36.5-29l506-206 26 66-330 134h468q33 0 56.5 23.5T880-640v480q0 33-23.5 56.5T800-80H160Zm0-80h640v-280H160v280Zm160-40q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29ZM160-520h480v-80h80v80h80v-120H160v120Zm0 360v-280 280Z" />
-          </svg>
-          <span class="menu-text ml-3 text-sm font-medium">Input</span>
-        </a>
-
-
-        <!-- Output with submenu -->
-        <div>
-          <button onclick="toggleSubmenu('output-submenu', 'output-chevron')"
-            class="w-full flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-              class="h-6 w-6">
-              <path
-                d="M680-80q-50 0-85-35t-35-85q0-6 3-28L282-392q-16 15-37 23.5t-45 8.5q-50 0-85-35t-35-85q0-50 35-85t85-35q24 0 45 8.5t37 23.5l281-164q-2-7-2.5-13.5T560-760q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35q-24 0-45-8.5T598-672L317-508q2-7 2.5-13.5t.5-14.5q0-8-.5-14.5T317-452l281 164q16-15 37-23.5t45-8.5q50 0 85 35t35 85q0 50-35 85t-85 35Zm0-80q17 0 28.5-11.5T720-200q0-17-11.5-28.5T680-240q-17 0-28.5 11.5T640-200q0 17 11.5 28.5T680-160ZM200-440q17 0 28.5-11.5T240-480q0-17-11.5-28.5T200-520q-17 0-28.5 11.5T160-480q0 17 11.5 28.5T200-440Zm480-280q17 0 28.5-11.5T720-760q0-17-11.5-28.5T680-800q-17 0-28.5 11.5T640-760q0 17 11.5 28.5T680-720Zm0 520ZM200-480Zm480-280Z" />
-            </svg>
-            <span class="menu-text ml-3 text-sm font-medium">Output</span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="ml-auto h-4 w-4 transition-transform duration-200"
-              id="output-chevron" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd"
-                d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z"
-                clip-rule="evenodd" />
-            </svg>
-          </button>
-          <div id="output-submenu" class="bg-gray-50 hidden">
-            <a href="/sharing" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">Community</span>
-            </a>
-            <a href="/udp" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">UDP</span>
-            </a>
-            <a href="/tcp" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">TCP Client</span>
-            </a>
-            <a href="/tcp-servers" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">TCP Servers</span>
-            </a>
-            <a href="/server" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">Webviewer</span>
-            </a>
-            <a href="/http" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">HTTP</span>
-            </a>
-            <a href="/mqtt" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">MQTT</span>
-            </a>
-          </div>
+        </button>
+        <div id="advanced-submenu" class="submenu bg-slate-50/50">
+          <a href="/editcmd" class="flex items-center px-8 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-sm transition-colors">Edit Config.cmd</a>
+          <a href="/editjson" class="flex items-center px-8 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-sm transition-colors">Edit Config.json</a>
         </div>
-
-        <!-- Webviewer -->
-        <a href="/webviewer" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-            class="h-6 w-6">
-            <path
-              d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm-40-82v-78q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 121 79.5 212T440-162Zm276-102q20-22 36-47.5t26.5-53q10.5-27.5 16-56.5t5.5-59q0-98-54.5-179T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h240q17 0 28.5 11.5T600-440v120h40q26 0 47 15.5t29 40.5Z" />
-          </svg>
-          <span class="menu-text ml-3 text-sm font-medium">Webviewer</span>
-        </a>
-
-        <div>
-          <button onclick="toggleSubmenu('advanced-submenu', 'advanced-chevron')"
-            class="w-full flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-              class="h-6 w-6">
-              <path
-                d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm0-80q-25 0-42.5-17.5T422-480q0-25 17.5-42.5T482-540q25 0 42.5 17.5T542-480q0 25-17.5 42.5T482-420Zm-2-60Zm-40 320h79-79Z" />
-            </svg>
-            <span class="menu-text ml-3 text-sm font-medium">Advanced</span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="ml-auto h-4 w-4 transition-transform duration-200"
-              id="advanced-chevron" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd"
-                d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z"
-                clip-rule="evenodd" />
-            </svg>
-          </button>
-          <div id="advanced-submenu" class="hidden bg-gray-50 hidden">
-            <a href="/editcmd" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">Edit Config.cmd</span>
-            </a>
-            <a href="/editjson" class="flex items-center px-8 py-2 text-gray-600 hover:bg-gray-100">
-              <span class="menu-text text-sm">Edit Config.json</span>
-            </a>
-          </div>
-        </div>
-
-        <!-- Password -->
-        <a href="/change-password" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-            class="h-6 w-6">
-            <path
-              d="M80-200v-80h800v80H80Zm46-242-52-30 34-60H40v-60h68l-34-58 52-30 34 58 34-58 52 30-34 58h68v60h-68l34 60-52 30-34-60-34 60Zm320 0-52-30 34-60h-68v-60h68l-34-58 52-30 34 58 34-58 52 30-34 58h68v60h-68l34 60-52 30-34-60-34 60Zm320 0-52-30 34-60h-68v-60h68l-34-58 52-30 34 58 34-58 52 30-34 58h68v60h-68l34 60-52 30-34-60-34 60Z" />
-          </svg>
-          <span class="menu-text ml-3 text-sm font-medium">Password</span>
-        </a>
-
-        <!-- Logout -->
-        <a href="/logout" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100">
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-            class="h-6 w-6">
-            <path
-              d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h280v80H200Zm440-160-55-58 102-102H360v-80h327L624-624l56-56 200 200-200 200Z" />
-          </svg>
-          <span class="menu-text ml-3 text-sm font-medium">Logout</span>
-        </a>
       </div>
+
+      <!-- Password -->
+      <a href="/change-password" class="flex items-center px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 group transition-colors">
+        <svg class="nav-icon h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 -960 960 960" fill="currentColor">
+          <path d="M80-200v-80h800v80H80Zm46-242-52-30 34-60H40v-60h68l-34-58 52-30 34 58 34-58 52 30-34 58h68v60h-68l34 60-52 30-34-60-34 60Zm320 0-52-30 34-60h-68v-60h68l-34-58 52-30 34 58 34-58 52 30-34 58h68v60h-68l34 60-52 30-34-60-34 60Zm320 0-52-30 34-60h-68v-60h68l-34-58 52-30 34 58 34-58 52 30-34 58h68v60h-68l34 60-52 30-34-60-34 60Z" />
+        </svg>
+        <span class="menu-text text-sm font-medium">Password</span>
+      </a>
+
+      <!-- License -->
+      <a href="/license" class="flex items-center px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 group transition-colors">
+        <svg class="nav-icon h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 -960 960 960" fill="currentColor">
+          <path d="M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"/>
+        </svg>
+        <span class="menu-text text-sm font-medium">License</span>
+      </a>
+
+      <!-- Logout -->
+      <a href="/logout" class="flex items-center px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 group transition-colors">
+        <svg class="nav-icon h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" viewBox="0 -960 960 960" fill="currentColor">
+          <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h280v80H200Zm440-160-55-58 102-102H360v-80h327L624-624l56-56 200 200-200 200Z" />
+        </svg>
+        <span class="menu-text text-sm font-medium">Logout</span>
+      </a>
     </div>
   </nav>
 
   <!-- Overlay -->
-  <div id="overlay" class="fixed inset-0 bg-black opacity-50 hidden z-40"></div>
+  <div id="overlay" class="fixed inset-0 bg-slate-900/50 hidden z-40 transition-opacity backdrop-blur-sm"></div>
 
   <!-- Main Content -->
-  <div class="main-content min-h-screen bg-gray-100">
-    <div class="md:p-6 p-4 pt-20 md:pt-6">
-      <div id="status-message" class="mt-2 mb-4 p-2 transition-opacity duration-300 opacity-0 hidden" role="alert"
-        aria-live="assertive">
+  <main class="main-content min-h-screen bg-slate-50">
+    <div class="md:p-8 p-4 pt-20 md:pt-8 max-w-7xl mx-auto">
+      <div id="status-message" class="mt-2 mb-4 transition-opacity duration-300 opacity-0 hidden" role="alert" aria-live="assertive">
       </div>
 
       {{ dynamicTemplate .ContentTemplate . }}
     </div>
+  </main>
 
-    <script>
-      // Menu Toggle
-      const menuToggle = document.getElementById('menu-toggle');
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
       const sidebar = document.getElementById('sidebar');
       const overlay = document.getElementById('overlay');
+      const menuToggle = document.getElementById('menu-toggle');
+      let hoverTimeout;
 
+      // 1. Mobile Menu Toggling
       menuToggle?.addEventListener('click', () => {
         sidebar.classList.toggle('show');
         overlay.classList.toggle('hidden');
@@ -305,72 +294,40 @@
         overlay.classList.add('hidden');
       });
 
-      // Moved toggleSubmenu outside of any other function to make it globally available
-      function toggleSubmenu(submenuId, chevronId) {
-        console.log(submenuId, chevronId);
-        const submenu = document.getElementById(submenuId);
-        const chevron = document.getElementById(chevronId);
-
-        if (submenu && chevron) {
-          if (submenu.classList.contains('hidden')) {
-            // Opening the submenu
-            submenu.classList.remove('hidden');
-            chevron.style.transform = 'rotate(180deg)';
-          } else {
-            // Closing the submenu
-            submenu.classList.add('hidden');
-            chevron.style.transform = 'rotate(0deg)';
-          }
-        }
-      }
-
-      function handleResize() {
-        if (window.innerWidth >= 768) {
-          sidebar.classList.remove('show');
-          overlay.classList.add('hidden');
-        }
-      }
-
+      // 2. Submenu Logic
       function closeAllSubmenus() {
-        document.querySelectorAll('[id$="-submenu"]').forEach(submenu => {
-          const chevronId = submenu.id.replace('submenu', 'chevron');
-          const chevron = document.getElementById(chevronId);
-          submenu.classList.add('hidden');
-          if (chevron) {
-            chevron.style.transform = 'rotate(0deg)';
+        document.querySelectorAll('.submenu').forEach(el => el.classList.remove('open'));
+        document.querySelectorAll('.chevron-icon').forEach(el => el.style.transform = 'rotate(0deg)');
+      }
+
+      document.querySelectorAll('.submenu-toggle').forEach(button => {
+        button.addEventListener('click', function() {
+          const targetId = this.getAttribute('data-target');
+          const submenu = document.getElementById(targetId);
+          const chevron = this.querySelector('.chevron-icon');
+
+          if (submenu.classList.contains('open')) {
+            submenu.classList.remove('open');
+            if(chevron) chevron.style.transform = 'rotate(0deg)';
+          } else {
+            submenu.classList.add('open');
+            if(chevron) chevron.style.transform = 'rotate(180deg)';
           }
         });
+      });
+
+      // 3. Tablet Hover Logic
+      function isTablet() {
+        return window.innerWidth >= 768 && window.innerWidth < 1024;
       }
 
-      // Add click event listeners for submenu buttons
-      function initializeSubmenuListeners() {
-        const submenuButtons = document.querySelectorAll('button[onclick*="toggleSubmenu"]');
-        submenuButtons.forEach(button => {
-          const submenuId = button.getAttribute('onclick').match(/'([^']+)'/)[1];
-          const chevronId = submenuId.replace('submenu', 'chevron');
-
-          // Remove the inline onclick attribute
-          button.removeAttribute('onclick');
-
-          // Add event listener
-          button.addEventListener('click', () => {
-            toggleSubmenu(submenuId, chevronId);
-          });
-        });
-      }
-
-      // For tablet view, handle hover events
       if (sidebar) {
-        let hoverTimeout;
-
         sidebar.addEventListener('mouseenter', () => {
-          if (window.innerWidth >= 768 && window.innerWidth < 1024) {
-            clearTimeout(hoverTimeout);
-          }
+          if (isTablet()) clearTimeout(hoverTimeout);
         });
 
         sidebar.addEventListener('mouseleave', () => {
-          if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+          if (isTablet()) {
             hoverTimeout = setTimeout(() => {
               closeAllSubmenus();
             }, 300);
@@ -378,16 +335,17 @@
         });
       }
 
-      // Initialize everything when the DOM is loaded
-      document.addEventListener('DOMContentLoaded', () => {
-        initializeSubmenuListeners();
-        handleResize();
+      // 4. Resize Reset
+      window.addEventListener('resize', () => {
+        if (window.innerWidth >= 768) {
+          sidebar.classList.remove('show');
+          overlay.classList.add('hidden');
+        }
       });
-
-      window.addEventListener('resize', handleResize);
-    </script>
-
-    <script src="/static/js/scripts.js?v={{ .JsVersion }}" defer></script>
+    });
+  </script>
+  
+  <script src="/static/js/schema.js?v={{ .JsVersion }}"></script>
+  <script src="/static/js/config-manager.js?v={{ .JsVersion }}"></script>
 </body>
-
 </html>

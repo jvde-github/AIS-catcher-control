@@ -1,307 +1,377 @@
 {{define "system"}}
-<div class="max-w-4xl mx-auto p-4">
+<div class="max-w-5xl mx-auto space-y-6">
 
   <!-- System Actions Box -->
-   {{if not .SystemInfo.DockerMode}}
-  <div class="mb-8 bg-white rounded-lg p-6 border border-gray-200">
-    <h2 class="text-2xl font-bold text-gray-800 mb-6">System Actions</h2>
-
-    <div class="flex space-x-4">
-      <!-- Action Selection -->
-      <select id="actionSelect"
-        class="flex-1 rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-        <option value="update-all">Upgrade all</option>
-        <option value="system-update">System Update (apt-get update)</option>
-        <option value="ais-update-prebuilt">Upgrade AIS-catcher</option>
-        <option value="ais-update-source">Upgrade AIS-catcher from Source</option>
-        <option value="control-update">Upgrade AIS-catcher Control</option>
-        <option value="update-all-reboot">Upgrade All and Reboot</option>
-        <option value="system-reboot">System Reboot</option>
-        <option value="system-halt">System Halt</option>
-      </select>
-
-      <!-- Execute Button -->
-      <button onclick="executeSelectedAction()" id="executeButton"
-        class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors">
-        Execute
-      </button>
+  {{if not .SystemInfo.DockerMode}}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center space-x-2">
+      <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+      <h2 class="font-semibold text-slate-700">System Actions</h2>
     </div>
-
-    <!-- Progress Display -->
-    <div id="progressDisplay" class="mt-6 hidden">
-      <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="text-base font-medium text-gray-800" id="progressTitle">Operation in Progress</h4>
-          <span class="px-3 py-1 text-xs rounded-full bg-blue-100 text-blue-800" id="progressStatus">Running</span>
-        </div>
-        <div class="space-y-3">
-          <div class="h-64 overflow-y-auto bg-white p-3 rounded border border-gray-200 font-mono text-sm"
-            id="progressOutput">
+    
+    <div class="p-6">
+      <div class="flex flex-col sm:flex-row gap-4">
+        <!-- Styled Select -->
+        <div class="relative flex-1">
+          <select id="actionSelect" class="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent shadow-sm">
+            <option value="" disabled selected>Select an operation...</option>
+            <option value="update-all">Upgrade All Components</option>
+            <option value="system-update">System Update (apt-get)</option>
+            <option value="ais-update-prebuilt">Upgrade AIS-catcher (Prebuilt)</option>
+            <option value="ais-update-source">Upgrade AIS-catcher (Source)</option>
+            <option value="control-update">Upgrade Control Panel</option>
+            <option value="update-all-reboot">Upgrade All & Reboot</option>
+            <option value="system-reboot">System Reboot</option>
+            <option value="system-halt">System Halt</option>
+          </select>
+          <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
           </div>
+        </div>
+
+        <!-- Execute Button -->
+        <button onclick="executeSelectedAction()" id="executeButton"
+          class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-lg transition-all duration-200 shadow-sm flex items-center justify-center gap-2 w-auto self-start sm:self-auto">
+          <span>Execute</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+        </button>
+      </div>
+
+      <!-- Terminal Output Display -->
+      <div id="progressDisplay" class="mt-6 hidden">
+        <div class="bg-slate-900 rounded-lg overflow-hidden border border-slate-700 shadow-inner">
+          <div class="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+            <div class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-slate-600"></div>
+              <h4 class="text-xs font-mono text-slate-300" id="progressTitle">Terminal</h4>
+            </div>
+            <span class="px-2 py-0.5 text-[10px] uppercase font-bold tracking-wide rounded bg-slate-700 text-slate-300" id="progressStatus">Ready</span>
+          </div>
+          <div class="h-64 overflow-y-auto p-4 font-mono text-xs sm:text-sm leading-relaxed text-slate-300" id="progressOutput"></div>
         </div>
       </div>
     </div>
   </div>
   {{end}}
 
-  <div class="mb-8 bg-white rounded-lg p-6 border border-gray-200">
-    <h2 class="text-2xl font-bold text-gray-800 mb-6">Support</h2>
-    <div class="flex flex-col md:flex-row items-start md:items-center gap-3 mb-4">
-      <svg class="flex-shrink-0 w-10 h-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#5f6368">
-        <path
-          d="m480-80-10-120h-10q-142 0-241-99t-99-241q0-142 99-241t241-99q71 0 132.5 26.5t108 73q46.5 46.5 73 108T800-540q0 75-24.5 144t-67 128q-42.5 59-101 107T480-80Zm80-146q71-60 115.5-140.5T720-540q0-109-75.5-184.5T460-800q-109 0-184.5 75.5T200-540q0 109 75.5 184.5T460-280h100v54Zm-101-95q17 0 29-12t12-29q0-17-12-29t-29-12q-17 0-29 12t-12 29q0 17 12 29t29 12Zm-29-127h60q0-30 6-42t38-44q18-18 30-39t12-45q0-51-34.5-76.5T460-720q-44 0-74 24.5T344-636l56 22q5-17 19-33.5t41-16.5q27 0 40.5 15t13.5 33q0 17-10 30.5T480-558q-35 30-42.5 47.5T430-448Zm30-65Z" />
-      </svg>
-      <div class="flex-1 text-gray-700 text-sm md:text-base">
-        Need help? Read the
-        <a href="https://docs.aiscatcher.org/usage/gui/"
-          class="text-blue-600 hover:underline font-medium transition-colors">
-          documentation
-        </a>
-        to learn more about AIS-catcher. Visit our
-        <a href="https://github.com/jvde-github/AIS-catcher/discussions"
-          class="text-blue-600 hover:underline font-medium transition-colors">
-          community forum
-        </a>
-        for support and discussions.
-      </div>
+  <!-- Support Card -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row items-center gap-5">
+    <div class="p-3 bg-slate-50 rounded-full border border-slate-100">
+      <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+    </div>
+    <div class="flex-1 text-center md:text-left text-slate-600 text-sm">
+      <h3 class="font-semibold text-slate-800 text-lg mb-1">Need Assistance?</h3>
+      <p>
+        Check the 
+        <a href="https://docs.aiscatcher.org/usage/gui/" target="_blank" class="text-slate-900 font-medium underline decoration-slate-300 underline-offset-2 hover:decoration-slate-800 transition-all">documentation</a>
+        to learn more about configuration. Visit our
+        <a href="https://github.com/jvde-github/AIS-catcher/discussions" target="_blank" class="text-slate-900 font-medium underline decoration-slate-300 underline-offset-2 hover:decoration-slate-800 transition-all">community forum</a>
+        for support.
+      </p>
     </div>
   </div>
 
-  <div class="bg-white shadow-sm rounded-lg border">
-    <div class="p-6">
-      <h2 class="text-2xl font-bold text-gray-800 mb-6">System Information</h2>
+  <!-- System Information Grid -->
+  <div class="space-y-6">
+    <h2 class="text-xl font-semibold text-slate-800 px-1">System Diagnostics</h2>
 
-      <!-- AIS-catcher Information -->
-      <div class="mb-8 bg-gray-50 rounded-lg p-6 border border-gray-200">
-        <h3 class="text-xl font-medium text-gray-800 mb-4">AIS-catcher Information</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Available</p>
-            <p class="text-gray-800">{{if .SystemInfo.AISCatcherAvailable}}Yes{{else}}No{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Service Status</p>
-            <p class="text-gray-800">{{.SystemInfo.ServiceStatus}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Version</p>
-            <p class="text-gray-800">{{if not .SystemInfo.AISCatcherAvailable}}< 0.61{{else if eq
-                .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Version Code</p>
-            <p class="text-gray-800">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode
-              -1)}}-{{else}}{{.SystemInfo.AISCatcherVersionCode}}{{end}}</p>
-          </div>
-          <div class="md:col-span-2">
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Version Details</p>
-            <p class="text-gray-800">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode
-              -1)}}-{{else}}{{.SystemInfo.AISCatcherDescribe}}{{end}}</p>
+    <!-- AIS-catcher Information -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        <h3 class="font-medium text-slate-700">Application Status</h3>
+      </div>
+      <div class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Installed</p>
+          <p class="text-sm font-medium text-slate-700">{{if .SystemInfo.AISCatcherAvailable}}<span class="text-emerald-600">Yes</span>{{else}}<span class="text-rose-600">No</span>{{end}}</p>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Service State</p>
+          <div class="text-sm font-medium text-slate-700">
+            {{if eq .SystemInfo.ServiceStatus "active (running)"}}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">Running</span>
+            {{else}}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 capitalize">{{.SystemInfo.ServiceStatus}}</span>
+            {{end}}
           </div>
         </div>
-      </div>
-
-      <!-- Process Statistics -->
-      <div class="mb-8 bg-gray-50 rounded-lg p-6 border border-gray-200">
-        <h3 class="text-xl font-medium text-gray-800 mb-4">Process Statistics</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Process ID</p>
-            <p class="text-gray-800">{{if eq .SystemInfo.ProcessID 0}}-{{else}}{{.SystemInfo.ProcessID}}{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Memory Usage</p>
-            <p class="text-gray-800">{{if lt .SystemInfo.ProcessMemoryUsage 0.01}}-{{else}}{{printf "%.2f MB"
-              .SystemInfo.ProcessMemoryUsage}}{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">CPU Usage</p>
-            <p class="text-gray-800">{{if lt .SystemInfo.ProcessCPUUsage 0.01}}-{{else}}{{printf "%.1f%%"
-              .SystemInfo.ProcessCPUUsage}}{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">System CPU Usage</p>
-            <p class="text-gray-800">{{if lt .SystemInfo.SystemCPUUsage 0.01}}-{{else}}{{printf "%.1f%%"
-              .SystemInfo.SystemCPUUsage}}{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Thread Count</p>
-            <p class="text-gray-800">{{if eq .SystemInfo.ProcessThreadCount
-              0}}-{{else}}{{.SystemInfo.ProcessThreadCount}}{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Running Since</p>
-            <p class="text-gray-800">{{if
-              .SystemInfo.ProcessStartTime.IsZero}}-{{else}}{{.SystemInfo.ProcessStartTime.Format "Jan 02, 15:04:05"}}{{end}}</p>
-          </div>
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Version</p>
+          <p class="text-sm font-medium text-slate-700 font-mono">{{if not .SystemInfo.AISCatcherAvailable}}&lt; 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Build Code</p>
+          <p class="text-sm font-medium text-slate-700 font-mono">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}N/A{{else}}{{.SystemInfo.AISCatcherVersionCode}}{{end}}</p>
+        </div>
+        <div class="sm:col-span-2 lg:col-span-4 border-t border-slate-50 pt-4 mt-2">
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Version Details</p>
+          <p class="text-xs text-slate-500 font-mono bg-slate-50 p-2 rounded border border-slate-100">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}No detailed version information available.{{else}}{{.SystemInfo.AISCatcherDescribe}}{{end}}</p>
         </div>
       </div>
+    </div>
 
-      <!-- System Information -->
-      <div class="bg-gray-50 rounded-lg p-6 border border-gray-200">
-        <h3 class="text-xl font-medium text-gray-800 mb-4">System Information</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Process Statistics -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+          <h3 class="font-medium text-slate-700">Process Telemetry</h3>
+        </div>
+        <div class="p-6 grid grid-cols-2 md:grid-cols-3 gap-y-6 gap-x-4">
           <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Docker Mode</p>
-            <p class="text-gray-800">{{if .SystemInfo.DockerMode}}Yes{{else}}No{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Build Version</p>
-            <p class="text-gray-800">{{.SystemInfo.BuildVersion}}</p>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">PID</p>
+            <p class="text-sm font-medium text-slate-700 font-mono">{{if eq .SystemInfo.ProcessID 0}}-{{else}}{{.SystemInfo.ProcessID}}{{end}}</p>
           </div>
           <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Operating System</p>
-            <p class="text-gray-800">{{.SystemInfo.OS}}</p>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Memory (RSS)</p>
+            <p class="text-sm font-medium text-slate-700 font-mono">{{if lt .SystemInfo.ProcessMemoryUsage 0.01}}-{{else}}{{printf "%.2f MB" .SystemInfo.ProcessMemoryUsage}}{{end}}</p>
           </div>
           <div>
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Architecture</p>
-            <p class="text-gray-800">{{.SystemInfo.Architecture}}</p>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">App CPU</p>
+            <p class="text-sm font-medium text-slate-700 font-mono">{{if lt .SystemInfo.ProcessCPUUsage 0.01}}-{{else}}{{printf "%.1f%%" .SystemInfo.ProcessCPUUsage}}{{end}}</p>
           </div>
-          <div class="md:col-span-2">
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Memory</p>
-            <p class="text-gray-800">{{printf "%.2f GB" .MemoryGB}}</p>
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total CPU</p>
+            <p class="text-sm font-medium text-slate-700 font-mono">{{if lt .SystemInfo.SystemCPUUsage 0.01}}-{{else}}{{printf "%.1f%%" .SystemInfo.SystemCPUUsage}}{{end}}</p>
           </div>
-          <div class="md:col-span-2">
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">CPU</p>
-            <p class="text-gray-800">{{.SystemInfo.CPUInfo}}</p>
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Threads</p>
+            <p class="text-sm font-medium text-slate-700 font-mono">{{if eq .SystemInfo.ProcessThreadCount 0}}-{{else}}{{.SystemInfo.ProcessThreadCount}}{{end}}</p>
           </div>
-          <div class="md:col-span-2">
-            <p class="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Kernel Version</p>
-            <p class="text-gray-800">{{.SystemInfo.KernelVersion}}</p>
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Uptime</p>
+            <p class="text-sm font-medium text-slate-700 font-mono truncate">{{if .SystemInfo.ProcessStartTime.IsZero}}-{{else}}{{.SystemInfo.ProcessStartTime.Format "2006-01-02 15:04"}}{{end}}</p>
           </div>
         </div>
-      </div>
+    </div>
+
+    <!-- Host Information -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+          <h3 class="font-medium text-slate-700">Host Environment</h3>
+        </div>
+        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Environment</p>
+            <div class="flex items-center gap-2">
+                {{if .SystemInfo.DockerMode}}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Docker Container</span>
+                {{else}}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">Bare Metal / VM</span>
+                {{end}}
+            </div>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Control Version</p>
+            <p class="text-sm font-medium text-slate-700 font-mono">{{.SystemInfo.BuildVersion}}</p>
+          </div>
+          <div class="pt-2 border-t border-slate-50 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">OS / Arch</p>
+                <p class="text-sm font-medium text-slate-700">{{.SystemInfo.OS}} <span class="text-slate-400 mx-1">/</span> {{.SystemInfo.Architecture}}</p>
+             </div>
+             <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Kernel</p>
+                <p class="text-sm font-medium text-slate-700 font-mono text-xs">{{.SystemInfo.KernelVersion}}</p>
+             </div>
+          </div>
+          <div class="md:col-span-2">
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Hardware</p>
+            <div class="bg-slate-50 rounded border border-slate-100 p-3">
+                 <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs text-slate-500">CPU Model</span>
+                    <span class="text-xs font-medium text-slate-700 text-right">{{.SystemInfo.CPUInfo}}</span>
+                 </div>
+                 <div class="flex justify-between items-center">
+                    <span class="text-xs text-slate-500">Total Memory</span>
+                    <span class="text-xs font-medium text-slate-700">{{printf "%.2f GB" .MemoryGB}}</span>
+                 </div>
+            </div>
+          </div>
+        </div>
     </div>
   </div>
 </div>
 
 <script>
   let currentOperation = null;
-let currentAction = null;
+  let currentAction = null;
 
-function showProgress(show = true) {
-    const display = document.getElementById('progressDisplay');
-    const executeButton = document.getElementById('executeButton');
-    
-    if (show) {
-        display.classList.remove('hidden');
-        executeButton.disabled = true;
-        executeButton.classList.add('opacity-50', 'cursor-not-allowed');
-    } else {
-        display.classList.add('hidden');
-        executeButton.disabled = false;
-        executeButton.classList.remove('opacity-50', 'cursor-not-allowed');
-    }
-}
+  function showProgress(show = true) {
+      const display = document.getElementById('progressDisplay');
+      const executeButton = document.getElementById('executeButton');
+      
+      if (show) {
+          display.classList.remove('hidden');
+          // Visual disable
+          executeButton.disabled = true;
+          executeButton.classList.add('opacity-70', 'cursor-not-allowed', 'bg-slate-600');
+          executeButton.classList.remove('bg-slate-800', 'hover:bg-slate-700');
+          executeButton.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Processing...
+          `;
+      } else {
+          // Revert button
+          executeButton.disabled = false;
+          executeButton.classList.remove('opacity-70', 'cursor-not-allowed', 'bg-slate-600');
+          executeButton.classList.add('bg-slate-800', 'hover:bg-slate-700');
+          executeButton.innerHTML = `
+            <span>Execute</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+          `;
+      }
+  }
 
-function appendOutput(text) {
-    const output = document.getElementById('progressOutput');
-    const wasScrolledToBottom = output.scrollHeight - output.clientHeight <= output.scrollTop + 1;
-    
-    output.innerHTML += text.replace(/\n/g, '<br>');
-    
-    if (wasScrolledToBottom) {
-        output.scrollTop = output.scrollHeight;
-    }
-}
+  function appendOutput(text) {
+      const output = document.getElementById('progressOutput');
+      const wasScrolledToBottom = output.scrollHeight - output.clientHeight <= output.scrollTop + 10;
+      
+      // Basic ANSI-like coloring could go here, for now just clean text
+      output.innerHTML += text.replace(/\n/g, '<br>');
+      
+      if (wasScrolledToBottom) {
+          output.scrollTop = output.scrollHeight;
+      }
+  }
 
-function updateStatus(status, isError = false) {
-    const statusElement = document.getElementById('progressStatus');
-    statusElement.className = `px-3 py-1 text-xs rounded-full ${
-        isError ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
-    }`;
-    statusElement.textContent = status;
-}
+  function updateStatus(status, isError = false) {
+      const statusElement = document.getElementById('progressStatus');
+      statusElement.className = `px-2 py-0.5 text-[10px] uppercase font-bold tracking-wide rounded ${
+          isError ? 'bg-rose-600 text-white' : (status === 'Completed' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300')
+      }`;
+      statusElement.textContent = status;
+  }
 
+  async function executeSelectedAction() {
+      const select = document.getElementById('actionSelect');
+      const action = select.value;
+      
+      if (!action) {
+          alert('Please select an operation from the list.');
+          select.focus();
+          return;
+      }
 
-async function executeSelectedAction() {
-    const select = document.getElementById('actionSelect');
-    const action = select.value;
-    
-    if (!action) {
-        alert('Please select an action first');
-        return;
-    }
+      if (currentOperation) {
+          return;
+      }
 
-    if (currentOperation) {
-        alert('An operation is already in progress');
-        return;
-    }
+      // Handle reboot confirmations
+      if (action === 'system-reboot' || action === 'update-all-reboot') {
+          if (!confirm('Are you sure you want to reboot the system? This will stop the AIS service temporarily.')) {
+              return;
+          }
+      }
 
-    // Handle reboot confirmations
-    if (action === 'system-reboot' || action === 'update-all-reboot') {
-        if (!confirm('Are you sure you want to reboot the system? This will disconnect all users and stop AIS-catcher.')) {
-            return;
-        }
-    }
+      currentAction = action;
+      document.getElementById('progressOutput').innerHTML = '<span class="text-slate-500">Initializing sequence...</span><br>';
+      document.getElementById('progressTitle').textContent = getActionTitle(action);
+      updateStatus('Running');
+      showProgress(true);
 
-    currentAction = action;
-    document.getElementById('progressOutput').innerHTML = '';
-    document.getElementById('progressTitle').textContent = getActionTitle(action);
-    updateStatus('Running');
-    showProgress(true);
+      connectSSE(action);
+  }
 
-    currentOperation = new EventSource(`/system-action-progress?action=${action}`);
-    
-    currentOperation.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'output') {
-            appendOutput(data.content + '\n');
-        } else if (data.type === 'status') {
-            updateStatus(data.content);
-        } else if (data.type === 'complete') {
-            appendOutput('\nOperation completed successfully\n');
-            if (data.reload) {
-                appendOutput('\nSystem will reboot in 5 seconds...');
-                setTimeout(() => window.location.reload(), 5000);
-            }
-            finishOperation('Completed', false);
-        } else if (data.type === 'error') {
-            appendOutput('\nError: ' + data.content + '\n');
-            finishOperation('Failed', true);
-        }
-    };
+  function finishOperation(status, isError = false) {
+      updateStatus(status, isError);
+      if (currentOperation) {
+          currentOperation.close();
+          currentOperation = null;
+      }
+      currentAction = null;
+      
+      // Re-enable button
+      const executeButton = document.getElementById('executeButton');
+      executeButton.disabled = false;
+      executeButton.classList.remove('opacity-70', 'cursor-not-allowed', 'bg-slate-600');
+      executeButton.classList.add('bg-slate-800', 'hover:bg-slate-700');
+      executeButton.innerHTML = `
+          <span>Execute</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+      `;
+      
+      // Ensure display stays visible to show logs
+      const progressDisplay = document.getElementById('progressDisplay');
+      progressDisplay.classList.remove('hidden');
+  }
 
-    currentOperation.onerror = () => {
-        // Only show error if we haven't finished normally
-        if (currentAction) {
-            finishOperation('Connection Lost', true);
-        }
-    };
-}
+  function getActionTitle(action) {
+      const titles = {
+          'system-update': 'System Update (APT)',
+          'ais-update-prebuilt': 'AIS-catcher Update (Binary)',
+          'ais-update-source': 'AIS-catcher Update (Source)',
+          'control-update': 'Control Panel Update',
+          'update-all-reboot': 'Full Upgrade & Reboot',
+          'system-reboot': 'System Reboot',
+          'system-halt': 'System Shutdown'
+      };
+      return titles[action] || 'System Operation';
+  }
 
-function finishOperation(status, isError = false) {
-    updateStatus(status, isError);
-    if (currentOperation) {
-        currentOperation.close();
-        currentOperation = null;
-    }
-    currentAction = null;
-    
-    // Always re-enable the button
-    const executeButton = document.getElementById('executeButton');
-    executeButton.disabled = false;
-    executeButton.classList.remove('opacity-50', 'cursor-not-allowed');
-    
-    // Keep the progress display visible but mark it as complete
-    const progressDisplay = document.getElementById('progressDisplay');
-    if (progressDisplay) {
-        progressDisplay.classList.remove('hidden');
-    }
-}
+  // Check status on load
+  document.addEventListener('DOMContentLoaded', () => {
+      fetch('/system-action-status')
+          .then(response => response.json())
+          .then(data => {
+              if (data.running && data.action) {
+                  // Restore UI state
+                  const select = document.getElementById('actionSelect');
+                  if (select) select.value = data.action;
+                  
+                  currentAction = data.action;
+                  document.getElementById('progressTitle').textContent = getActionTitle(data.action);
+                  document.getElementById('progressOutput').innerHTML = ''; // Will be filled by history
+                  updateStatus('Running');
+                  showProgress(true);
+                  
+                  // Reconnect SSE
+                  connectSSE(data.action);
+              }
+          })
+          .catch(console.error);
+  });
 
-function getActionTitle(action) {
-    const titles = {
-        'system-update': 'System Update',
-        'ais-update-prebuilt': 'AIS-catcher Update (Pre-built)',
-        'ais-update-source': 'AIS-catcher Update (Source)',
-        'control-update': 'AIS-catcher Control Update',
-        'update-all-reboot': 'Full System Update & Reboot',
-        'system-reboot': 'System Reboot',
-        'system-halt': 'System Halt'
-    };
-    return titles[action] || 'System Operation';
-}
+  function connectSSE(action) {
+      if (currentOperation) return;
+
+      currentOperation = new EventSource(`/system-action-progress?action=${action}`);
+      
+      currentOperation.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'output') {
+              appendOutput(data.content + '\n');
+          } else if (data.type === 'status') {
+              updateStatus(data.content);
+          } else if (data.type === 'complete') {
+              appendOutput('\n<span class="text-emerald-400">Operation completed successfully.</span>\n');
+              
+              let shouldReload = false;
+              try {
+                  const result = JSON.parse(data.content);
+                  if (result.reload) shouldReload = true;
+              } catch (e) {
+                  // Content might not be JSON, ignore
+              }
+
+              if (shouldReload) {
+                  appendOutput('\n<span class="text-amber-400">System will reboot in 5 seconds...</span>');
+                  setTimeout(() => window.location.reload(), 5000);
+              }
+              finishOperation('Completed', false);
+          } else if (data.type === 'error') {
+              appendOutput('\n<span class="text-rose-400">Error: ' + data.content + '</span>\n');
+              finishOperation('Failed', true);
+          }
+      };
+
+      currentOperation.onerror = () => {
+          if (currentAction) {
+              finishOperation('Connection Lost', true);
+          }
+      };
+  }
 </script>
 {{end}}

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -14,12 +15,12 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ import (
 
 var (
 	buildVersion = "dev" // This will be set during build
+	ansiEscape   = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 )
 
 // Embedding the templates and static files
@@ -80,8 +82,6 @@ type SystemInfo struct {
 	SystemMemoryUsage     float64   `json:"system_memory_usage"` // percentage
 }
 
-var configIntegrityError = false
-
 var templates *template.Template
 
 type LogMessage struct {
@@ -112,13 +112,35 @@ type ServiceConfig struct {
 
 var systemInfo SystemInfo
 
-type OperationProgress struct {
-	cmd    *exec.Cmd
-	ctx    context.Context
-	cancel context.CancelFunc
+// Global state for system actions
+type SystemActionState struct {
+	sync.Mutex
+	IsRunning   bool
+	ActionName  string
+	Logs        []string
+	Subscribers map[chan SSEMessage]bool
+	Result      *SSEMessage // Store the final result message
 }
 
-var activeOperations sync.Map
+type SSEMessage struct {
+	Type    string
+	Content string
+}
+
+var globalActionState = SystemActionState{
+	Subscribers: make(map[chan SSEMessage]bool),
+}
+
+func systemActionStatusHandler(w http.ResponseWriter, r *http.Request) {
+	globalActionState.Lock()
+	defer globalActionState.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"running": globalActionState.IsRunning,
+		"action":  globalActionState.ActionName,
+	})
+}
 
 func getActionScript(action string) (string, bool) {
 	var script string
@@ -192,110 +214,200 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	action := r.URL.Query().Get("action")
-	script, reload := getActionScript(action)
+	requestedAction := r.URL.Query().Get("action")
 
-	if script == "" {
-		http.Error(w, "Invalid action", http.StatusBadRequest)
+	globalActionState.Lock()
+	if globalActionState.IsRunning {
+		// If an action is running, we can only attach to it if the requested action matches
+		// or if no specific action was requested (just viewing status)
+		if requestedAction != "" && requestedAction != globalActionState.ActionName {
+			globalActionState.Unlock()
+			sendSSEMessage(w, flusher, "error", "Another system action is already in progress")
+			return
+		}
+		// Proceed to attach
+	} else {
+		// If not running, we can start a new one if requested
+		if requestedAction != "" {
+			script, reload := getActionScript(requestedAction)
+			if script == "" {
+				globalActionState.Unlock()
+				sendSSEMessage(w, flusher, "error", "Invalid action")
+				return
+			}
+
+			// Start new action
+			globalActionState.IsRunning = true
+			globalActionState.ActionName = requestedAction
+			globalActionState.Logs = []string{}
+			globalActionState.Result = nil
+
+			// Run in background
+			go runSystemAction(requestedAction, script, reload)
+		} else {
+			// Not running, no action requested -> nothing to do
+			globalActionState.Unlock()
+			return
+		}
+	}
+
+	// Subscribe to updates
+	msgChan := make(chan SSEMessage, 100)
+	globalActionState.Subscribers[msgChan] = true
+
+	// Send history immediately
+	history := make([]string, len(globalActionState.Logs))
+	copy(history, globalActionState.Logs)
+
+	// If we have a result (finished just now or previously), send it
+	var result *SSEMessage
+	if globalActionState.Result != nil {
+		result = globalActionState.Result
+	}
+
+	globalActionState.Unlock()
+
+	// Send history
+	for _, log := range history {
+		sendSSEMessage(w, flusher, "output", log)
+	}
+
+	// If finished, send result and exit
+	if result != nil {
+		sendSSEMessage(w, flusher, result.Type, result.Content)
+		// We don't return here immediately because we might want to keep the connection open?
+		// No, if it's done, we are done.
+		// But wait, if we just attached to a finished action, we send result and close.
 		return
 	}
 
-	// Create a unique unit name for this execution
-	unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
-
-	// Create context with cancellation
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	// Set proper unit properties for systemd-run
-	runCmd := exec.Command("systemd-run",
-		"--unit="+unitName,
-		"--property=Type=oneshot",
-		"--property=StandardOutput=journal",
-		"--property=StandardError=journal",
-		"--collect",
-		"/bin/bash", "-c", script)
-
-	if err := runCmd.Start(); err != nil {
-		sendSSEError(w, flusher, fmt.Sprintf("Failed to start command: %v", err))
-		return
-	}
-
-	// Start log streaming immediately
-	logChan := make(chan string, 100)
-	go func() {
-		// Wait a brief moment for the unit to be created
-		time.Sleep(100 * time.Millisecond)
-		streamJournalLogs(ctx, unitName, logChan)
-	}()
-
-	// Monitor status and handle logs
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
+	// Listen for new messages
+	// Use r.Context().Done() to detect client disconnect
+	ctx := r.Context()
 
 	for {
 		select {
+		case msg := <-msgChan:
+			sendSSEMessage(w, flusher, msg.Type, msg.Content)
+			if msg.Type == "complete" || msg.Type == "error" {
+				return
+			}
 		case <-ctx.Done():
+			globalActionState.Lock()
+			delete(globalActionState.Subscribers, msgChan)
+			globalActionState.Unlock()
 			return
-		case log := <-logChan:
-			// Only send non-empty, relevant output
-			if log != "" && !strings.Contains(log, "pam_unix") &&
-				!strings.Contains(log, "Missing '='") &&
-				!strings.Contains(log, "PWD=") &&
-				!strings.Contains(log, "USER=root") {
-				sendSSEMessage(w, flusher, "output", log)
-			}
-		case <-ticker.C:
-			status := getUnitStatus(unitName)
-			if status == "inactive" || status == "dead" {
-				// Check exit status
-				if getUnitExitStatus(unitName) == 0 {
-					sendSSEMessage(w, flusher, "complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
-				} else {
-					sendSSEMessage(w, flusher, "error", "Command failed")
-				}
-				return
-			} else if status == "failed" {
-				sendSSEMessage(w, flusher, "error", "Command failed")
-				return
-			}
 		}
 	}
 }
 
-func streamJournalLogs(ctx context.Context, unitName string, logChan chan<- string) {
-	cmd := exec.Command("journalctl",
-		"-u", unitName,
-		"-f",
-		"--no-pager",
-		"--output=json")
+func runSystemAction(actionName, script string, reload bool) {
+	// Create a unique unit name for this execution
+	unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
 
-	stdout, err := cmd.StdoutPipe()
+	// Check if systemd is available
+	useSystemd := false
+	if _, err := os.Stat("/run/systemd/system"); err == nil {
+		useSystemd = true
+	}
+	if config.Docker {
+		useSystemd = false
+	}
+
+	var runCmd *exec.Cmd
+	// We use a background context because this runs independently of the HTTP request
+	ctx := context.Background()
+
+	if useSystemd {
+		// Set proper unit properties for systemd-run
+		runCmd = exec.CommandContext(ctx, "systemd-run",
+			"--unit="+unitName,
+			"--property=Type=oneshot",
+			"--pipe",
+			"--collect",
+			"/bin/bash", "-c", script)
+	} else {
+		// Run directly
+		runCmd = exec.CommandContext(ctx, "/bin/bash", "-c", script)
+	}
+
+	stdout, err := runCmd.StdoutPipe()
 	if err != nil {
-		log.Printf("Failed to create stdout pipe: %v", err)
+		broadcastResult("error", fmt.Sprintf("Failed to create stdout pipe: %v", err))
+		return
+	}
+	runCmd.Stderr = runCmd.Stdout // Combine stderr into stdout
+
+	if err := runCmd.Start(); err != nil {
+		broadcastResult("error", fmt.Sprintf("Failed to start command: %v", err))
 		return
 	}
 
-	if err := cmd.Start(); err != nil {
-		log.Printf("Failed to start journalctl: %v", err)
-		return
-	}
-
-	go func() {
-		<-ctx.Done()
-		if cmd.Process != nil {
-			cmd.Process.Kill()
-		}
-	}()
-
+	// Stream output
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			logChan <- parseJournalLine(scanner.Text())
+		log := scanner.Text()
+		if log != "" {
+			cleanLog := ansiEscape.ReplaceAllString(log, "")
+			broadcastLog(cleanLog)
 		}
+	}
+
+	if err := runCmd.Wait(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			broadcastResult("error", fmt.Sprintf("Command failed with exit code %d", exitErr.ExitCode()))
+		} else {
+			broadcastResult("error", fmt.Sprintf("Command execution error: %v", err))
+		}
+	} else {
+		broadcastResult("complete", fmt.Sprintf(`{"success": true, "reload": %v}`, reload))
+	}
+}
+
+func broadcastLog(content string) {
+	globalActionState.Lock()
+	defer globalActionState.Unlock()
+
+	// Append to history (limit to 1000 lines)
+	if len(globalActionState.Logs) >= 1000 {
+		globalActionState.Logs = globalActionState.Logs[1:]
+	}
+	globalActionState.Logs = append(globalActionState.Logs, content)
+
+	msg := SSEMessage{Type: "output", Content: content}
+	for ch := range globalActionState.Subscribers {
+		// Non-blocking send to avoid hanging if a client is slow
+		select {
+		case ch <- msg:
+		default:
+		}
+	}
+}
+
+func broadcastResult(msgType, content string) {
+	globalActionState.Lock()
+	defer globalActionState.Unlock()
+
+	globalActionState.IsRunning = false
+	result := SSEMessage{Type: msgType, Content: content}
+	globalActionState.Result = &result
+
+	for ch := range globalActionState.Subscribers {
+		select {
+		case ch <- result:
+		default:
+		}
+		// We don't close channels here, the handler loop will see the "complete"/"error" type and return.
+		// But we should probably remove them from the map?
+		// The handler will remove itself when it returns and defer cleanup isn't there?
+		// The handler loop breaks on "complete"/"error", so it will exit.
+		// But we need to make sure we don't keep sending to them.
+		// Actually, the handler removes itself on ctx.Done(), but if we return from loop, we should also remove.
+		// But we can't remove from inside the loop easily without locking again.
+		// It's fine, the handler will return, the channel will be garbage collected eventually,
+		// but we should clean up the map.
+		// Let's just clear the map here since everyone is done.
+		delete(globalActionState.Subscribers, ch)
 	}
 }
 
@@ -421,7 +533,7 @@ func migrateMsgFormat(channel map[string]interface{}) bool {
 
 // Add this function to perform one-time migration at startup
 func migrateConfigAtStartup() error {
-	jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+	jsonContent, err := os.ReadFile(configJSONFilePath)
 	if err != nil {
 		return err
 	}
@@ -438,10 +550,23 @@ func migrateConfigAtStartup() error {
 
 	needsReceiverMigration := false
 	needsMsgFormatMigration := false
+	needsServerArrayMigration := false
 
 	// Check if receiver array migration is needed
 	if _, exists := configMap["receiver"]; !exists {
 		needsReceiverMigration = true
+	}
+
+	// Check if server needs to be converted from object to array
+	if serverValue, exists := configMap["server"]; exists {
+		// Check if it's an object (map) instead of an array
+		if serverObj, isMap := serverValue.(map[string]interface{}); isMap {
+			// It's an object, not an array - needs migration
+			log.Println("Detected 'server' as object, will migrate to array")
+			needsServerArrayMigration = true
+			// Convert to array immediately
+			configMap["server"] = []interface{}{serverObj}
+		}
 	}
 
 	// Check if msgformat migration is needed for udp, tcp_listener, tcp arrays
@@ -473,7 +598,7 @@ func migrateConfigAtStartup() error {
 	}
 
 	// If no migration needed, return
-	if !needsReceiverMigration && !needsMsgFormatMigration {
+	if !needsReceiverMigration && !needsMsgFormatMigration && !needsServerArrayMigration {
 		return nil
 	}
 
@@ -498,9 +623,15 @@ func migrateConfigAtStartup() error {
 		}
 	}
 
+	// Server array migration has already been applied to configMap above
+	// Just need to set the flag for saving later
+	if needsServerArrayMigration {
+		log.Println("Server object converted to array")
+	}
+
 	// Perform msgformat migration if needed
+	modified := needsServerArrayMigration // Server migration already done
 	if needsMsgFormatMigration {
-		modified := false
 		for _, arrayKey := range channelArrays {
 			if arrayValue, ok := configMap[arrayKey].([]interface{}); ok {
 				for _, item := range arrayValue {
@@ -515,11 +646,15 @@ func migrateConfigAtStartup() error {
 
 		if modified {
 			log.Println("Migrated msgformat in channel arrays (udp, tcp_listener, tcp)")
-			migratedContent, err = json.MarshalIndent(configMap, "", "  ")
-			if err != nil {
-				log.Printf("Failed to marshal migrated config: %v", err)
-				return err
-			}
+		}
+	}
+
+	// If any migration was performed, marshal the config
+	if modified {
+		migratedContent, err = json.MarshalIndent(configMap, "", "  ")
+		if err != nil {
+			log.Printf("Failed to marshal migrated config: %v", err)
+			return err
 		}
 	}
 
@@ -528,7 +663,7 @@ func migrateConfigAtStartup() error {
 	log.Println(strings.Repeat("=", 50))
 
 	// Save migrated config back to file
-	if err := ioutil.WriteFile(configJSONFilePath, migratedContent, 0644); err != nil {
+	if err := os.WriteFile(configJSONFilePath, migratedContent, 0644); err != nil {
 		log.Printf("Failed to save migrated config: %v", err)
 		return err
 	}
@@ -536,34 +671,15 @@ func migrateConfigAtStartup() error {
 	log.Println("Migration completed and saved to file")
 
 	// Update hash to prevent integrity error
-	config.ConfigJSONHash = calculate32BitHash(string(migratedContent))
-	if err := saveControlSettings(); err != nil {
+	err = updateConfig(func(c *Config) {
+		c.ConfigJSONHash = calculate32BitHash(string(migratedContent))
+	})
+	if err != nil {
 		log.Printf("Failed to update config hash: %v", err)
 		return err
 	}
 
 	return nil
-}
-
-func getUnitExitStatus(unit string) int {
-	cmd := exec.Command("systemctl", "show", unit, "--property=ExecMainStatus")
-	output, err := cmd.Output()
-	if err != nil {
-		return -1
-	}
-	status := strings.TrimSpace(strings.TrimPrefix(string(output), "ExecMainStatus="))
-	exitStatus, err := strconv.Atoi(status)
-	if err != nil {
-		return -1
-	}
-	return exitStatus
-}
-
-// Helper function to get systemd unit status
-func getUnitStatus(unit string) string {
-	cmd := exec.Command("systemctl", "is-active", unit)
-	output, _ := cmd.Output()
-	return strings.TrimSpace(string(output))
 }
 
 func systemActionCancelHandler(w http.ResponseWriter, r *http.Request) {
@@ -635,13 +751,17 @@ func updateScriptLogsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func sendSSEMessage(w http.ResponseWriter, flusher http.Flusher, messageType string, content string) {
-	fmt.Fprintf(w, "data: {\"type\": \"%s\", \"content\": %s}\n\n",
-		messageType, strconv.Quote(content))
+	msg := map[string]string{
+		"type":    messageType,
+		"content": content,
+	}
+	jsonData, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("Error marshaling SSE message: %v", err)
+		return
+	}
+	fmt.Fprintf(w, "data: %s\n\n", jsonData)
 	flusher.Flush()
-}
-
-func sendSSEError(w http.ResponseWriter, flusher http.Flusher, message string) {
-	sendSSEMessage(w, flusher, "error", message)
 }
 
 func findAISCatcherPID() (int32, error) {
@@ -739,7 +859,7 @@ func collectSystemInfo() {
 	systemInfo.Architecture = runtime.GOARCH
 
 	// Get CPU Info
-	if cpuinfo, err := ioutil.ReadFile("/proc/cpuinfo"); err == nil {
+	if cpuinfo, err := os.ReadFile("/proc/cpuinfo"); err == nil {
 		scanner := bufio.NewScanner(strings.NewReader(string(cpuinfo)))
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -751,7 +871,7 @@ func collectSystemInfo() {
 	}
 
 	// Get Memory Info
-	if meminfo, err := ioutil.ReadFile("/proc/meminfo"); err == nil {
+	if meminfo, err := os.ReadFile("/proc/meminfo"); err == nil {
 		scanner := bufio.NewScanner(strings.NewReader(string(meminfo)))
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -774,7 +894,7 @@ func collectSystemInfo() {
 
 	// Get service status
 	systemInfo.ServiceStatus = getServiceStatus()
-	systemInfo.DockerMode = config.Docker
+	systemInfo.DockerMode = getConfig().Docker
 }
 
 func init() {
@@ -797,9 +917,9 @@ func init() {
 		"templates/content/tcp-channels.html",
 		"templates/content/http-channels.html",
 		"templates/content/mqtt-channels.html",
+		"templates/content/output.html",
 		"templates/content/sharing-channel.html",
 		"templates/content/change-password.html",
-		"templates/content/input-selection.html",
 		"templates/content/device-setup.html",
 		"templates/content/integrity-error.html",
 		"templates/content/server-setup.html",
@@ -808,24 +928,95 @@ func init() {
 		"templates/content/edit-config-json.html",
 		"templates/content/edit-config-cmd.html",
 		"templates/content/tcp-servers.html",
+		"templates/license.html",
 	)
 	if err != nil {
 		log.Fatalf("Failed to parse templates: %v", err)
 	}
 }
 
-var sessions = map[string]string{}
-
-type Config struct {
-	PasswordHash   string `json:"password_hash"`
-	Port           string `json:"port"`
-	ConfigCmdHash  uint32 `json:"config_cmd_hash"`
-	ConfigJSONHash uint32 `json:"config_json_hash"`
-	Docker         bool   `json:"docker"`
+type SessionManager struct {
+	mu       sync.RWMutex
+	sessions map[string]string // sessionID -> username
 }
 
-var config Config
+func NewSessionManager() *SessionManager {
+	return &SessionManager{
+		sessions: make(map[string]string),
+	}
+}
+
+func (sm *SessionManager) Create(username string) string {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	// Generate a secure random session ID
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to less secure if rand fails (unlikely)
+		return hashPassword(username + time.Now().String())
+	}
+	sessionID := hex.EncodeToString(b)
+
+	sm.sessions[sessionID] = username
+	return sessionID
+}
+
+func (sm *SessionManager) Get(sessionID string) (string, bool) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	user, ok := sm.sessions[sessionID]
+	return user, ok
+}
+
+func (sm *SessionManager) Delete(sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	delete(sm.sessions, sessionID)
+}
+
+var sessionManager = NewSessionManager()
+
+type Config struct {
+	PasswordHash    string `json:"password_hash"`
+	Port            string `json:"port"`
+	ConfigCmdHash   uint32 `json:"config_cmd_hash"`
+	ConfigJSONHash  uint32 `json:"config_json_hash"`
+	Docker          bool   `json:"docker"`
+	LicenseAccepted bool   `json:"license_accepted"`
+}
+
+var (
+	config         Config
+	integrityError bool
+	configMu       sync.RWMutex
+)
 var execDir string
+
+func getConfig() Config {
+	configMu.RLock()
+	defer configMu.RUnlock()
+	return config
+}
+
+func getIntegrityError() bool {
+	configMu.RLock()
+	defer configMu.RUnlock()
+	return integrityError
+}
+
+func setIntegrityError(val bool) {
+	configMu.Lock()
+	defer configMu.Unlock()
+	integrityError = val
+}
+
+func updateConfig(fn func(*Config)) error {
+	configMu.Lock()
+	defer configMu.Unlock()
+	fn(&config)
+	return saveControlSettings(config)
+}
 
 func initPaths() error {
 	execPath, err := os.Executable()
@@ -848,7 +1039,10 @@ func hashPassword(password string) string {
 }
 
 func loadControlSettings() error {
-	data, err := ioutil.ReadFile(settingsFilePath)
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	data, err := os.ReadFile(settingsFilePath)
 	if os.IsNotExist(err) {
 		config = Config{
 			PasswordHash:   hashPassword(defaultPassword),
@@ -857,24 +1051,24 @@ func loadControlSettings() error {
 			ConfigJSONHash: 3798370746,
 			Docker:         false,
 		}
-		return saveControlSettings()
-	} else if err != nil {
-		return err
-	} else {
-		err = json.Unmarshal(data, &config)
+		data, err := json.MarshalIndent(config, "", "    ")
 		if err != nil {
 			return err
 		}
+		return os.WriteFile(settingsFilePath, data, 0644)
+	} else if err != nil {
+		return err
 	}
-	return nil
+
+	return json.Unmarshal(data, &config)
 }
 
-func saveControlSettings() error {
-	data, err := json.MarshalIndent(config, "", "    ")
+func saveControlSettings(c Config) error {
+	data, err := json.MarshalIndent(c, "", "    ")
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(settingsFilePath, data, 0644)
+	return os.WriteFile(settingsFilePath, data, 0644)
 }
 
 func calculate32BitHash(input string) uint32 {
@@ -883,28 +1077,51 @@ func calculate32BitHash(input string) uint32 {
 	return h.Sum32()
 }
 
-func updateConfigJSONHash(input string) error {
-	hashValue := calculate32BitHash(input)
+// Authentication functions
 
-	config.ConfigJSONHash = uint32(hashValue)
-	err := saveControlSettings()
-	if err != nil {
-		return fmt.Errorf("failed to save control settings: %v", err)
+func licenseHandler(w http.ResponseWriter, r *http.Request) {
+	// Check if user is authenticated to determine if we should show the "Accept" button or just the license
+	// For now, we just show the license page.
+	// If we wanted to hide the accept button for logged-in users, we could check the cookie here.
+
+	data := map[string]interface{}{
+		"CssVersion": cssVersion,
+		"Accepted":   getConfig().LicenseAccepted,
 	}
-
-	return nil
+	templates.ExecuteTemplate(w, "license.html", data)
 }
 
-// Authentication functions
+func acceptLicenseHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/license", http.StatusSeeOther)
+		return
+	}
+
+	err := updateConfig(func(c *Config) {
+		c.LicenseAccepted = true
+	})
+	if err != nil {
+		log.Printf("Failed to save license acceptance: %v", err)
+		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
 
 func authenticate(username, password string) bool {
 	if username != defaultUsername {
 		return false
 	}
-	return hashPassword(password) == config.PasswordHash
+	return hashPassword(password) == getConfig().PasswordHash
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
+	if !getConfig().LicenseAccepted {
+		http.Redirect(w, r, "/license", http.StatusSeeOther)
+		return
+	}
+
 	if r.Method == http.MethodGet {
 		data := map[string]interface{}{
 			"CssVersion": cssVersion,
@@ -919,15 +1136,14 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 
 	if authenticate(username, password) {
-		sessionID := hashPassword(username + password)
-		sessions[sessionID] = username
+		sessionID := sessionManager.Create(username)
 		http.SetCookie(w, &http.Cookie{
 			Name:  sessionCookieName,
 			Value: sessionID,
 			Path:  "/",
 		})
 
-		if password == defaultPassword && hashPassword(password) == config.PasswordHash {
+		if password == defaultPassword && hashPassword(password) == getConfig().PasswordHash {
 			http.Redirect(w, r, "/change-password", http.StatusSeeOther)
 		} else {
 			http.Redirect(w, r, "/control", http.StatusSeeOther)
@@ -945,7 +1161,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err == nil {
-		delete(sessions, cookie.Value)
+		sessionManager.Delete(cookie.Value)
 		http.SetCookie(w, &http.Cookie{
 			Name:   sessionCookieName,
 			Value:  "",
@@ -959,7 +1175,13 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)
-		if err != nil || sessions[cookie.Value] != defaultUsername {
+		if err != nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		user, ok := sessionManager.Get(cookie.Value)
+		if !ok || user != defaultUsername {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -998,8 +1220,9 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	config.PasswordHash = hashPassword(newPassword)
-	err := saveControlSettings()
+	err := updateConfig(func(c *Config) {
+		c.PasswordHash = hashPassword(newPassword)
+	})
 	if err != nil {
 		data := map[string]interface{}{
 			"CssVersion":      cssVersion,
@@ -1012,10 +1235,6 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 		templates.ExecuteTemplate(w, "layout.html", data)
 		return
 	}
-
-	// Update session
-	cookie, _ := r.Cookie(sessionCookieName)
-	sessions[cookie.Value] = defaultUsername
 
 	http.Redirect(w, r, "/control", http.StatusSeeOther)
 }
@@ -1103,7 +1322,7 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 		Title:           "Control Dashboard",
 		Logs:            journalctlLogs,
 		LogTxtLogs:      logTxtLogs,
-		Docker:          config.Docker,
+		Docker:          getConfig().Docker,
 		ContentTemplate: "control",
 	}
 
@@ -1114,31 +1333,10 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func tcpServersHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /tcp-servers")
-		renderTemplateWithConfig(w, "TCP Servers", "tcp-servers")
-
-	} else if r.Method == http.MethodPost {
-		err := saveConfigJSON(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Configuration saved successfully."))
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-}
-
 func getServiceStatus() string {
-	if config.Docker {
-
+	if getConfig().Docker {
 		cmd := exec.Command("/usr/bin/is-running.sh")
-		output, _ := cmd.Output()
+		_ = cmd.Run() // We only care about the exit code
 
 		exitCode := cmd.ProcessState.ExitCode()
 
@@ -1149,7 +1347,6 @@ func getServiceStatus() string {
 		} else {
 			return "unknown"
 		}
-		return strings.TrimSpace(string(output))
 	}
 
 	cmd := exec.Command("systemctl", "is-active", "ais-catcher.service")
@@ -1171,7 +1368,7 @@ func getServiceStatus() string {
 }
 
 func getServiceUptime() string {
-	if config.Docker {
+	if getConfig().Docker {
 		cmd := exec.Command("/usr/bin/uptime.sh")
 		output, err := cmd.Output()
 		if err != nil {
@@ -1225,7 +1422,7 @@ func formatDuration(d time.Duration) string {
 }
 
 func getServiceLogs(lines int) []string {
-	if config.Docker {
+	if getConfig().Docker {
 		return []string{""}
 	}
 
@@ -1247,7 +1444,7 @@ func getServiceLogs(lines int) []string {
 
 func getLogTxtLogs(lines int) []string {
 
-	if !config.Docker {
+	if !getConfig().Docker {
 		return []string{""}
 	}
 
@@ -1281,7 +1478,7 @@ func getLogTxtLogs(lines int) []string {
 }
 
 func controlService(action string) error {
-	if config.Docker {
+	if getConfig().Docker {
 		// Use custom scripts for control if in Docker mode
 		script := fmt.Sprintf("/usr/bin/%s.sh", action)
 		fmt.Println("Running script:", script)
@@ -1295,7 +1492,7 @@ func controlService(action string) error {
 }
 
 func getServiceEnabled() (bool, error) {
-	if config.Docker {
+	if getConfig().Docker {
 		// Use custom scripts for control if in Docker mode
 		cmd := exec.Command("/usr/bin/is-enabled.sh")
 		output, _ := cmd.Output()
@@ -1338,8 +1535,8 @@ func parseJournalLine(line string) string {
 	// Parse JSON output from journalctl
 	var entry map[string]interface{}
 	if err := json.Unmarshal([]byte(line), &entry); err != nil {
-		// If JSON parsing fails, return the line as-is
-		return line
+		// If JSON parsing fails, return the line as-is, but stripped of ANSI codes
+		return ansiEscape.ReplaceAllString(line, "")
 	}
 
 	// Extract timestamp and message
@@ -1354,7 +1551,7 @@ func parseJournalLine(line string) string {
 
 	message := ""
 	if msg, ok := entry["MESSAGE"].(string); ok {
-		message = msg
+		message = ansiEscape.ReplaceAllString(msg, "")
 	}
 
 	if timestamp != "" && message != "" {
@@ -1366,11 +1563,11 @@ func parseJournalLine(line string) string {
 		return message
 	}
 
-	return line
+	return ansiEscape.ReplaceAllString(line, "")
 }
 
 func readConfigJSON() ([]byte, error) {
-	jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+	jsonContent, err := os.ReadFile(configJSONFilePath)
 	if err != nil {
 		log.Printf("Error reading config.json: %v", err)
 		return []byte(""), err
@@ -1378,16 +1575,16 @@ func readConfigJSON() ([]byte, error) {
 
 	calculatedHash := calculate32BitHash(string(jsonContent))
 
-	if uint32(calculatedHash) != config.ConfigJSONHash {
-		fmt.Printf("hash mismatch: config.json content does not match the stored hash (%d != %d)\n", calculatedHash, config.ConfigJSONHash)
-		configIntegrityError = true
+	if uint32(calculatedHash) != getConfig().ConfigJSONHash {
+		fmt.Printf("hash mismatch: config.json content does not match the stored hash (%d != %d)\n", calculatedHash, getConfig().ConfigJSONHash)
+		setIntegrityError(true)
 	}
 
 	return jsonContent, nil
 }
 
 func readConfigCmd() ([]byte, error) {
-	cmdContent, err := ioutil.ReadFile(configCmdFilePath)
+	cmdContent, err := os.ReadFile(configCmdFilePath)
 	if err != nil {
 		log.Printf("Error reading config.cmd: %v", err)
 		return []byte(""), err
@@ -1395,80 +1592,61 @@ func readConfigCmd() ([]byte, error) {
 
 	calculatedHash := calculate32BitHash(string(cmdContent))
 
-	if uint32(calculatedHash) != config.ConfigCmdHash {
-		fmt.Printf("hash mismatch: config.cmd content does not match the stored hash (%d != %d)\n", calculatedHash, config.ConfigCmdHash)
-		configIntegrityError = true
+	if uint32(calculatedHash) != getConfig().ConfigCmdHash {
+		fmt.Printf("hash mismatch: config.cmd content does not match the stored hash (%d != %d)\n", calculatedHash, getConfig().ConfigCmdHash)
+		setIntegrityError(true)
 	}
 
 	return cmdContent, nil
 }
 
 func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		return fmt.Errorf("Failed to read request body: %v", err)
+		return fmt.Errorf("failed to read request body: %v", err)
 	}
 
 	// Validate the JSON data
 	var jsonMap map[string]interface{}
 	err = json.Unmarshal(body, &jsonMap)
 	if err != nil {
-		return fmt.Errorf("Invalid JSON: %v", err)
+		log.Printf("JSON unmarshal error: %v, body: %s", err, string(body))
+		return fmt.Errorf("invalid JSON: %v", err)
 	}
 
 	// Check that "config" is "aiscatcher" and "version" is 1
 	configValue, ok := jsonMap["config"].(string)
 	if !ok || configValue != "aiscatcher" {
-		return fmt.Errorf("Invalid JSON: config value must be 'aiscatcher'")
+		log.Printf("Config validation failed: config=%v, ok=%v", configValue, ok)
+		return fmt.Errorf("invalid JSON: config value must be 'aiscatcher'")
 	}
 
 	versionValue, ok := jsonMap["version"].(float64)
 	if !ok || int(versionValue) != 1 {
-		return fmt.Errorf("Invalid JSON: version value must be 1")
+		log.Printf("Version validation failed: version=%v, ok=%v", versionValue, ok)
+		return fmt.Errorf("invalid JSON: version value must be 1")
 	}
 
 	hashValue := calculate32BitHash(string(body))
 	err = loadControlSettings()
 	if err != nil {
-		return fmt.Errorf("Failed to load control settings: %v", err)
+		return fmt.Errorf("failed to load control settings: %v", err)
 	}
 
-	config.ConfigJSONHash = uint32(hashValue)
-	err = saveControlSettings()
+	err = updateConfig(func(c *Config) {
+		c.ConfigJSONHash = uint32(hashValue)
+	})
 
 	if err != nil {
-		return fmt.Errorf("Failed to update control settings with new hash: %v", err)
+		return fmt.Errorf("failed to update control settings with new hash: %v", err)
 	}
 
-	err = ioutil.WriteFile(configJSONFilePath, body, 0644)
+	err = os.WriteFile(configJSONFilePath, body, 0644)
 	if err != nil {
-		return fmt.Errorf("Failed to save config.json: %v", err)
+		return fmt.Errorf("failed to save config.json: %v", err)
 	}
 
 	return nil
-}
-
-func sendSSE(w http.ResponseWriter, msg LogMessage) {
-	jsonData, err := json.Marshal(msg)
-	if err != nil {
-		log.Printf("Error marshaling log message: %v", err)
-		return
-	}
-	fmt.Fprintf(w, "data: %s\n\n", jsonData)
-}
-
-func sendHeartbeat(w http.ResponseWriter, flusher http.Flusher, ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			fmt.Fprintf(w, ": heartbeat\n\n")
-			flusher.Flush()
-		}
-	}
 }
 
 // Broadcaster manages log collection and client subscriptions
@@ -1620,8 +1798,9 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request, broadcaster *Broa
 	clientChan := broadcaster.Subscribe()
 	defer broadcaster.Unsubscribe(clientChan)
 
-	// Start sending heartbeats
-	go sendHeartbeat(w, flusher, ctx)
+	// Heartbeat ticker
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
 
 	// Listen for log messages and send them to the client
 	for {
@@ -1629,6 +1808,10 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request, broadcaster *Broa
 		case <-ctx.Done():
 			// Client disconnected
 			return
+		case <-ticker.C:
+			// Send heartbeat
+			fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
 		case msg, ok := <-clientChan:
 			if !ok {
 				return
@@ -1652,76 +1835,27 @@ func checkTailCommand() error {
 	return nil
 }
 
-func udpChannelsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /udp")
-		renderTemplateWithConfig(w, "UDP channels", "udp-channels")
-
-	} else if r.Method == http.MethodPost {
-		err := saveConfigJSON(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+// makeConfigHandler creates a handler for config pages that follow the same pattern
+func makeConfigHandler(title, contentTemplate string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			renderTemplateWithConfig(w, title, contentTemplate)
+		} else if r.Method == http.MethodPost {
+			err := saveConfigJSON(w, r)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Configuration saved successfully."))
+		} else {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
-		// Send success response
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Configuration saved successfully."))
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-}
-
-func deviceSetupHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /device")
-		renderTemplateWithConfig(w, "Device Configuration", "device-setup")
-	} else if r.Method == http.MethodPost {
-		// Handle POST request to save JSON data
-		err := saveConfigJSON(w, r)
-		if err != nil {
-			// Send error response
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		// Send success response
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Configuration saved successfully."))
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-}
-
-func sharingChannelsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /sharing")
-		renderTemplateWithConfig(w, "Community Sharing", "sharing-channel")
-	} else if r.Method == http.MethodPost {
-		// Handle POST request to save JSON data
-		err := saveConfigJSON(w, r)
-		if err != nil {
-			// Send error response
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		// Send success response
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Configuration saved successfully."))
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
 	}
 }
 
 func renderTemplateWithConfig(w http.ResponseWriter, title string, contentTemplate string) {
-	jsonContent, err := readConfigJSON()
-	if err != nil {
-		log.Printf("Error reading config.json: %v", err)
-		jsonContent = []byte("")
-	}
-
-	if true && configIntegrityError {
+	if true && getIntegrityError() {
 		data := map[string]interface{}{
 			"Title":           "Configuration Integrity Error",
 			"ContentTemplate": "integrity-error",
@@ -1737,41 +1871,20 @@ func renderTemplateWithConfig(w http.ResponseWriter, title string, contentTempla
 	data := map[string]interface{}{
 		"CssVersion":      cssVersion,
 		"JsVersion":       jsVersion,
-		"JsonContent":     string(jsonContent),
 		"Title":           title,
 		"ContentTemplate": contentTemplate,
 	}
 
-	err = templates.ExecuteTemplate(w, "layout.html", data)
+	err := templates.ExecuteTemplate(w, "layout.html", data)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Printf("Template execution error: %v", err)
 	}
 }
 
-func inputSelectionHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /input")
-		renderTemplateWithConfig(w, "Input Selection", "input-selection")
-
-	} else if r.Method == http.MethodPost {
-		err := saveConfigJSON(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		// Send success response
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Configuration saved successfully."))
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-}
-
 func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 
-	if true && configIntegrityError {
+	if true && getIntegrityError() {
 		data := map[string]interface{}{
 			"Title":           "Configuration Integrity Error",
 			"ContentTemplate": "integrity-error",
@@ -1786,20 +1899,12 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonContent, err := readConfigJSON()
-	if err != nil {
-		log.Printf("Error reading config.json: %v", err)
-		jsonContent = []byte("")
-	}
-
 	port := "8000"
 
-	if len(jsonContent) > 0 {
+	jsonContent, err := readConfigJSON()
+	if err == nil && len(jsonContent) > 0 {
 		var cfg ConfigJSON
-		err = json.Unmarshal(jsonContent, &cfg)
-		if err != nil {
-			log.Printf("Error parsing config.json: %v", err)
-		} else {
+		if err := json.Unmarshal(jsonContent, &cfg); err == nil {
 			port = cfg.Service.Port
 		}
 	}
@@ -1807,7 +1912,6 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"CssVersion":      cssVersion,
 		"JsVersion":       jsVersion,
-		"JsonContent":     string(jsonContent),
 		"Title":           "Webviewer",
 		"ContentTemplate": "webviewer",
 		"port":            port,
@@ -1820,84 +1924,49 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func serverSetupHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /server")
-		renderTemplateWithConfig(w, "Webviewer Setup", "server-setup")
-
-	} else if r.Method == http.MethodPost {
-		err := saveConfigJSON(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+// makeReadOnlyConfigHandler creates a handler for GET-only config pages
+func makeReadOnlyConfigHandler(title, contentTemplate string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			renderTemplateWithConfig(w, title, contentTemplate)
+		} else {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
-		// Send success response
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Configuration saved successfully."))
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
 	}
 }
 
-func tcpChannelsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /tcp")
-		renderTemplateWithConfig(w, "TCP Channels", "tcp-channels")
+// renderEditorTemplate renders the file editor template with the given data
+func renderEditorTemplate(w http.ResponseWriter, title, contentTemplate, content, errMsg, successMsg string) {
+	data := map[string]interface{}{
+		"CssVersion":      cssVersion,
+		"JsVersion":       jsVersion,
+		"FileContent":     content,
+		"Title":           title,
+		"ContentTemplate": contentTemplate,
+	}
+	if errMsg != "" {
+		data["ErrorMessage"] = errMsg
+	}
+	if successMsg != "" {
+		data["SuccessMessage"] = successMsg
+	}
 
-	} else if r.Method == http.MethodPost {
-		err := saveConfigJSON(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Configuration saved successfully."))
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
+	err := templates.ExecuteTemplate(w, "layout.html", data)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Printf("Template execution error: %v", err)
 	}
 }
 
-func httpChannelsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /http")
-		renderTemplateWithConfig(w, "HTTP Channels", "http-channels")
-
-	} else if r.Method == http.MethodPost {
-		err := saveConfigJSON(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Configuration saved successfully."))
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
+// sendJSONResponse sends a JSON response with status and optional error
+func sendJSONResponse(w http.ResponseWriter, status bool, errorMsg string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	response := map[string]interface{}{"status": status}
+	if errorMsg != "" {
+		response["error"] = errorMsg
 	}
-}
-
-func mqttChannelsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		log.Printf("Received GET request for /mqtt")
-		renderTemplateWithConfig(w, "MQTT Channels", "mqtt-channels")
-
-	} else if r.Method == http.MethodPost {
-		err := saveConfigJSON(w, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Configuration saved successfully."))
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
+	json.NewEncoder(w).Encode(response)
 }
 
 func getFileVersion(staticFSys fs.FS, filepath string) string {
@@ -1918,159 +1987,90 @@ func getFileVersion(staticFSys fs.FS, filepath string) string {
 	return hex.EncodeToString(hash[:])[:8]
 }
 
-func statusHandler(w http.ResponseWriter, r *http.Request) {
-	status := getServiceStatus()
-	uptime := getServiceUptime()
-	enabled, _ := getServiceEnabled()
+func apiConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		jsonContent, err := readConfigJSON()
+		if err != nil {
+			log.Printf("Error reading config.json: %v", err)
+			http.Error(w, "Failed to read config", http.StatusInternalServerError)
+			return
+		}
 
-	data := map[string]interface{}{
-		"status":  status,
-		"uptime":  uptime,
-		"enabled": enabled,
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jsonContent)
+	} else if r.Method == http.MethodPost {
+		// Handle POST request to save JSON data
+		err := saveConfigJSON(w, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Configuration saved successfully."))
+	} else {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	}
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonData)
 }
 
-func serviceHandler(w http.ResponseWriter, r *http.Request) {
-
-	action := r.URL.Query().Get("action")
-
-	validActions := map[string]bool{
-		"start":   true,
-		"stop":    true,
-		"restart": true,
-		"enable":  true,
-		"disable": true,
-	}
-
-	if !validActions[action] {
-		http.Redirect(w, r, "/control", http.StatusSeeOther)
-		return
-	}
-
-	err := controlService(action)
-	if err != nil {
-		log.Println("Service control error:", err)
-	}
-
-	data := map[string]interface{}{
-		"status": true,
-	}
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
+func statusHandler(w http.ResponseWriter, r *http.Request) {
+	enabled, _ := getServiceEnabled()
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonData)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  getServiceStatus(),
+		"uptime":  getServiceUptime(),
+		"enabled": enabled,
+	})
+}
+
+func serviceActionHandler(action string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			sendJSONResponse(w, false, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if err := controlService(action); err != nil {
+			log.Println("Service control error:", err)
+			sendJSONResponse(w, false, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		sendJSONResponse(w, true, "", http.StatusOK)
+	}
 }
 
 func editConfigJSONHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		// Read config.json
 		jsonContent, err := readConfigJSON()
 		if err != nil {
 			log.Printf("Error reading config.json: %v", err)
 			jsonContent = []byte("")
 		}
-
-		data := map[string]interface{}{
-			"CssVersion":      cssVersion,
-			"JsVersion":       jsVersion,
-			"FileContent":     string(jsonContent),
-			"Title":           "Edit config.json",
-			"ContentTemplate": "edit-config-json",
-		}
-
-		err = templates.ExecuteTemplate(w, "layout.html", data)
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			log.Printf("Template execution error: %v", err)
-		}
+		renderEditorTemplate(w, "Edit config.json", "edit-config-json", string(jsonContent), "", "")
 
 	} else if r.Method == http.MethodPost {
-		// Read new content from form
 		newContent := r.FormValue("file_content")
 
 		// Validate JSON
 		var jsonMap map[string]interface{}
-		err := json.Unmarshal([]byte(newContent), &jsonMap)
-		if err != nil {
-			data := map[string]interface{}{
-				"CssVersion":      cssVersion,
-				"JsVersion":       jsVersion,
-				"FileContent":     newContent,
-				"Title":           "Edit config.json",
-				"ContentTemplate": "edit-config-json",
-				"ErrorMessage":    "Invalid JSON: " + err.Error(),
-			}
-			err = templates.ExecuteTemplate(w, "layout.html", data)
-			if err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				log.Printf("Template execution error: %v", err)
-			}
+		if err := json.Unmarshal([]byte(newContent), &jsonMap); err != nil {
+			renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "Invalid JSON: "+err.Error(), "")
 			return
 		}
 
-		// Save the file
-		err = ioutil.WriteFile(configJSONFilePath, []byte(newContent), 0644)
-		if err != nil {
-			data := map[string]interface{}{
-				"CssVersion":      cssVersion,
-				"JsVersion":       jsVersion,
-				"FileContent":     newContent,
-				"Title":           "Edit config.json",
-				"ContentTemplate": "edit-config-json",
-				"ErrorMessage":    "Failed to save file: " + err.Error(),
-			}
-			err = templates.ExecuteTemplate(w, "layout.html", data)
-			if err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				log.Printf("Template execution error: %v", err)
-			}
+		// Save file
+		if err := os.WriteFile(configJSONFilePath, []byte(newContent), 0644); err != nil {
+			renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "Failed to save file: "+err.Error(), "")
 			return
 		}
 
-		// Update hash value
-		config.ConfigJSONHash = uint32(0)
-		err = saveControlSettings()
-		if err != nil {
-			data := map[string]interface{}{
-				"CssVersion":      cssVersion,
-				"JsVersion":       jsVersion,
-				"FileContent":     newContent,
-				"Title":           "Edit config.json",
-				"ContentTemplate": "edit-config-json",
-				"ErrorMessage":    "Failed to update control settings: " + err.Error(),
-			}
-			err = templates.ExecuteTemplate(w, "layout.html", data)
-			if err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				log.Printf("Template execution error: %v", err)
-			}
+		// Update hash
+		if err := updateConfig(func(c *Config) { c.ConfigJSONHash = uint32(0) }); err != nil {
+			renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "Failed to update control settings: "+err.Error(), "")
 			return
 		}
 
-		// Display success message
-		data := map[string]interface{}{
-			"CssVersion":      cssVersion,
-			"JsVersion":       jsVersion,
-			"FileContent":     newContent,
-			"Title":           "Edit config.json",
-			"ContentTemplate": "edit-config-json",
-			"SuccessMessage":  "Configuration saved successfully.",
-		}
-		err = templates.ExecuteTemplate(w, "layout.html", data)
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			log.Printf("Template execution error: %v", err)
-		}
+		renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "", "Configuration saved successfully.")
 
 	} else {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -2079,87 +2079,30 @@ func editConfigJSONHandler(w http.ResponseWriter, r *http.Request) {
 
 func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		// Read config.cmd
-		cmdContent, err := ioutil.ReadFile(configCmdFilePath)
+		cmdContent, err := os.ReadFile(configCmdFilePath)
 		if err != nil {
 			log.Printf("Error reading config.cmd: %v", err)
 			cmdContent = []byte("")
 		}
-
-		data := map[string]interface{}{
-			"CssVersion":      cssVersion,
-			"JsVersion":       jsVersion,
-			"FileContent":     string(cmdContent),
-			"Title":           "Edit config.cmd",
-			"ContentTemplate": "edit-config-cmd",
-		}
-
-		err = templates.ExecuteTemplate(w, "layout.html", data)
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			log.Printf("Template execution error: %v", err)
-		}
+		renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", string(cmdContent), "", "")
 
 	} else if r.Method == http.MethodPost {
-		// Read new content from form
 		newContent := r.FormValue("file_content")
-
-		// Optionally sanitize the content
 		sanitizedContent := sanitizeFileContent(newContent)
 
-		// Save the file
-		err := ioutil.WriteFile(configCmdFilePath, []byte(sanitizedContent), 0644)
-		if err != nil {
-			data := map[string]interface{}{
-				"CssVersion":      cssVersion,
-				"JsVersion":       jsVersion,
-				"FileContent":     newContent,
-				"Title":           "Edit config.cmd",
-				"ContentTemplate": "edit-config-cmd",
-				"ErrorMessage":    "Failed to save file: " + err.Error(),
-			}
-			err = templates.ExecuteTemplate(w, "layout.html", data)
-			if err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				log.Printf("Template execution error: %v", err)
-			}
+		// Save file
+		if err := os.WriteFile(configCmdFilePath, []byte(sanitizedContent), 0644); err != nil {
+			renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", newContent, "Failed to save file: "+err.Error(), "")
 			return
 		}
 
-		// Update hash value
-		config.ConfigCmdHash = uint32(0)
-		err = saveControlSettings()
-		if err != nil {
-			data := map[string]interface{}{
-				"CssVersion":      cssVersion,
-				"JsVersion":       jsVersion,
-				"FileContent":     newContent,
-				"Title":           "Edit config.cmd",
-				"ContentTemplate": "edit-config-cmd",
-				"ErrorMessage":    "Failed to update control settings: " + err.Error(),
-			}
-			err = templates.ExecuteTemplate(w, "layout.html", data)
-			if err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				log.Printf("Template execution error: %v", err)
-			}
+		// Update hash
+		if err := updateConfig(func(c *Config) { c.ConfigCmdHash = uint32(0) }); err != nil {
+			renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", newContent, "Failed to update control settings: "+err.Error(), "")
 			return
 		}
 
-		// Display success message
-		data := map[string]interface{}{
-			"CssVersion":      cssVersion,
-			"JsVersion":       jsVersion,
-			"FileContent":     sanitizedContent,
-			"Title":           "Edit config.cmd",
-			"ContentTemplate": "edit-config-cmd",
-			"SuccessMessage":  "Configuration saved successfully.",
-		}
-		err = templates.ExecuteTemplate(w, "layout.html", data)
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			log.Printf("Template execution error: %v", err)
-		}
+		renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", sanitizedContent, "", "Configuration saved successfully.")
 
 	} else {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -2208,20 +2151,20 @@ func main() {
 			log.Fatal("Failed to load control settings:", err)
 		}
 
-		jsonContent, err := ioutil.ReadFile(configJSONFilePath)
+		jsonContent, err := os.ReadFile(configJSONFilePath)
 		if err != nil {
 			log.Fatal("Failed to read config.json:", err)
 		}
 		config.ConfigJSONHash = calculate32BitHash(string(jsonContent))
 
 		// Calculate and set hash for config.cmd
-		cmdContent, err := ioutil.ReadFile(configCmdFilePath)
+		cmdContent, err := os.ReadFile(configCmdFilePath)
 		if err != nil {
 			log.Fatal("Failed to read config.cmd:", err)
 		}
 		config.ConfigCmdHash = calculate32BitHash(string(cmdContent))
 
-		err = saveControlSettings()
+		err = saveControlSettings(config)
 		if err != nil {
 			log.Fatal("Failed to save control settings:", err)
 		}
@@ -2258,7 +2201,7 @@ func main() {
 	}
 
 	cssVersion = getFileVersion(staticFSys, "css/tailwind.css")
-	jsVersion = getFileVersion(staticFSys, "js/scripts.js")
+	jsVersion = getFileVersion(staticFSys, "js/config-manager.js")
 
 	_, err = readConfigJSON()
 	if err != nil {
@@ -2284,19 +2227,26 @@ func main() {
 	})
 
 	http.HandleFunc("/login", loginHandler)
-	http.HandleFunc("/sharing", authMiddleware(sharingChannelsHandler))
-	http.HandleFunc("/udp", authMiddleware(udpChannelsHandler))
-	http.HandleFunc("/tcp", authMiddleware(tcpChannelsHandler))
-	http.HandleFunc("/http", authMiddleware(httpChannelsHandler))
-	http.HandleFunc("/mqtt", authMiddleware(mqttChannelsHandler))
+	http.HandleFunc("/license", licenseHandler)
+	http.HandleFunc("/api/accept-license", acceptLicenseHandler)
+	http.HandleFunc("/api/config", authMiddleware(apiConfigHandler))
+	http.HandleFunc("/sharing", authMiddleware(makeConfigHandler("Community Sharing", "sharing-channel")))
+	http.HandleFunc("/udp", authMiddleware(makeConfigHandler("UDP Channels", "udp-channels")))
+	http.HandleFunc("/tcp", authMiddleware(makeConfigHandler("TCP Channels", "tcp-channels")))
+	http.HandleFunc("/http", authMiddleware(makeConfigHandler("HTTP Channels", "http-channels")))
+	http.HandleFunc("/mqtt", authMiddleware(makeConfigHandler("MQTT Channels", "mqtt-channels")))
+	http.HandleFunc("/output", authMiddleware(makeReadOnlyConfigHandler("Output Configuration", "output")))
 	http.HandleFunc("/control", authMiddleware(controlHandler))
 	http.HandleFunc("/change-password", authMiddleware(changePasswordHandler))
-	http.HandleFunc("/service", authMiddleware(serviceHandler))
+	http.HandleFunc("/api/start", authMiddleware(serviceActionHandler("start")))
+	http.HandleFunc("/api/stop", authMiddleware(serviceActionHandler("stop")))
+	http.HandleFunc("/api/restart", authMiddleware(serviceActionHandler("restart")))
+	http.HandleFunc("/api/enable", authMiddleware(serviceActionHandler("enable")))
+	http.HandleFunc("/api/disable", authMiddleware(serviceActionHandler("disable")))
 	http.HandleFunc("/logs-stream", authMiddleware(func(w http.ResponseWriter, r *http.Request) { logsStreamHandler(w, r, broadcaster) }))
 	http.HandleFunc("/status", authMiddleware(statusHandler))
-	http.HandleFunc("/device", authMiddleware(deviceSetupHandler))
-	http.HandleFunc("/server", authMiddleware(serverSetupHandler))
-	http.HandleFunc("/input", authMiddleware(inputSelectionHandler))
+	http.HandleFunc("/device", authMiddleware(makeConfigHandler("Device Configuration", "device-setup")))
+	http.HandleFunc("/server", authMiddleware(makeConfigHandler("Webviewer Setup", "server-setup")))
 	http.HandleFunc("/webviewer", authMiddleware(webviewerHandler))
 	http.HandleFunc("/logout", authMiddleware(logoutHandler))
 	http.HandleFunc("/device-list", authMiddleware(deviceListHandler))
@@ -2305,20 +2255,27 @@ func main() {
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
 	http.HandleFunc("/system", authMiddleware(systemInfoHandler))
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
+	http.HandleFunc("/system-action-status", authMiddleware(systemActionStatusHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
-	http.HandleFunc("/tcp-servers", authMiddleware(tcpServersHandler))
+	http.HandleFunc("/tcp-servers", authMiddleware(makeConfigHandler("TCP Servers", "tcp-servers")))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(sessionCookieName)
-		if err == nil && sessions[cookie.Value] == defaultUsername {
-			http.Redirect(w, r, "/control", http.StatusSeeOther)
-		} else {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+		if !getConfig().LicenseAccepted {
+			http.Redirect(w, r, "/license", http.StatusSeeOther)
+			return
 		}
+		cookie, err := r.Cookie(sessionCookieName)
+		if err == nil {
+			if user, ok := sessionManager.Get(cookie.Value); ok && user == defaultUsername {
+				http.Redirect(w, r, "/control", http.StatusSeeOther)
+				return
+			}
+		}
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	})
 
-	addr := ":" + config.Port
+	addr := ":" + getConfig().Port
 	log.Printf("Server started at %s\n", addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
 }

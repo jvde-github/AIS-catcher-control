@@ -1,166 +1,232 @@
 {{ define "control" }}
-<div class="p-2 sm:p-6 bg-white rounded-lg shadow-md">
-    <!-- Styles for Log Lines -->
+<div class="space-y-6">
+    <!-- Custom Styles -->
     <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1e293b;
+            border-radius: 0.5rem;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
         .log-line {
+            font-family: 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            padding: 1px 0;
             white-space: pre-wrap;
-            padding: 2px 0;
-            font-family: monospace;
-            font-size: 14px;
-            overflow-x: auto;
+            word-break: break-all;
         }
 
         .log-line.error {
-            color: #FF4C4C;
-            background-color: rgba(255, 76, 76, 0.1);
-            border-left: 4px solid #FF4C4C;
-            padding-left: 8px;
+            color: #f87171;
         }
 
         .log-line.warning {
-            color: #FFA500;
-            background-color: rgba(255, 165, 0, 0.1);
-            border-left: 4px solid #FFA500;
-            padding-left: 8px;
+            color: #fbbf24;
         }
 
         .log-line.info {
-            color: #1E90FF;
-            background-color: rgba(30, 144, 255, 0.1);
-            border-left: 4px solid #1E90FF;
-            padding-left: 8px;
+            color: #60a5fa;
         }
 
-        #logs-container {
-            scroll-behavior: smooth;
-            max-width: 100%;
-            overflow-x: auto;
+        .log-line.default {
+            color: #cbd5e1;
         }
     </style>
 
-
-
-
-    <!-- Status Cards Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        <!-- Service Status Card -->
-        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
-            <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">Service Status</h2>
-            <div class="flex flex-col space-y-3 sm:space-y-4">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm sm:text-base text-gray-600">Status:</span>
-                    <span id="service-status" class="text-sm sm:text-base">Checking status...</span>
-                </div>
-                <div class="flex flex-wrap gap-2 justify-end" id="action-buttons"></div>
+    <!-- Unified Service Control Card -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <!-- Header with Status -->
+        <div class="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <h2 class="font-semibold text-slate-800 text-lg">Service Control</h2>
+            </div>
+            <div id="service-status-indicator" class="flex items-center space-x-2">
+                <span id="service-status" class="text-sm font-medium text-slate-600">Checking...</span>
+                <span class="relative flex h-2.5 w-2.5">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-500"></span>
+                </span>
             </div>
         </div>
 
-        <!-- Service Uptime Card -->
-        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
-            <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">Service Uptime</h2>
-            <div class="flex items-center justify-between">
-                <span class="text-sm sm:text-base text-gray-600">Running for:</span>
-                <span id="service-uptime" class="text-sm sm:text-base text-gray-800 font-medium">Calculating
-                    uptime...</span>
-            </div>
-        </div>
-
-        <!-- Auto-Start Service Card -->
-        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200">
-            <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">Auto-Start</h2>
-            <div class="flex flex-col space-y-3 sm:space-y-4">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm sm:text-base text-gray-600">Enabled:</span>
-                    <div id="enabled-status">
-                        <!-- This will be updated by JavaScript -->
+        <!-- Body with Status Info and Controls -->
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <!-- Uptime -->
+                <div class="flex items-center space-x-3">
+                    <div class="flex-shrink-0 w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 font-medium">Uptime</p>
+                        <p id="service-uptime" class="text-sm font-semibold text-slate-800 font-mono">--:--:--</p>
                     </div>
                 </div>
-                <div class="flex gap-2 justify-end">
+
+                <!-- Auto-Start Status -->
+                <div class="flex items-center space-x-3">
+                    <div class="flex-shrink-0 w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 font-medium">Start at Boot</p>
+                        <p id="enabled-status" class="text-sm font-semibold text-slate-800">
+                            <span class="inline-block h-4 w-16 bg-slate-100 rounded animate-pulse"></span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Control Buttons -->
+                <div class="flex items-center justify-end space-x-2">
+                    <div id="action-buttons" class="flex space-x-2 w-full md:w-auto">
+                        <div class="h-9 flex-1 bg-slate-100 rounded animate-pulse"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auto-Start Toggle -->
+            <div class="flex items-center justify-between pt-4 border-t border-slate-100">
+                <span class="text-sm text-slate-600">Auto-start configuration</span>
+                <div class="flex space-x-2">
                     <button id="enable-button" data-action="enable"
-                        class="hidden px-3 sm:px-4 py-1 sm:py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Enable</button>
+                        class="hidden px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors action-button">
+                        Enable
+                    </button>
                     <button id="disable-button" data-action="disable"
-                        class="hidden px-3 sm:px-4 py-1 sm:py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button">Disable</button>
+                        class="hidden px-4 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-colors action-button">
+                        Disable
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Unified Logs Section -->
-    <div class="space-y-4 sm:space-y-6">
-        <div>
-            <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800">Logs</h2>
-            <div class="bg-gray-900 text-gray-100 p-3 sm:p-4 rounded-lg h-48 sm:h-64 overflow-y-auto"
-                id="logs-container">
-                <div id="logs-content" class="text-xs sm:text-sm leading-relaxed break-all">
-                    {{if or .LogTxtLogs .Logs}}
-                    {{range .LogTxtLogs}}<div class="log-line">{{.}}</div>{{end}}
-                    {{range .Logs}}<div class="log-line">{{.}}</div>{{end}}
-                    {{else}}
-                    <p class="text-gray-400">No logs available.</p>
-                    {{end}}
-                </div>
+    <div class="bg-slate-900 rounded-xl shadow-lg overflow-hidden border border-slate-700 flex flex-col">
+        <div class="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+            <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3"></path>
+                </svg>
+                <span class="text-sm font-medium text-slate-300">System Logs</span>
+            </div>
+            <div class="flex space-x-1.5">
+                <div class="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
+                <div class="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50"></div>
+            </div>
+        </div>
+
+        <div id="logs-container" class="h-64 sm:h-80 overflow-y-auto custom-scrollbar p-4 bg-slate-900">
+            <div id="logs-content" class="flex flex-col justify-end min-h-full">
+                {{if or .LogTxtLogs .Logs}}
+                {{range .LogTxtLogs}}<div class="log-line default">{{.}}</div>{{end}}
+                {{range .Logs}}<div class="log-line default">{{.}}</div>{{end}}
+                {{else}}
+                <div class="text-slate-500 italic text-sm">Waiting for logs...</div>
+                {{end}}
             </div>
         </div>
     </div>
+
     <script>
+        let operationInProgress = false;
+
+        function getStatusIndicatorHTML(color) {
+            return `
+                <span class="relative flex h-2.5 w-2.5 ml-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-${color}-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-${color}-500"></span>
+                </span>`;
+        }
+
+        function getStaticIndicatorHTML(color) {
+            return `<span class="relative inline-flex rounded-full h-2.5 w-2.5 ml-2 bg-${color}-500"></span>`;
+        }
+
         function updateStatus() {
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
-                    // Update Enabled Status
+                    // --- Update Auto-Start (UPDATED: Plain text styling) ---
                     const enabledStatusDiv = document.getElementById('enabled-status');
-                    let enabledHTML = '';
+                    const enableBtn = document.getElementById('enable-button');
+                    const disableBtn = document.getElementById('disable-button');
+
                     if (data.enabled === true) {
-                        enabledHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">Yes</span>';
-                        document.getElementById('enable-button').classList.add('hidden');
-                        document.getElementById('disable-button').classList.remove('hidden');
+                        // Matches "Active" style (Green text)
+                        enabledStatusDiv.innerHTML = '<span class="text-emerald-600">Enabled</span>';
+                        enableBtn.classList.add('hidden');
+                        disableBtn.classList.remove('hidden');
                     } else if (data.enabled === false) {
-                        enabledHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-red-100 text-red-800">No</span>';
-                        document.getElementById('enable-button').classList.remove('hidden');
-                        document.getElementById('disable-button').classList.add('hidden');
+                        // Matches "Stopped" style (Grey text)
+                        enabledStatusDiv.innerHTML = '<span class="text-slate-500">Disabled</span>';
+                        enableBtn.classList.remove('hidden');
+                        disableBtn.classList.add('hidden');
                     } else {
-                        // Handle cases where data.enabled is undefined or another value
-                        enabledHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">Unknown</span>';
-                        document.getElementById('enable-button').classList.remove('hidden');
-                        document.getElementById('disable-button').classList.add('hidden');
+                        enabledStatusDiv.innerHTML = '<span class="text-amber-600">Unknown</span>';
                     }
-                    enabledStatusDiv.innerHTML = enabledHTML;
 
-                    // Update Service Status (existing code)
-                    const statusSpan = document.getElementById('service-status');
-                    let statusHTML = '';
+                    // --- Update Service Status ---
+                    const indicatorContainer = document.getElementById('service-status-indicator');
+
                     if (data.status === 'active (running)') {
-                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">Active</span>';
+                        indicatorContainer.innerHTML = '<span class="text-sm font-medium text-emerald-600">Active</span>' + getStatusIndicatorHTML('emerald');
                     } else if (data.status === 'inactive (stopped)') {
-                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-red-100 text-red-800">Inactive</span>';
+                        indicatorContainer.innerHTML = '<span class="text-sm font-medium text-slate-600">Stopped</span>' + getStaticIndicatorHTML('slate');
                     } else if (data.status === 'failed') {
-                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-red-100 text-red-800">Failed</span>';
+                        indicatorContainer.innerHTML = '<span class="text-sm font-medium text-rose-600">Failed</span>' + getStaticIndicatorHTML('rose');
                     } else {
-                        statusHTML = '<span class="px-3 py-1 text-sm font-medium rounded-full bg-yellow-100 text-yellow-800">' + data.status + '</span>';
+                        indicatorContainer.innerHTML = `<span class="text-sm font-medium text-amber-600 capitalize">${data.status}</span>` + getStaticIndicatorHTML('amber');
                     }
-                    statusSpan.innerHTML = statusHTML;
 
-                    // Update Uptime and Action Buttons (existing code)
-                    const uptimeSpan = document.getElementById('service-uptime');
-                    uptimeSpan.textContent = data.uptime;
+                    // --- Update Uptime ---
+                    document.getElementById('service-uptime').textContent = data.uptime;
 
+                    // --- Update Action Buttons ---
                     const actionButtonsDiv = document.getElementById('action-buttons');
                     let buttonsHTML = '';
+
+                    const btnBase = "px-4 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1";
+                    const disabledClass = operationInProgress ? "opacity-50 cursor-not-allowed" : "";
+                    const disabledAttr = operationInProgress ? "disabled" : "";
+                    const primaryBtn = `${btnBase} ${disabledClass} text-white bg-slate-800 hover:bg-slate-700 focus:ring-slate-500`;
+                    const dangerBtn = `${btnBase} ${disabledClass} text-white bg-rose-600 hover:bg-rose-700 focus:ring-rose-500`;
+                    const secondaryBtn = `${btnBase} ${disabledClass} border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 focus:ring-slate-500`;
+
                     if (data.status === 'active (running)') {
-                        buttonsHTML += `
-                    <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="stop">Stop</button>
-                    <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="restart">Restart</button>
-                `;
+                        buttonsHTML += `<button class="${secondaryBtn} action-button" data-action="restart" ${disabledAttr}>Restart</button>`;
+                        buttonsHTML += `<button class="${dangerBtn} action-button" data-action="stop" ${disabledAttr}>Stop</button>`;
                     } else {
-                        buttonsHTML += `
-                    <button class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition duration-200 action-button" data-action="start">Start</button>
-                `;
+                        buttonsHTML += `<button class="${primaryBtn} action-button" data-action="start" ${disabledAttr}>Start Service</button>`;
                     }
                     actionButtonsDiv.innerHTML = buttonsHTML;
                 })
-                .catch(error => {
-                    console.error('Error fetching status:', error);
-                });
+                .catch(error => console.error('Error fetching status:', error));
         }
 
         document.addEventListener('DOMContentLoaded', function () {
@@ -169,45 +235,64 @@
             updateStatus();
             setInterval(updateStatus, 3000);
 
-            function initializeSSE() {
-                if (eventSource) {
-                    eventSource.close();
-                }
+            // Log Processing
+            function formatLogLine(message) {
+                const div = document.createElement('div');
+                div.classList.add('log-line');
 
+                if (message.includes('[ERROR]') || message.toLowerCase().includes('error:')) {
+                    div.classList.add('error');
+                    div.textContent = message.replace('[ERROR]', '').trim();
+                } else if (message.includes('[WARNING]') || message.toLowerCase().includes('warn:')) {
+                    div.classList.add('warning');
+                    div.textContent = message.replace('[WARNING]', '').trim();
+                } else if (message.includes('[INFO]')) {
+                    div.classList.add('info');
+                    div.textContent = message.replace('[INFO]', '').trim();
+                } else {
+                    div.classList.add('default');
+                    div.textContent = message;
+                }
+                return div;
+            }
+
+            document.querySelectorAll('#logs-content .log-line').forEach(line => {
+                const text = line.textContent;
+                line.className = 'log-line';
+                if (text.includes('[ERROR]')) line.classList.add('error');
+                else if (text.includes('[WARNING]')) line.classList.add('warning');
+                else if (text.includes('[INFO]')) line.classList.add('info');
+                else line.classList.add('default');
+                if (text.includes(']')) line.textContent = text.substring(text.indexOf(']') + 1).trim();
+            });
+
+            function initializeSSE() {
+                if (eventSource) eventSource.close();
                 const logsContentDiv = document.getElementById('logs-content');
                 const logsContainer = document.getElementById('logs-container');
+
                 eventSource = new EventSource('/logs-stream');
 
                 eventSource.onmessage = function (event) {
                     try {
                         const logMsg = JSON.parse(event.data);
-                        const message = logMsg.message;
+                        const newLog = formatLogLine(logMsg.message);
+                        logsContentDiv.appendChild(newLog);
 
-                        const newLog = document.createElement('div');
-                        newLog.classList.add('log-line');
-
-                        if (message.startsWith('[ERROR]')) {
-                            newLog.classList.add('error');
-                            newLog.textContent = message.substring(7).trim();
-                        } else if (message.startsWith('[WARNING]')) {
-                            newLog.classList.add('warning');
-                            newLog.textContent = message.substring(9).trim();
-                        } else if (message.startsWith('[INFO]')) {
-                            newLog.classList.add('info');
-                            newLog.textContent = message.substring(6).trim();
-                        } else {
-                            newLog.textContent = message;
+                        // Limit the number of log lines to prevent memory issues
+                        const maxLogs = 1000;
+                        while (logsContentDiv.children.length > maxLogs) {
+                            logsContentDiv.removeChild(logsContentDiv.firstChild);
                         }
 
-                        logsContentDiv.appendChild(newLog);
-                        logsContainer.scrollTop = logsContainer.scrollHeight;
+                        const isAtBottom = logsContainer.scrollHeight - logsContainer.scrollTop <= logsContainer.clientHeight + 100;
+                        if (isAtBottom) logsContainer.scrollTop = logsContainer.scrollHeight;
                     } catch (e) {
-                        console.error('Error processing log message:', e);
+                        console.error('Error processing log:', e);
                     }
                 };
 
-                eventSource.onerror = function () {
-                    console.error('Error with SSE connection');
+                eventSource.onerror = () => {
                     eventSource.close();
                     setTimeout(initializeSSE, 5000);
                 };
@@ -215,93 +300,60 @@
 
             initializeSSE();
 
-            const actionButtons = document.querySelectorAll('.action-button');
-
-            actionButtons.forEach(button => {
-                button.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    const action = this.getAttribute('data-action');
-                    if (!action) {
-                        console.error('No data-action attribute found on button.');
-                        return;
-                    }
-
-                    fetch(`/service?action=${action}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status) {
-                                updateStatus();
-                            } else {
-                                alert('Action failed.');
-                            }
-                        })
-                        .catch(error => {
-                            alert('An error occurred: ' + error);
-                        });
-                });
-            });
-
-            document.getElementById('action-buttons').addEventListener('click', function (e) {
+            const handleAction = (e) => {
                 const button = e.target.closest('.action-button');
-                if (!button) return; // Exit if click wasn't on an action button
+                if (!button || operationInProgress) return;
 
                 e.preventDefault();
                 const action = button.getAttribute('data-action');
-                if (!action) {
-                    console.error('No data-action attribute found on button.');
-                    return;
-                }
 
-                fetch(`/service?action=${action}`)
+                // Set operation in progress
+                operationInProgress = true;
+
+                const originalText = button.textContent;
+                button.textContent = '...';
+                button.disabled = true;
+
+                // Disable all action buttons
+                document.querySelectorAll('.action-button').forEach(btn => btn.disabled = true);
+
+                fetch(`/api/${action}`, { method: 'POST' })
                     .then(response => response.json())
                     .then(data => {
                         if (data.status) {
-                            updateStatus();
+                            // For restart, wait a bit longer before allowing button updates
+                            if (action === 'restart') {
+                                setTimeout(() => {
+                                    operationInProgress = false;
+                                    updateStatus();
+                                }, 3000);
+                            } else {
+                                operationInProgress = false;
+                                updateStatus();
+                            }
                         } else {
-                            alert('Action failed.');
+                            alert('Action failed');
+                            operationInProgress = false;
+                            updateStatus();
                         }
                     })
-                    .catch(error => {
-                        alert('An error occurred: ' + error);
+                    .catch(err => {
+                        alert('Error: ' + err);
+                        operationInProgress = false;
+                        updateStatus();
                     });
+            };
+
+            document.getElementById('action-buttons').addEventListener('click', handleAction);
+            document.querySelector('.grid').addEventListener('click', handleAction);
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) { if (eventSource) eventSource.close(); }
+                else { initializeSSE(); updateStatus(); }
             });
 
-            window.addEventListener('beforeunload', function () {
-                if (eventSource) {
-                    eventSource.close();
-                }
-            });
-
-            document.addEventListener('visibilitychange', function () {
-                if (document.hidden) {
-                    if (eventSource) {
-                        eventSource.close();
-                    }
-                } else {
-                    initializeSSE();
-                }
-            });
-
-            // Scroll to bottom on initial load
             const logsContainer = document.getElementById('logs-container');
-            if (logsContainer) {
-                logsContainer.scrollTop = logsContainer.scrollHeight;
-            }
-
-            // Process existing log lines
-            const logLines = document.querySelectorAll('#logs-content .log-line');
-            logLines.forEach(function (line) {
-                if (line.textContent.startsWith('[ERROR]')) {
-                    line.classList.add('error');
-                    line.textContent = line.textContent.substring(7).trim();
-                } else if (line.textContent.startsWith('[WARNING]')) {
-                    line.classList.add('warning');
-                    line.textContent = line.textContent.substring(9).trim();
-                } else if (line.textContent.startsWith('[INFO]')) {
-                    line.classList.add('info');
-                    line.textContent = line.textContent.substring(6).trim();
-                }
-            });
+            if (logsContainer) logsContainer.scrollTop = logsContainer.scrollHeight;
         });
     </script>
 </div>

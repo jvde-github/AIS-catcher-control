@@ -1,46 +1,15 @@
 {{ define "device-setup" }}
-<div id="device-setup" class="max-w-4xl mx-auto p-4 md:p-6 bg-white rounded-lg shadow-md">
-    <h3 class="text-lg text-xl font-semibold text-gray-800 mb-4">Device Configuration - Multiple Receivers</h3>
+<div id="device-setup" class="max-w-2xl mx-auto p-4 md:p-6 bg-white rounded-lg shadow-md">
+    <h3 class="text-lg text-xl font-semibold text-gray-800 mb-4">Device Configuration</h3>
 
     <div id="receivers-container" class="space-y-6">
         <!-- Receivers will be dynamically populated here -->
     </div>
-
-    <!-- Add Receiver Button -->
-    <div class="mt-6 flex justify-between items-center">
-        <button type="button" id="add-receiver-btn"
-            class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition duration-200">
-            Add Receiver
-        </button>
-        <button type="button" id="save-button"
-            class="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition duration-200">
-            Save Configuration
-        </button>
-    </div>
-
-    <hr class="my-6 border-gray-300">
-
-    <!-- JSON Content Toggle -->
-    <div class="mt-6">
-        <button type="button" onclick="toggleJsonContent()" class="flex items-center text-gray-800 focus:outline-none">
-            <svg id="chevron-icon" class="h-5 w-5 transform transition-transform duration-200"
-                xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-            <span class="ml-2 font-medium">Show JSON Content</span>
-        </button>
-
-        <div id="json-content-container" class="mt-2 hidden">
-            <pre id="json_content" name="json_content"
-                class="max-w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 overflow-auto focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                readonly>{{.JsonContent}}</pre>
-        </div>
-    </div>
 </div>
 
 <!-- Modals remain the same -->
-<div id="serial-device-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 max-w-2xl mx-4">
+<div id="serial-device-modal" class="fixed inset-0 bg-gray-200 bg-opacity-75 flex items-center justify-center hidden z-50" style="background-color: rgba(0, 0, 0, 0.3);">
+    <div class="bg-white rounded-lg shadow-xl w-11/12 md:w-2/3 lg:w-1/2 max-w-2xl mx-4 relative z-10" style="background-color: white;">
         <div class="flex justify-between items-center p-4 border-b">
             <h3 class="text-lg font-medium text-gray-800">Select Serial Device</h3>
             <button type="button" onclick="closeSerialDeviceModal()" class="text-gray-600 hover:text-gray-800">
@@ -65,8 +34,8 @@
 </div>
 
 <div id="device-selection-modal"
-    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 max-w-2xl mx-4">
+    class="fixed inset-0 bg-gray-200 bg-opacity-75 flex items-center justify-center hidden z-50" style="background-color: rgba(0, 0, 0, 0.3);">
+    <div class="bg-white rounded-lg shadow-xl w-11/12 md:w-2/3 lg:w-1/2 max-w-2xl mx-4 relative z-10" style="background-color: white;">
         <div class="flex justify-between items-center p-4 border-b">
             <h3 class="text-lg font-medium text-gray-800">Select Device</h3>
             <button type="button" onclick="closeDeviceSelectionModal()" class="text-gray-600 hover:text-gray-800">
@@ -90,1000 +59,53 @@
     </div>
 </div>
 
-<style>
-    input:disabled,
-    select:disabled {
-        background-color: #f9f9f9;
-        color: #a0aec0;
-        cursor: not-allowed;
-    }
-
-    .peer:disabled~div {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    @media (max-width: 640px) {
-        #device-setup {
-            padding: 1rem;
-        }
-    }
-</style>
-
 <script>
-    let isInitialLoading = true;
-    let jsonData = {};
-    let currentSerialModalReceiver = null;
-    let currentDeviceModalReceiver = null;
-
-    const deviceConfigs = {
-        RTLSDR: {
-            title: "RTLSDR Settings",
-            hasSerial: true,
-            fields: [
-                {
-                    name: "tuner",
-                    label: "Tuner",
-                    type: "select",
-                    jsonpath: "rtlsdr.tuner",
-                    options: [
-                        { value: "auto", label: "Auto" },
-                        ...Array.from({ length: 51 }, (_, i) => ({ value: i.toString(), label: i.toString() }))
-                    ]
-                },
-                {
-                    name: "bandwidth",
-                    label: "Bandwidth",
-                    type: "select",
-                    jsonpath: "rtlsdr.bandwidth",
-                    options: [
-                        { value: "0", label: "Off" },
-                        { value: "192K", label: "192K" }
-                    ]
-                },
-                {
-                    name: "sample_rate",
-                    label: "Sample Rate",
-                    type: "select",
-                    jsonpath: "rtlsdr.sample_rate",
-                    options: [
-                        { value: "288K", label: "288K" },
-                        { value: "1536K", label: "1536K" }
-                    ]
-                },
-                {
-                    name: "freqoffset",
-                    label: "Frequency Offset",
-                    type: "number",
-                    jsonpath: "rtlsdr.freqoffset",
-                    min: -50,
-                    max: 50,
-                    defaultValue: 0
-                },
-                {
-                    name: "biastee",
-                    label: "Bias tee",
-                    type: "toggle",
-                    jsonpath: "rtlsdr.biastee"
-                },
-                {
-                    name: "rtlagc",
-                    label: "RTLAGC",
-                    type: "toggle",
-                    jsonpath: "rtlsdr.rtlagc"
-                }
-            ]
-        },
-        AIRSPYHF: {
-            title: "Airspy HF+ Settings",
-            hasSerial: true,
-            fields: [
-                {
-                    name: "sample_rate",
-                    label: "Sample Rate",
-                    type: "select",
-                    jsonpath: "airspyhf.sample_rate",
-                    options: [{ value: "192K", label: "192K" }]
-                },
-                {
-                    name: "threshold",
-                    label: "Threshold",
-                    type: "select",
-                    jsonpath: "airspyhf.threshold",
-                    options: [
-                        { value: "low", label: "Low" },
-                        { value: "high", label: "High" }
-                    ]
-                },
-                {
-                    name: "preamp",
-                    label: "Preamp",
-                    type: "toggle",
-                    jsonpath: "airspyhf.preamp"
-                }
-            ]
-        },
-        AIRSPY: {
-            title: "AirSpy Settings",
-            hasSerial: true,
-            fields: [
-                {
-                    name: "gain_mode",
-                    label: "Gain Mode",
-                    type: "select",
-                    jsonpath: "airspy.gain_mode",
-                    options: [
-                        { value: "free", label: "Free" },
-                        { value: "linearity", label: "Linearity" },
-                        { value: "sensitivity", label: "Sensitivity" }
-                    ]
-                },
-                {
-                    name: "biastee",
-                    label: "Bias tee",
-                    type: "toggle",
-                    jsonpath: "airspy.biastee"
-                },
-                {
-                    name: "vga",
-                    label: "VGA",
-                    type: "select",
-                    jsonpath: "airspy.vga",
-                    options: [
-                        ...Array.from({ length: 11 }, (_, i) => ({ value: i.toString(), label: i.toString() }))
-                    ],
-                    dependsOn: {
-                        field: "gain_mode",
-                        value: "free"
-                    }
-                },
-                {
-                    name: "mixer",
-                    label: "Mixer",
-                    type: "select",
-                    jsonpath: "airspy.mixer",
-                    options: [
-                        { value: "auto", label: "Auto" },
-                        ...Array.from({ length: 15 }, (_, i) => ({ value: i.toString(), label: i.toString() }))
-                    ],
-                    dependsOn: {
-                        field: "gain_mode",
-                        value: "free"
-                    }
-                },
-                {
-                    name: "lna",
-                    label: "LNA",
-                    type: "select",
-                    jsonpath: "airspy.lna",
-                    options: [
-                        { value: "auto", label: "Auto" },
-                        ...Array.from({ length: 15 }, (_, i) => ({ value: i.toString(), label: i.toString() }))
-                    ],
-                    dependsOn: {
-                        field: "gain_mode",
-                        value: "free"
-                    }
-                },
-                {
-                    name: "linearity",
-                    label: "Linearity",
-                    type: "number",
-                    jsonpath: "airspy.linearity",
-                    min: 0,
-                    max: 14,
-                    step: 1,
-                    defaultValue: 10,
-                    placeholder: "0-14",
-                    dependsOn: {
-                        field: "gain_mode",
-                        value: "linearity"
-                    }
-                },
-                {
-                    name: "sensitivity",
-                    label: "Sensitivity",
-                    type: "number",
-                    jsonpath: "airspy.sensitivity",
-                    min: 0,
-                    max: 14,
-                    step: 1,
-                    defaultValue: 10,
-                    placeholder: "0-14",
-                    dependsOn: {
-                        field: "gain_mode",
-                        value: "sensitivity"
-                    }
-                }
-            ]
-        },
-        RTLTCP: {
-            title: "TCP Settings",
-            fields: [
-                {
-                    name: "protocol",
-                    label: "Protocol",
-                    type: "select",
-                    jsonpath: "rtltcp.protocol",
-                    options: [
-                        { value: "txt", label: "NMEA" },
-                        { value: "none", label: "Raw" },
-                        { value: "rtltcp", label: "RTLTCP" },
-                        { value: "ws", label: "WS" },
-                        { value: "wsmqtt", label: "WSMQTT" },
-                        { value: "mqtt", label: "MQTT" },
-                        { value: "gpsd", label: "GPSD" },
-                        { value: "beast", label: "BEAST" },
-                        { value: "basestation", label: "BASESTATION" },
-                    ]
-                },
-                {
-                    name: "host",
-                    label: "Host",
-                    type: "text",
-                    jsonpath: "rtltcp.host",
-                    placeholder: "e.g., 127.0.0.1"
-                },
-                {
-                    name: "port",
-                    label: "Port",
-                    type: "number",
-                    jsonpath: "rtltcp.port",
-                    placeholder: "e.g., 1234"
-                },
-                // RTLTCP specific fields
-                {
-                    name: "sample_rate",
-                    label: "Sample Rate (Hz)",
-                    type: "number",
-                    jsonpath: "rtltcp.sample_rate",
-                    min: 0,
-                    max: 20000000,
-                    defaultValue: 288000,
-                    placeholder: "0-20,000,000",
-                    dependsOn: {
-                        field: "protocol",
-                        value: "rtltcp"
-                    }
-                },
-                {
-                    name: "bandwidth",
-                    label: "Bandwidth (Hz)",
-                    type: "number",
-                    jsonpath: "rtltcp.bandwidth",
-                    min: 0,
-                    max: 1000000,
-                    defaultValue: 0,
-                    placeholder: "0-1,000,000",
-                    dependsOn: {
-                        field: "protocol",
-                        value: "rtltcp"
-                    }
-                },
-                {
-                    name: "freqoffset",
-                    label: "Frequency Offset (PPM)",
-                    type: "number",
-                    jsonpath: "rtltcp.freqoffset",
-                    min: -150,
-                    max: 150,
-                    defaultValue: 0,
-                    placeholder: "-150 to +150",
-                    dependsOn: {
-                        field: "protocol",
-                        value: "rtltcp"
-                    }
-                },
-                {
-                    name: "tuner",
-                    label: "Tuner Gain",
-                    type: "number",
-                    jsonpath: "rtltcp.tuner",
-                    min: 0,
-                    max: 50,
-                    step: 0.1,
-                    defaultValue: 33.0,
-                    placeholder: "0-50, auto",
-                    dependsOn: {
-                        field: "protocol",
-                        value: "rtltcp"
-                    }
-                },
-                {
-                    name: "rtlagc",
-                    label: "RTL AGC",
-                    type: "toggle",
-                    jsonpath: "rtltcp.rtlagc",
-                    defaultValue: false,
-                    dependsOn: {
-                        field: "protocol",
-                        value: "rtltcp"
-                    }
-                },
-                // WebSocket specific fields
-                {
-                    name: "protocols",
-                    label: "Protocols",
-                    type: "text",
-                    jsonpath: "rtltcp.protocols",
-                    defaultValue: "mqtt",
-                    dependsOn: {
-                        field: "protocol",
-                        value: ["ws", "wsmqtt"]
-                    }
-                },
-                {
-                    name: "binary",
-                    label: "Binary Mode",
-                    type: "toggle",
-                    jsonpath: "rtltcp.binary",
-                    defaultValue: true,
-                    dependsOn: {
-                        field: "protocol",
-                        value: ["ws", "wsmqtt"]
-                    }
-                },
-                {
-                    name: "origin",
-                    label: "Origin",
-                    type: "text",
-                    jsonpath: "rtltcp.origin",
-                    placeholder: "Origin header for WebSocket",
-                    dependsOn: {
-                        field: "protocol",
-                        value: ["ws", "wsmqtt"]
-                    }
-                },
-                // MQTT specific fields
-                {
-                    name: "topic",
-                    label: "Topic",
-                    type: "text",
-                    jsonpath: "rtltcp.topic",
-                    defaultValue: "ais/data",
-                    dependsOn: {
-                        field: "protocol",
-                        value: ["mqtt", "wsmqtt"]
-                    }
-                },
-                {
-                    name: "client_id",
-                    label: "Client ID",
-                    type: "text",
-                    jsonpath: "rtltcp.client_id",
-                    placeholder: "MQTT client identifier",
-                    dependsOn: {
-                        field: "protocol",
-                        value: ["mqtt", "wsmqtt"]
-                    }
-                },
-                {
-                    name: "username",
-                    label: "Username",
-                    type: "text",
-                    jsonpath: "rtltcp.username",
-                    placeholder: "MQTT username",
-                    dependsOn: {
-                        field: "protocol",
-                        value: ["mqtt", "wsmqtt"]
-                    }
-                },
-                {
-                    name: "password",
-                    label: "Password",
-                    type: "text",
-                    jsonpath: "rtltcp.password",
-                    placeholder: "MQTT password",
-                    dependsOn: {
-                        field: "protocol",
-                        value: ["mqtt", "wsmqtt"]
-                    }
-                },
-                {
-                    name: "qos",
-                    label: "QoS Level",
-                    type: "select",
-                    jsonpath: "rtltcp.qos",
-                    options: [
-                        { value: "0", label: "0" },
-                        { value: "1", label: "1" },
-                        { value: "2", label: "2" }
-                    ],
-                    defaultValue: "0",
-                    dependsOn: {
-                        field: "protocol",
-                        value: ["mqtt", "wsmqtt"]
-                    }
-                }
-            ]
-        },
-        SERIALPORT: {
-            title: "Serial Port Settings",
-            fields: [
-                {
-                    name: "port",
-                    label: "Port",
-                    type: "text",
-                    jsonpath: "serialport.port",
-                    placeholder: "e.g., /dev/tty0",
-                    withButton: {
-                        label: "",
-                        onClick: "openSerialDeviceModal()",
-                        icon: `<svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor">
-                        <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/>
-                    </svg>`
-                    }
-                },
-                {
-                    name: "baudrate",
-                    label: "Baud Rate",
-                    type: "select",
-                    jsonpath: "serialport.baudrate",
-                    defaultValue: "38400",
-                    options: [
-                        { value: "9600", label: "9600" },
-                        { value: "19200", label: "19200" },
-                        { value: "38400", label: "38400" },
-                        { value: "57600", label: "57600" },
-                        { value: "115200", label: "115200" }
-                    ]
-                }
-            ]
-        },
-        UDPSERVER: {
-            title: "UDP Server Settings",
-            fields: [
-                {
-                    name: "server",
-                    label: "Server Address",
-                    type: "text",
-                    jsonpath: "udpserver.server",
-                    placeholder: "e.g., 127.0.0.1"
-                },
-                {
-                    name: "port",
-                    label: "Port",
-                    type: "number",
-                    jsonpath: "udpserver.port",
-                    placeholder: "e.g., 1234"
-                }
-            ]
-        },
-        HACKRF: {
-            title: "HACKRF Settings",
-            hasSerial: true,
-            fields: [
-                {
-                    name: "lna",
-                    label: "LNA Gain",
-                    type: "number",
-                    jsonpath: "hackrf.lna",
-                    min: 0,
-                    max: 40,
-                    step: 8,
-                    defaultValue: 8,
-                    placeholder: "0-40 (in steps of 8)"
-                },
-                {
-                    name: "vga",
-                    label: "VGA Gain",
-                    type: "number",
-                    jsonpath: "hackrf.vga",
-                    min: 0,
-                    max: 62,
-                    step: 2,
-                    defaultValue: 20,
-                    placeholder: "0-62 (in steps of 2)"
-                },
-                {
-                    name: "preamp",
-                    label: "Preamp",
-                    type: "toggle",
-                    jsonpath: "hackrf.preamp"
-                }
-            ]
-        },
-        SPYSERVER: {
-            title: "SpyServer Settings",
-            fields: [
-                {
-                    name: "gain",
-                    label: "Tuner Gain",
-                    type: "number",
-                    jsonpath: "spyserver.gain",
-                    min: 0,
-                    max: 50,
-                    step: 0.1,
-                    defaultValue: 0,
-                    placeholder: "Gain (0-50)"
-                },
-                {
-                    name: "host",
-                    label: "Host",
-                    type: "text",
-                    jsonpath: "spyserver.host",
-                    placeholder: "e.g., 127.0.0.1",
-                    defaultValue: "localhost"
-                },
-                {
-                    name: "port",
-                    label: "Port",
-                    type: "number",
-                    jsonpath: "spyserver.port",
-                    placeholder: "e.g., 5555",
-                    defaultValue: "1234"
-                }
-            ]
-        },
-        NMEA2000: {
-            title: "NMEA2000 Settings",
-            fields: [
-                {
-                    name: "interface",
-                    label: "Interface",
-                    type: "text",
-                    jsonpath: "nmea2000.interface",
-                    placeholder: "CAN interface name",
-                    defaultValue: "can0"
-                }
-            ]
-        }
-    };
-
-    function escapeHtml(unsafe) {
-        return String(unsafe)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
+    // Initialize receiver manager
+    let receiverManager;
     
-    // Initialize on page load
-    document.addEventListener('DOMContentLoaded', function () {
-        loadConfiguration();
-        setupEventListeners();
+    document.addEventListener('DOMContentLoaded', function() {
+        // Enhance receiverSchema with device selection modal before initializing
+        receiverSchema.input.withButton.onClick = (index) => openDeviceSelectionModal(index);
+        
+        receiverManager = createChannelManager({
+            channelType: 'receiver',
+            schema: receiverSchema,
+            containerId: 'receivers-container',
+            addButtonId: 'add-device-btn',
+            saveButtonId: 'save-button',
+            title: 'Receiver'
+        });
     });
 
-    const isValueMatch = (requiredValue, currentValue) => {
-        if (Array.isArray(requiredValue)) {
-            return requiredValue.includes(currentValue);
-        }
-        return currentValue === requiredValue;
+    // Modal and utility functions
+
+    window.openSerialDeviceModal = function() {
+        fetchSerialDevices();
+        document.getElementById('serial-device-modal').classList.remove('hidden');
     };
-
-    function loadConfiguration() {
-        try {
-            const jsonContent = document.getElementById('json_content').textContent;
-            jsonData = JSON.parse(jsonContent);
-
-            if (!jsonData.receiver || !Array.isArray(jsonData.receiver)) {
-                jsonData.receiver = [{ input: "RTLSDR" }];
-            }
-
-            // Ensure at least one receiver exists
-            if (jsonData.receiver.length === 0) {
-                jsonData.receiver.push({ input: "RTLSDR" });
-            }
-
-            renderReceivers();
-        } catch (error) {
-            console.error('Error loading configuration:', error);
-            jsonData = {
-                config: "aiscatcher",
-                version: 1,
-                receiver: [{ input: "rtlsdr" }]
-            };
-            renderReceivers();
-        }
-    }
-
-    function setupEventListeners() {
-        document.getElementById('add-receiver-btn').addEventListener('click', addReceiver);
-        document.getElementById('save-button').addEventListener('click', saveConfiguration);
-    }
-
-    function renderReceivers() {
-        const container = document.getElementById('receivers-container');
-        container.innerHTML = '';
-
-        jsonData.receiver.forEach((receiver, index) => {
-            const receiverElement = createReceiverElement(receiver, index);
-            container.appendChild(receiverElement);
-        });
-
-        updateJsonDisplay();
-    }
-
-    function createReceiverElement(receiver, index) {
-        const div = document.createElement('div');
-        div.className = 'bg-gray-50 p-6 rounded-lg border';
-        div.innerHTML = `
-            <div class="flex justify-between items-center mb-6">
-                <h4 class="text-lg font-semibold text-gray-800">Receiver ${index + 1}</h4>
-                <button type="button" onclick="removeReceiver(${index})" 
-                        class="text-red-600 hover:text-red-800 ${jsonData.receiver.length <= 1 ? 'opacity-50 cursor-not-allowed' : ''}"
-                        ${jsonData.receiver.length <= 1 ? 'disabled' : ''}>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                </button>
-            </div>
-
-            <div class="space-y-4">
-                <!-- Device Type Selection -->
-                <div class="max-w-md">
-                    <label class="block text-gray-700 text-sm font-medium mb-2">Device Type:</label>
-                    <div class="flex gap-2">
-                        <select id="device-input-${index}" onchange="updateReceiverInput(${index}, this.value)"
-                            class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
-                            <option value="">Select Device</option>
-                            <option value="RTLSDR" ${receiver.input === 'RTLSDR' ? 'selected' : ''}>RTLSDR</option>
-                            <option value="AIRSPY" ${receiver.input === 'AIRSPY' ? 'selected' : ''}>AIRSPY</option>
-                            <option value="AIRSPYHF" ${receiver.input === 'AIRSPYHF' ? 'selected' : ''}>AIRSPYHF</option>
-                            <option value="HACKRF" ${receiver.input === 'HACKRF' ? 'selected' : ''}>HACKRF</option>
-                            <option value="SERIALPORT" ${receiver.input === 'SERIALPORT' ? 'selected' : ''}>SERIAL</option>
-                            <option value="UDPSERVER" ${receiver.input === 'UDPSERVER' ? 'selected' : ''}>UDP Server</option>
-                            <option value="RTLTCP" ${receiver.input === 'RTLTCP' ? 'selected' : ''}>TCP Client</option>
-                            <option value="SPYSERVER" ${receiver.input === 'SPYSERVER' ? 'selected' : ''}>SPYSERVER</option>
-                            <option value="NMEA2000" ${receiver.input === 'NMEA2000' ? 'selected' : ''}>NMEA2000</option>
-                        </select>
-                        <button type="button" onclick="openDeviceSelectionModal(${index})"
-                            class="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition duration-200 flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="#FFFFFF">
-                                <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Serial Key -->
-                <div class="max-w-md" id="serialKeyContainer-${index}" style="${shouldShowSerial(receiver.input) ? '' : 'display: none;'}">
-                    <label class="block text-gray-700 text-sm font-medium mb-2">Serial Key:</label>
-                    <input type="text" placeholder="Optional Serial Key" value="${receiver.serial || ''}"
-                        onchange="updateReceiverField(${index}, 'serial', this.value)"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400">
-                </div>
-
-                <!-- Device-specific settings container -->
-                <div id="device-settings-${index}" class="mt-6">
-                    <!-- Device settings will be populated here -->
-                </div>
-            </div>
-        `;
-
-        // After creating the element, update device settings
-        setTimeout(() => {
-            if (receiver.input) {
-                updateDeviceSettings(receiver.input, index);
-            }
-        }, 0);
-
-        return div;
-    }
-
-    function shouldShowSerial(inputType) {
-        return deviceConfigs[inputType] && deviceConfigs[inputType].hasSerial;
-    }
-
-    function updateReceiverInput(index, value) {
-        if (!jsonData.receiver[index]) {
-            jsonData.receiver[index] = {};
-        }
-
-        if (value === '') {
-            delete jsonData.receiver[index].input;
-        } else {
-            jsonData.receiver[index].input = value;
-        }
-
-        // Update serial key visibility
-        const serialContainer = document.getElementById(`serialKeyContainer-${index}`);
-        if (serialContainer) {
-            serialContainer.style.display = shouldShowSerial(value) ? 'block' : 'none';
-        }
-
-        updateDeviceSettings(value, index);
-        updateJsonDisplay();
-        handleUnsavedChanges(true, 'Receiver configuration updated. Please save your changes.');
-    }
-
-    function updateReceiverField(index, field, value) {
-        if (!jsonData.receiver[index]) {
-            jsonData.receiver[index] = {};
-        }
-
-        if (value === '') {
-            delete jsonData.receiver[index][field];
-        } else {
-            jsonData.receiver[index][field] = value;
-        }
-
-        updateJsonDisplay();
-        handleUnsavedChanges(true, 'Receiver configuration updated. Please save your changes.');
-    }
-
-
-    function updateDeviceSettings(deviceType, receiverIndex) {
-        const settingsContainer = document.getElementById(`device-settings-${receiverIndex}`);
-        if (!settingsContainer) return;
-
-        settingsContainer.innerHTML = '';
-
-        if (!deviceType || !deviceConfigs[deviceType]) return;
-
-        const config = deviceConfigs[deviceType];
-        const receiver = jsonData.receiver[receiverIndex];
-
-        // Add title
-        const title = document.createElement('h5');
-        title.className = 'text-md font-medium text-gray-700 mb-4';
-        title.textContent = config.title;
-        settingsContainer.appendChild(title);
-
-        // Add fields
-        const fieldsContainer = document.createElement('div');
-        fieldsContainer.className = 'space-y-4';
-
-        config.fields.forEach(field => {
-            const fieldElement = createDeviceField(field, receiverIndex, receiver);
-            fieldsContainer.appendChild(fieldElement);
-        });
-
-        settingsContainer.appendChild(fieldsContainer);
-
-        setTimeout(() => {
-            updateFieldDependencies(receiverIndex);
-        }, 10); // Small delay to ensure DOM elements are fully rendered
-    }
-
-    function updateFieldDependencies(receiverIndex) {
-        const receiver = jsonData.receiver[receiverIndex];
-        if (!receiver || !receiver.input) return;
-
-        const config = deviceConfigs[receiver.input.toUpperCase()];
-        if (!config) return;
-
-        // Update visibility for all fields with dependencies
-        config.fields.forEach(field => {
-            if (field.dependsOn) {
-                const controllingInput = document.getElementById(`${field.dependsOn.field}-${receiverIndex}`);
-                const dependentFieldContainer = document.getElementById(`${field.name}-${receiverIndex}`)?.closest('.max-w-md');
-
-                if (controllingInput && dependentFieldContainer) {
-                    const currentValue = controllingInput.type === 'checkbox' ? controllingInput.checked : controllingInput.value;
-                    const requiredValue = field.dependsOn.value;
-
-                    const shouldShow = isValueMatch(requiredValue, currentValue);
-
-                    dependentFieldContainer.style.display = shouldShow ? 'block' : 'none';
-
-                    // Enable/disable the input
-                    const dependentInput = document.getElementById(`${field.name}-${receiverIndex}`);
-                    if (dependentInput) {
-                        dependentInput.disabled = !shouldShow;
-                    }
-                }
-            }
-        });
-    }
-
-    function createDeviceField(field, receiverIndex, receiver) {
-        const fieldContainer = document.createElement('div');
-        fieldContainer.className = 'max-w-md mb-4';
-
-        // Handle dependencies - initially hide dependent fields
-        if (field.dependsOn) {
-            fieldContainer.style.display = 'none';
-        }
-
-        // Create label
-        const label = document.createElement('label');
-        label.className = 'block text-gray-700 text-sm font-medium mb-2';
-        label.textContent = `${field.label}:`;
-        fieldContainer.appendChild(label);
-
-        // Create input
-        let input;
-        const fieldId = `${field.name}-${receiverIndex}`;
-
-        switch (field.type) {
-            case 'select':
-                input = document.createElement('select');
-                input.className = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
-                field.options.forEach(option => {
-                    const opt = document.createElement('option');
-                    opt.value = option.value;
-                    opt.textContent = option.label;
-                    input.appendChild(opt);
-                });
-                break;
-
-            case 'toggle':
-                const toggleContainer = document.createElement('label');
-                toggleContainer.className = 'relative inline-flex items-center cursor-pointer';
-                input = document.createElement('input');
-                input.type = 'checkbox';
-                input.className = 'sr-only peer';
-                const toggleUI = document.createElement('div');
-                toggleUI.className = "w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500";
-                toggleContainer.appendChild(input);
-                toggleContainer.appendChild(toggleUI);
-                fieldContainer.appendChild(toggleContainer);
-                break;
-
-            default:
-                input = document.createElement('input');
-                input.type = field.type;
-                input.className = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400';
-                input.placeholder = field.placeholder || '';
-                if (field.min !== undefined) input.min = field.min;
-                if (field.max !== undefined) input.max = field.max;
-                if (field.step !== undefined) input.step = field.step;
-                break;
-        }
-
-        if (field.type !== 'toggle') {
-            fieldContainer.appendChild(input);
-        }
-
-        input.id = fieldId;
-
-        // Set initial value
-        const pathSegments = field.jsonpath.split('.');
-        let current = receiver;
-        for (let i = 0; i < pathSegments.length; i++) {
-            if (current && current[pathSegments[i]] !== undefined) {
-                current = current[pathSegments[i]];
-            } else {
-                current = undefined;
-                break;
-            }
-        }
-
-        if (current !== undefined) {
-            if (field.type === 'toggle') {
-                input.checked = current;
-            } else {
-                input.value = current;
-            }
-        } else if (field.defaultValue !== undefined) {
-            if (field.type === 'toggle') {
-                input.checked = field.defaultValue;
-            } else {
-                input.value = field.defaultValue;
-            }
-        }
-
-        // Add event listeners - UPDATED to include dependency updates
-        input.addEventListener('change', () => {
-            const value = field.type === 'toggle' ? input.checked : input.value;
-            updateDeviceFieldValue(receiverIndex, field.jsonpath, value);
-
-            // Update dependent fields when this field changes
-            updateFieldDependencies(receiverIndex);
-        });
-
-        return fieldContainer;
-    }
-
-    function updateDeviceFieldValue(receiverIndex, jsonpath, value) {
-        const pathSegments = jsonpath.split('.');
-        let current = jsonData.receiver[receiverIndex];
-
-        for (let i = 0; i < pathSegments.length - 1; i++) {
-            const segment = pathSegments[i];
-            if (!current[segment] || typeof current[segment] !== 'object') {
-                current[segment] = {};
-            }
-            current = current[segment];
-        }
-
-        current[pathSegments[pathSegments.length - 1]] = value;
-        updateJsonDisplay();
-        handleUnsavedChanges(true, 'Device settings updated. Please save your changes.');
-    }
-
-    function addReceiver() {
-        jsonData.receiver.push({ input: "RTLSDR" });
-        renderReceivers();
-        handleUnsavedChanges(true, 'New receiver added. Please save your changes.');
-    }
-
-    function removeReceiver(index) {
-        if (jsonData.receiver.length <= 1) {
-            alert('At least one receiver is required.');
-            return;
-        }
-
-        jsonData.receiver.splice(index, 1);
-        renderReceivers();
-        handleUnsavedChanges(true, 'Receiver removed. Please save your changes.');
-    }
-
-    function updateJsonDisplay() {
-        const jsonContent = document.getElementById('json_content');
-        jsonContent.textContent = JSON.stringify(jsonData, null, 2);
-    }
-
-    function saveConfiguration() {
-        fetch('/device', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(jsonData)
-        })
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return response.text();
-            })
-            .then(data => {
-                handleUnsavedChanges(false);
-                alert('Configuration saved successfully!');
-            })
-            .catch(error => {
-                console.error('Error saving configuration:', error);
-                alert('Error saving configuration: ' + error.message);
-            });
-    }
-
-    // Keep your existing modal functions exactly as they are
-    function openSerialDeviceModal() {
-        fetchSerialDevices();
-        document.getElementById('serial-device-modal').classList.remove('hidden');
-    }
-
-    function closeSerialDeviceModal() {
-        document.getElementById('serial-device-modal').classList.add('hidden');
-    }
-
-    function openDeviceSelectionModal(receiverIndex) {
-        currentDeviceModalReceiver = receiverIndex;
-        document.getElementById('device-selection-modal').classList.remove('hidden');
-        fetchDeviceList();
-    }
-
-    function closeDeviceSelectionModal() {
-        document.getElementById('device-selection-modal').classList.add('hidden');
-        currentDeviceModalReceiver = null;
-    }
-
-    // Keep all your existing modal and utility functions...
-    function toggleJsonContent() {
-        const container = document.getElementById('json-content-container');
-        const chevron = document.getElementById('chevron-icon');
-
-        if (container.classList.contains('hidden')) {
-            container.classList.remove('hidden');
-            chevron.classList.add('rotate-180');
-        } else {
-            container.classList.add('hidden');
-            chevron.classList.remove('rotate-180');
-        }
-    }
-
-    function handleUnsavedChanges(hasChanges, message = '') {
-        if (hasChanges && message) {
-            console.log(message);
-        }
-    }
-
-    function openSerialDeviceModal() {
-        fetchSerialDevices();
-        document.getElementById('serial-device-modal').classList.remove('hidden');
-    }
 
     function closeSerialDeviceModal() {
         document.getElementById('serial-device-modal').classList.add('hidden');
     }
 
     function selectSerialDevice(device) {
-        const input = document.getElementById('port');
+        // Find the serial port input field by data-field attribute
+        const input = document.querySelector('[data-field="serialport_port"] input');
         if (input) {
             input.value = device;
+            // Trigger change event to update the config
             const event = new Event('change', { bubbles: true });
             input.dispatchEvent(event);
             const inputEvent = new Event('input', { bubbles: true });
             input.dispatchEvent(inputEvent);
+            
+            // Manually trigger the config manager update
+            if (receiverManager && receiverManager.data && receiverManager.data.length > 0) {
+                const receiver = receiverManager.data[0];
+                if (!receiver.serialport) receiver.serialport = {};
+                receiver.serialport.port = device;
+                receiverManager.updateJsonDebug();
+            }
         }
         closeSerialDeviceModal();
     }
@@ -1117,17 +139,14 @@
             });
     }
 
-    function openDeviceSelectionModal() {
-        const deviceSelectionModal = document.getElementById('device-selection-modal');
-        deviceSelectionModal.classList.remove('hidden');
+    window.openDeviceSelectionModal = function(receiverIndex) {
+        document.getElementById('device-selection-modal').classList.remove('hidden');
         fetchDeviceList();
-    }
+    };
 
     function closeDeviceSelectionModal() {
-        const deviceSelectionModal = document.getElementById('device-selection-modal');
-        deviceSelectionModal.classList.add('hidden');
+        document.getElementById('device-selection-modal').classList.add('hidden');
     }
-
 
     function fetchDeviceList() {
         const deviceList = document.getElementById('device-list');
@@ -1160,7 +179,7 @@
             const listItem = document.createElement('li');
             listItem.className = 'flex items-center justify-between p-2 border rounded-md hover:bg-gray-100 cursor-pointer';
             listItem.innerHTML = `
-        <span>${escapeHtml(device.name)}</span>
+        <span>${device.name}</span>
         <button type="button" class="select-device-btn bg-gray-600 text-white px-2 py-1 rounded-md hover:bg-gray-700">Select</button>
       `;
 
@@ -1179,15 +198,28 @@
             return;
         }
 
-        const deviceInput = document.getElementById('device-input');
-        const serialKeyInput = document.getElementById('serial-key');
+        // Find the input field by data-field attribute
+        const inputField = document.querySelector('[data-field="input"] select');
+        const serialField = document.querySelector('[data-field="serial"] input');
 
-        deviceInput.value = device.input.toUpperCase() || '';
-        serialKeyInput.value = device.serial || '';
+        if (inputField) {
+            inputField.value = device.input.toUpperCase() || '';
+            inputField.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        if (serialField) {
+            serialField.value = device.serial || '';
+            serialField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
 
-        updateDeviceSettings(device.input.toUpperCase(), true);
+        // Manually update the receiver manager data
+        if (receiverManager && receiverManager.data && receiverManager.data.length > 0) {
+            const receiver = receiverManager.data[0];
+            receiver.input = device.input.toUpperCase() || '';
+            receiver.serial = device.serial || '';
+            receiverManager.updateJsonDebug();
+        }
     }
-
 
 </script>
 {{ end }}
