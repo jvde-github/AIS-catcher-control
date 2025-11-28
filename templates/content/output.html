@@ -1,0 +1,150 @@
+{{ define "output" }}
+<div class="max-w-2xl mx-auto p-4 md:p-6 bg-white rounded-lg shadow-md">
+    <h3 class="text-lg text-xl font-semibold text-gray-800 mb-4">Output Configurations</h3>
+
+    <!-- Output Type Selector (not saved, just for UI) -->
+    <div class="mb-6">
+        <select id="output-type-selector"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="sharing">Community Sharing</option>
+            <option value="udp">UDP </option>
+            <option value="http">HTTP </option>
+            <option value="mqtt">MQTT</option>
+            <option value="tcp">TCP Client</option>
+            <option value="tcp-server">TCP Server/Listener</option>
+            <option value="webviewer">Webviewer</option>
+        </select>
+    </div>
+
+    <!-- Community Sharing Configurations -->
+    <div id="sharing-container" class="output-container">
+        <div id="sharing-configurations" class="space-y-6">
+            <!-- Community Sharing Configuration Entries Will Appear Here -->
+        </div>
+    </div>
+
+    <!-- HTTP Configurations -->
+    <div id="http-container" class="output-container hidden">
+        <div id="http-configurations" class="space-y-6">
+            <!-- HTTP Configuration Entries Will Appear Here -->
+        </div>
+    </div>
+
+    <!-- MQTT Configurations -->
+    <div id="mqtt-container" class="output-container hidden">
+        <div id="mqtt-configurations" class="space-y-6">
+            <!-- MQTT Configuration Entries Will Appear Here -->
+        </div>
+    </div>
+
+    <!-- TCP Configurations -->
+    <div id="tcp-container" class="output-container hidden">
+        <div id="tcp-configurations" class="space-y-6">
+            <!-- TCP Configuration Entries Will Appear Here -->
+        </div>
+    </div>
+
+    <!-- UDP Configurations -->
+    <div id="udp-container" class="output-container hidden">
+        <div id="udp-configurations" class="space-y-6">
+            <!-- UDP Configuration Entries Will Appear Here -->
+        </div>
+    </div>
+
+    <!-- TCP Server/Listener Configurations -->
+    <div id="tcp-server-container" class="output-container hidden">
+        <div id="tcp-server-configurations" class="space-y-6">
+            <!-- TCP Server Configuration Entries Will Appear Here -->
+        </div>
+    </div>
+
+    <!-- Webviewer (Server) Configurations -->
+    <div id="webviewer-container" class="output-container hidden">
+        <div id="webviewer-configurations" class="space-y-6">
+            <!-- Webviewer Configuration Entries Will Appear Here -->
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Create separate managers for each output type
+        // Community sharing is not an array, use simple config manager
+        createSimpleConfigManager({
+            schema: sharingSchema,
+            containerId: 'sharing-configurations',
+            saveButtonId: 'save-sharing-btn'
+        });
+
+        createChannelManager({
+            channelType: 'http',
+            schema: httpSchema,
+            containerId: 'http-configurations',
+            addButtonId: 'add-http-btn',
+            saveButtonId: 'save-http-btn',
+            title: 'HTTP'
+        });
+
+        createChannelManager({
+            channelType: 'mqtt',
+            schema: mqttSchema,
+            containerId: 'mqtt-configurations',
+            addButtonId: 'add-mqtt-btn',
+            saveButtonId: 'save-mqtt-btn',
+            title: 'MQTT'
+        });
+
+        createChannelManager({
+            channelType: 'tcp',
+            schema: tcpSchema,
+            containerId: 'tcp-configurations',
+            addButtonId: 'add-tcp-btn',
+            saveButtonId: 'save-tcp-btn',
+            title: 'TCP'
+        });
+
+        createChannelManager({
+            channelType: 'udp',
+            schema: udpSchema,
+            containerId: 'udp-configurations',
+            addButtonId: 'add-udp-btn',
+            saveButtonId: 'save-udp-btn',
+            title: 'UDP'
+        });
+
+        createChannelManager({
+            channelType: 'tcp_server',
+            schema: tcpServerSchema,
+            containerId: 'tcp-server-configurations',
+            addButtonId: 'add-tcp-server-btn',
+            saveButtonId: 'save-tcp-server-btn',
+            title: 'TCP Server'
+        });
+
+        createChannelManager({
+            channelType: 'server',
+            schema: webviewerSchema,
+            containerId: 'webviewer-configurations',
+            addButtonId: 'add-webviewer-btn',
+            saveButtonId: 'save-webviewer-btn',
+            title: 'Webviewer'
+        });
+
+        // Handle output type selector change
+        const selector = document.getElementById('output-type-selector');
+        selector.addEventListener('change', function () {
+            // Hide all containers
+            document.querySelectorAll('.output-container').forEach(container => {
+                container.classList.add('hidden');
+            });
+
+            // Show selected container
+            const selectedType = this.value;
+            document.getElementById(selectedType + '-container').classList.remove('hidden');
+        });
+
+        // Show initial selection (Community Sharing)
+        selector.dispatchEvent(new Event('change'));
+    });
+</script>
+{{ end }}
