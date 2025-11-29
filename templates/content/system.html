@@ -274,7 +274,7 @@
       connectSSE(action);
   }
 
-  function finishOperation(status, isError = false) {
+  function finishOperation(status, isError = false, connectionLost = false) {
       updateStatus(status, isError);
       if (currentOperation) {
           currentOperation.close();
@@ -295,6 +295,11 @@
       // Ensure display stays visible to show logs
       const progressDisplay = document.getElementById('progressDisplay');
       progressDisplay.classList.remove('hidden');
+      
+      // Reload page after connection lost
+      if (connectionLost) {
+          setTimeout(() => window.location.reload(), 3000);
+      }
   }
 
   function getActionTitle(action) {
@@ -369,7 +374,7 @@
 
       currentOperation.onerror = () => {
           if (currentAction) {
-              finishOperation('Connection Lost', true);
+              finishOperation('Connection Lost', true, true);
           }
       };
   }
