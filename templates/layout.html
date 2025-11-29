@@ -272,12 +272,17 @@
 
   <!-- Main Content -->
   <main class="main-content min-h-screen bg-slate-50">
-    <div class="md:p-8 px-0 py-4 pt-20 md:pt-8 max-w-7xl mx-auto">
-      <div id="status-message" class="mt-2 mb-4 mx-4 transition-opacity duration-300 opacity-0 hidden" role="alert" aria-live="assertive">
-      </div>
-
+    {{if eq .ContentTemplate "webviewer"}}
+      <!-- Webviewer: Full screen with no padding -->
       {{ dynamicTemplate .ContentTemplate . }}
-    </div>
+    {{else}}
+      <div class="md:p-8 px-0 py-4 pt-20 md:pt-8 max-w-7xl mx-auto">
+        <div id="status-message" class="mt-2 mb-4 mx-4 transition-opacity duration-300 opacity-0 hidden" role="alert" aria-live="assertive">
+        </div>
+
+        {{ dynamicTemplate .ContentTemplate . }}
+      </div>
+    {{end}}
   </main>
 
   <script>
