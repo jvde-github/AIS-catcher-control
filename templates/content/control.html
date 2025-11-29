@@ -154,12 +154,7 @@
 
         <div id="logs-container" class="h-64 sm:h-80 overflow-auto custom-scrollbar p-4 bg-slate-900">
             <div id="logs-content" class="flex flex-col justify-end min-h-full">
-                {{if or .LogTxtLogs .Logs}}
-                {{range .LogTxtLogs}}<div class="log-line default">{{.}}</div>{{end}}
-                {{range .Logs}}<div class="log-line default">{{.}}</div>{{end}}
-                {{else}}
-                <div class="text-slate-500 italic text-sm">Waiting for logs...</div>
-                {{end}}
+                <div class="text-slate-500 italic text-sm">Loading logs...</div>
             </div>
         </div>
     </div>
@@ -247,6 +242,30 @@
 
             updateStatus();
             setInterval(updateStatus, 3000);
+
+            // Load initial logs with priority filter
+            const logsContentDiv = document.getElementById('logs-content');
+            logsContentDiv.innerHTML = '<div class="text-slate-500 italic text-sm" id="loading-message">Loading logs...</div>';
+            
+            fetch(`/api/recent-logs?source=${currentLogSource}&lines=10&priority=${currentPriority}`)
+                .then(response => response.json())
+                .then(data => {
+                    const loadingMsg = document.getElementById('loading-message');
+                    if (loadingMsg) loadingMsg.remove();
+                    
+                    if (data.logs && data.logs.length > 0) {
+                        data.logs.forEach(log => {
+                            logsContentDiv.appendChild(formatLogLine(log.message));
+                        });
+                        const logsContainer = document.getElementById('logs-container');
+                        logsContainer.scrollTop = logsContainer.scrollHeight;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching initial logs:', error);
+                    const loadingMsg = document.getElementById('loading-message');
+                    if (loadingMsg) loadingMsg.remove();
+                });
 
             // Switch log source
             window.switchLogSource = function() {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -90,16 +89,14 @@ type LogMessage struct {
 }
 
 type Control struct {
-	CssVersion      string   `json:"css_version"`
-	JsVersion       string   `json:"js_version"`
-	Title           string   `json:"title"`
-	Status          string   `json:"status"`
-	Uptime          string   `json:"uptime"`
-	Logs            []string `json:"logs"`
-	LogTxtLogs      []string `json:"log_txt_logs"`
-	ServiceEnabled  bool     `json:"service_enabled"`
-	Docker          bool     `json:"docker"`
-	ContentTemplate string   `json:"content_template"`
+	CssVersion      string `json:"css_version"`
+	JsVersion       string `json:"js_version"`
+	Title           string `json:"title"`
+	Status          string `json:"status"`
+	Uptime          string `json:"uptime"`
+	ServiceEnabled  bool   `json:"service_enabled"`
+	Docker          bool   `json:"docker"`
+	ContentTemplate string `json:"content_template"`
 }
 
 type ConfigJSON struct {
@@ -1322,15 +1319,11 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	journalctlLogs := getServiceLogs(50)
-	logTxtLogs := getLogTxtLogs(10)
 
 	controlData := Control{
 		CssVersion:      cssVersion,
 		JsVersion:       jsVersion,
 		Title:           "Control Dashboard",
-		Logs:            journalctlLogs,
-		LogTxtLogs:      logTxtLogs,
 		Docker:          getConfig().Docker,
 		ContentTemplate: "control",
 	}
@@ -1428,62 +1421,6 @@ func formatDuration(d time.Duration) string {
 		parts = append(parts, fmt.Sprintf("%ds", seconds))
 	}
 	return strings.Join(parts, " ")
-}
-
-func getServiceLogs(lines int) []string {
-	if getConfig().Docker {
-		return []string{""}
-	}
-
-	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", fmt.Sprintf("%d", lines), "--no-pager", "--output=json")
-	output, err := cmd.Output()
-	if err != nil {
-		return []string{"Unable to retrieve logs"}
-	}
-
-	jsonLines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	logLines := make([]string, 0, len(jsonLines))
-	for _, line := range jsonLines {
-		if line != "" {
-			logLines = append(logLines, parseJournalLine(line))
-		}
-	}
-	return logLines
-}
-
-func getLogTxtLogs(lines int) []string {
-
-	if !getConfig().Docker {
-		return []string{""}
-	}
-
-	cmd := exec.Command("tail", "-n", fmt.Sprintf("%d", lines), logTxtFilePath)
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	if err != nil {
-		if strings.Contains(stderr.String(), "No such file or directory") {
-			return []string{""}
-		}
-		log.Printf("Error executing tail command: %v, %s", err, stderr.String())
-		return []string{"Error reading %s.", logTxtFilePath}
-	}
-
-	// Get the command output as a string
-	output := stdout.String()
-
-	// Handle the case where the file is empty
-	if strings.TrimSpace(output) == "" {
-		return []string{"%s is empty.", logTxtFilePath}
-	}
-
-	// Split the output into individual lines
-	logLines := strings.Split(strings.TrimSpace(output), "\n")
-	return logLines
 }
 
 func controlService(action string) error {
