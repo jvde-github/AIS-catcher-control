@@ -39,8 +39,15 @@
         }
 
         function checkServiceStatus() {
-            fetch('/status')
-                .then(response => response.json())
+            // Add timeout to prevent hanging
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
+            fetch('/status', { signal: controller.signal })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    return response.json();
+                })
                 .then(data => {
                     // Check if status is not "active (running)"
                     if (data.status !== 'active (running)') {
@@ -65,8 +72,10 @@
                     loadWebviewer();
                 })
                 .catch(error => {
+                    clearTimeout(timeoutId);
                     console.error('Error checking service status:', error);
-                    loadWebviewer(); // Try anyway
+                    // If status check fails/times out, just try to load the webviewer
+                    loadWebviewer();
                 });
         }
 
