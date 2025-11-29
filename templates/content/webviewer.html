@@ -1,5 +1,13 @@
 {{ define "webviewer" }}
-<div id="webviewer" class="h-screen overflow-hidden flex items-center justify-center">
+<div id="webviewer" class="h-screen overflow-hidden flex items-center justify-center" style="height: calc(100vh - 4rem); height: calc(100dvh - 4rem);">
+  <style>
+    @media (min-width: 1024px) {
+      #webviewer {
+        height: 100vh !important;
+        height: 100dvh !important;
+      }
+    }
+  </style>
     <div id="loading" class="text-center p-8">
         <svg class="animate-spin h-12 w-12 text-slate-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
