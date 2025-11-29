@@ -1,11 +1,10 @@
-version: '3.8'
-
 services:
   ais-catcher-control:
     image: ghcr.io/jvde-github/ais-catcher-control:edge
     pull_policy: always
     container_name: ais-catcher-control
     privileged: true
+    cgroup: host
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - ais-data:/var/lib/ais-catcher
@@ -19,7 +18,6 @@ services:
       - /run/lock
       - /tmp
     stop_signal: SIGRTMIN+3
-    # For USB RTL-SDR devices
     devices:
       - /dev/bus/usb:/dev/bus/usb
     environment:
