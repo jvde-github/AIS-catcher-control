@@ -2,9 +2,8 @@ version: '3.8'
 
 services:
   ais-catcher-control:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/jvde-github/ais-catcher-control:edge
+    pull_policy: always
     container_name: ais-catcher-control
     privileged: true
     volumes:
