@@ -274,7 +274,7 @@
       connectSSE(action);
   }
 
-  function finishOperation(status, isError = false, connectionLost = false) {
+  function finishOperation(status, isError = false) {
       updateStatus(status, isError);
       if (currentOperation) {
           currentOperation.close();
@@ -295,13 +295,6 @@
       // Ensure display stays visible to show logs
       const progressDisplay = document.getElementById('progressDisplay');
       progressDisplay.classList.remove('hidden');
-      
-      // Only reload the page if connection was lost (e.g., service restarted)
-      if (connectionLost) {
-          setTimeout(() => {
-              window.location.reload();
-          }, 3000);
-      }
   }
 
   function getActionTitle(action) {
@@ -367,16 +360,16 @@
                   appendOutput('\n<span class="text-amber-400">System will reboot in 5 seconds...</span>');
                   setTimeout(() => window.location.reload(), 5000);
               }
-              finishOperation('Completed', false, false);
+              finishOperation('Completed', false);
           } else if (data.type === 'error') {
               appendOutput('\n<span class="text-rose-400">Error: ' + data.content + '</span>\n');
-              finishOperation('Failed', true, false);
+              finishOperation('Failed', true);
           }
       };
 
       currentOperation.onerror = () => {
           if (currentAction) {
-              finishOperation('Connection Lost', true, true);
+              finishOperation('Connection Lost', true);
           }
       };
   }

@@ -67,22 +67,22 @@
     // ============================================================================
 
     const Styles = {
-        input: 'w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all duration-200 shadow-sm sm:text-sm',
+        input: 'w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-white border border-slate-300 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all duration-200 shadow-sm text-xs sm:text-sm',
         select: 'appearance-none pr-8',
         toggle: "w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-slate-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-800",
         slider: 'flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-800',
-        sliderContainer: 'flex items-center gap-3 p-2 bg-slate-50 rounded-lg border border-slate-100',
-        sliderDisplay: 'text-sm font-mono font-medium text-slate-600 min-w-[3rem] text-center px-2 py-1 bg-slate-100 rounded border border-slate-200',
-        label: 'block text-slate-700 text-sm font-semibold mb-2 ml-0.5',
-        description: 'mt-1 text-xs text-slate-500 ml-0.5',
-        button: 'w-full sm:w-auto bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50 transition duration-200 shadow-sm inline-flex items-center justify-center gap-2 font-medium',
-        buttonPrimary: 'px-3 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition duration-200 shadow-sm flex items-center justify-center min-w-[44px]',
-        card: 'bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-w-2xl mx-auto mb-6 relative hover:shadow-md transition-shadow duration-300',
-        cardHeader: 'flex justify-between items-center mb-6 pb-4 border-b border-slate-100',
-        deleteBtn: 'text-rose-600 hover:text-rose-700 hover:bg-rose-50 p-2 rounded-lg transition duration-200',
+        sliderContainer: 'flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 bg-slate-50 rounded-lg border border-slate-100',
+        sliderDisplay: 'text-xs sm:text-sm font-mono font-medium text-slate-600 min-w-[2.5rem] sm:min-w-[3rem] text-center px-1.5 sm:px-2 py-0.5 sm:py-1 bg-slate-100 rounded border border-slate-200',
+        label: 'block text-slate-700 text-xs sm:text-sm font-semibold mb-1 sm:mb-2 ml-0.5',
+        description: 'mt-0.5 text-[10px] sm:text-xs text-slate-500 ml-0.5',
+        button: 'w-full sm:w-auto bg-white border border-slate-300 text-slate-700 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-slate-50 transition duration-200 shadow-sm inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-medium',
+        buttonPrimary: 'px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition duration-200 shadow-sm flex items-center justify-center min-w-[40px] sm:min-w-[44px] text-xs sm:text-sm',
+        card: 'bg-white p-3 sm:p-6 rounded-none sm:rounded-xl border-x-0 sm:border-x border-slate-200 shadow-sm sm:max-w-2xl sm:mx-auto mb-2 sm:mb-6 relative hover:shadow-md transition-shadow duration-300',
+        cardHeader: 'flex justify-between items-center mb-3 sm:mb-6 pb-2 sm:pb-4 border-b border-slate-100',
+        deleteBtn: 'text-rose-600 hover:text-rose-700 hover:bg-rose-50 p-1.5 sm:p-2 rounded-lg transition duration-200',
         chevron: 'pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500',
-        saveActive: 'bg-slate-800 text-white px-6 py-2 rounded-lg hover:bg-slate-700 shadow-md transition-all duration-200 font-medium transform hover:-translate-y-0.5',
-        saveInactive: 'bg-white border border-slate-300 text-slate-400 px-6 py-2 rounded-lg hover:bg-slate-50 shadow-sm transition-all duration-200 font-medium cursor-default',
+        saveActive: 'bg-slate-800 text-white px-4 sm:px-6 py-1.5 sm:py-2 rounded-lg hover:bg-slate-700 shadow-md transition-all duration-200 text-xs sm:text-sm font-medium transform hover:-translate-y-0.5',
+        saveInactive: 'bg-white border border-slate-300 text-slate-400 px-4 sm:px-6 py-1.5 sm:py-2 rounded-lg hover:bg-slate-50 shadow-sm transition-all duration-200 text-xs sm:text-sm font-medium cursor-default',
     };
 
     const Icons = {
@@ -301,7 +301,7 @@
                 );
             }
 
-            const container = el('div', 'mb-2 transition-all duration-200', {
+            const container = el('div', 'mb-1.5 sm:mb-2 transition-all duration-200', {
                 dataset: { field: field.name, dependsOn: field.dependsOn ? JSON.stringify(field.dependsOn) : null },
                 style: field.width ? `flex: 0 1 calc(${field.width}% - 0.375rem); min-width: 0;` : 'flex: 1 1 100%;'
             });
@@ -393,7 +393,7 @@
             items.forEach((item, index) => {
                 const wrapper = el('div', Styles.card, {}, 
                     this.config.isList ? el('div', Styles.cardHeader, {}, 
-                        el('h4', 'text-lg font-semibold text-slate-800', {}, `${this.config.title} ${index + 1}`),
+                        el('h4', 'text-base sm:text-lg font-semibold text-slate-800', {}, `${this.config.title} ${index + 1}`),
                         el('button', Styles.deleteBtn, { 
                             type: 'button', 
                             title: 'Remove Item',
@@ -425,33 +425,49 @@
             const existing = this.container.parentElement.querySelector('.' + containerIdClass);
             if (existing) existing.remove();
 
-            const btnGroup = el('div', `${containerIdClass} mt-8 flex justify-end items-center gap-3 max-w-2xl mx-auto`);
+            // Ensure JSON section exists first so we can insert buttons before it
+            this.ensureJsonUI();
+            
+            const btnGroup = el('div', `${containerIdClass} mt-6 sm:mt-8 px-4 sm:px-0 flex justify-end items-center gap-3 max-w-2xl sm:mx-auto`);
             
             if (this.config.isList) {
-                btnGroup.appendChild(el('button', Styles.button, {
+                btnGroup.appendChild(el('button', 'w-32 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50 transition duration-200 shadow-sm inline-flex items-center justify-center gap-2 text-sm font-medium', {
                     type: 'button', onClick: () => this.addItem()
                 }, 
                 Icons.plus(),
                 'Add Item'));
             }
             
-            btnGroup.appendChild(el('button', Styles.saveInactive, {
+            btnGroup.appendChild(el('button', 'w-32 bg-white border border-slate-300 text-slate-400 px-6 py-2 rounded-lg hover:bg-slate-50 shadow-sm transition-all duration-200 text-sm font-medium cursor-default', {
                 type: 'button', onClick: () => this.save()
             }, 'Save'));
 
-            this.container.parentElement.appendChild(btnGroup);
+            // Insert buttons before the JSON section
+            const jsonSection = this.container.parentElement.querySelector('.border-t.border-slate-200.pt-6');
+            if (jsonSection) {
+                this.container.parentElement.insertBefore(btnGroup, jsonSection);
+            } else {
+                this.container.parentElement.appendChild(btnGroup);
+            }
+            
             if(App.state.unsaved) App.setUnsaved(true);
-
-            this.ensureJsonUI();
         }
 
         ensureJsonUI() {
-            if (document.getElementById('json-content-container')) return;
-
             const parent = this.container.parentElement;
+            const existingContainer = document.getElementById('json-content-container');
+            
+            // If JSON section already exists, move it to the end to ensure proper order
+            if (existingContainer) {
+                const toggleDiv = existingContainer.parentElement;
+                if (toggleDiv) {
+                    parent.appendChild(toggleDiv);
+                }
+                return;
+            }
             
             // Collapsible JSON Debugger
-            const toggleDiv = el('div', 'mt-8 max-w-2xl mx-auto border-t border-slate-200 pt-6');
+            const toggleDiv = el('div', 'mt-6 sm:mt-8 px-4 sm:px-0 max-w-2xl sm:mx-auto border-t border-slate-200 pt-6');
             const btn = el('button', 'flex items-center text-slate-500 hover:text-slate-800 transition-colors focus:outline-none group text-sm font-medium', { 
                 type: 'button', onClick: () => global.toggleJsonContent() 
             });
@@ -461,7 +477,7 @@
             }, el('path', '', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M19 9l-7 7-7-7' }));
 
             btn.appendChild(chevron);
-            btn.appendChild(el('span', '', {}, 'Advanced: Show JSON Config'));
+            btn.appendChild(el('span', '', {}, 'JSON'));
 
             const contentDiv = el('div', 'mt-3 hidden transition-all', { id: 'json-content-container' });
             // Dark mode terminal look for JSON
