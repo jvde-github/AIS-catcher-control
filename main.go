@@ -1790,6 +1790,19 @@ func (b *Broadcaster) Unsubscribe(clientChan chan LogMessage) {
 }
 
 func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
+	// Panic recovery to prevent crashes
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Recovered from panic in recentLogsHandler: %v", r)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"logs":  []LogMessage{},
+				"error": "Internal server error",
+			})
+		}
+	}()
+
 	logSource := r.URL.Query().Get("source")
 	if logSource == "" {
 		logSource = "ais-catcher"
@@ -1798,30 +1811,55 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	linesStr := r.URL.Query().Get("lines")
 	lines := 10
 	if linesStr != "" {
-		if parsedLines, err := strconv.Atoi(linesStr); err == nil && parsedLines > 0 {
+		if parsedLines, err := strconv.Atoi(linesStr); err == nil && parsedLines > 0 && parsedLines <= 1000 {
 			lines = parsedLines
 		}
 	}
 
-	// Build journalctl command based on source
+	// Verify journalctl is available
+	if _, err := exec.LookPath("journalctl"); err != nil {
+		log.Printf("journalctl command not found: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"logs":  []LogMessage{},
+			"error": "journalctl not available",
+		})
+		return
+	}
+
+	// Set timeout for command execution
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	// Build journalctl command with context based on source
 	var cmd *exec.Cmd
 	switch logSource {
 	case "ais-catcher":
-		cmd = exec.Command("journalctl", "-u", "ais-catcher.service", "-n", strconv.Itoa(lines), "--no-pager", "--output=cat")
+		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher.service", "-n", strconv.Itoa(lines), "--no-pager")
 	case "control":
-		cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-n", strconv.Itoa(lines), "--no-pager", "--output=cat")
+		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher-control", "-n", strconv.Itoa(lines), "--no-pager")
 	case "system":
-		cmd = exec.Command("journalctl", "-n", strconv.Itoa(lines), "--no-pager", "--output=cat")
+		cmd = exec.CommandContext(ctx, "journalctl", "-n", strconv.Itoa(lines), "--no-pager")
 	default:
-		http.Error(w, "Invalid log source", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"logs":  []LogMessage{},
+			"error": "Invalid log source",
+		})
 		return
 	}
 
 	output, err := cmd.Output()
 	if err != nil {
-		log.Printf("Error fetching recent logs: %v", err)
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Printf("Timeout fetching recent %s logs", logSource)
+		} else {
+			log.Printf("Error fetching recent %s logs: %v", logSource, err)
+		}
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"logs": []LogMessage{},
+			"logs":  []LogMessage{},
+			"error": "Failed to fetch logs",
 		})
 		return
 	}
@@ -1864,42 +1902,90 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request, broadcaster *Broa
 	clientChan := make(chan LogMessage, 100)
 	defer close(clientChan)
 
+	// Verify journalctl is available
+	if _, err := exec.LookPath("journalctl"); err != nil {
+		log.Printf("journalctl command not found: %v", err)
+		fmt.Fprintf(w, "data: %s\n\n", `{"message":"[ERROR] journalctl not available on this system"}`)
+		flusher.Flush()
+		return
+	}
+
 	// Start log tailing goroutine using journalctl
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Recovered from panic in log streaming: %v", r)
+			}
+		}()
+
 		var cmd *exec.Cmd
 		switch logSource {
 		case "ais-catcher":
-			cmd = exec.Command("journalctl", "-u", "ais-catcher.service", "-f", "-n", "0", "--no-pager", "--output=cat")
+			cmd = exec.Command("journalctl", "-u", "ais-catcher.service", "-f", "-n", "0", "--no-pager")
 		case "control":
-			cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-f", "-n", "0", "--no-pager", "--output=cat")
+			cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-f", "-n", "0", "--no-pager")
 		case "system":
-			cmd = exec.Command("journalctl", "-f", "-n", "0", "--no-pager", "--output=cat")
+			cmd = exec.Command("journalctl", "-f", "-n", "0", "--no-pager")
 		default:
+			log.Printf("Invalid log source: %s", logSource)
 			return
 		}
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			log.Printf("Error creating pipe: %v", err)
+			log.Printf("Error creating pipe for %s logs: %v", logSource, err)
+			// Try to send error message to client
+			select {
+			case clientChan <- LogMessage{Message: fmt.Sprintf("[ERROR] Failed to create pipe: %v", err)}:
+			default:
+			}
 			return
 		}
 
 		if err := cmd.Start(); err != nil {
-			log.Printf("Error starting command: %v", err)
+			log.Printf("Error starting journalctl for %s logs: %v", logSource, err)
+			// Try to send error message to client
+			select {
+			case clientChan <- LogMessage{Message: fmt.Sprintf("[ERROR] Failed to start journalctl: %v", err)}:
+			default:
+			}
 			return
 		}
+
+		// Ensure process is killed when context is done
+		go func() {
+			<-ctx.Done()
+			if cmd.Process != nil {
+				cmd.Process.Kill()
+			}
+		}()
 
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			select {
 			case <-ctx.Done():
-				cmd.Process.Kill()
 				return
 			case clientChan <- LogMessage{Message: scanner.Text()}:
 			default:
+				// Channel full, skip message to prevent blocking
 			}
 		}
-		cmd.Wait()
+
+		// Check for scanner errors
+		if err := scanner.Err(); err != nil {
+			log.Printf("Scanner error for %s logs: %v", logSource, err)
+		}
+
+		// Wait for command to finish
+		if err := cmd.Wait(); err != nil {
+			// Only log if not killed by context cancellation
+			select {
+			case <-ctx.Done():
+				// Expected termination
+			default:
+				log.Printf("journalctl command for %s exited with error: %v", logSource, err)
+			}
+		}
 	}()
 
 	// Heartbeat ticker
