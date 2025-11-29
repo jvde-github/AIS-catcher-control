@@ -42,7 +42,8 @@
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
-                    if (!data.running) {
+                    // Check if status is not "active (running)"
+                    if (data.status !== 'active (running)') {
                         webviewerDiv.innerHTML = `
                             <div class="flex items-center justify-center h-full bg-slate-50">
                                 <div class="max-w-md p-8 text-center">
