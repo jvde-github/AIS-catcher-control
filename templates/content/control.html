@@ -131,10 +131,18 @@
                 <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3"></path>
                 </svg>
-                <select id="log-source-select" onchange="switchLogSource(this.value)" class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select id="log-source-select" onchange="switchLogSource()" class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="ais-catcher">ais-catcher</option>
                     <option value="control">control panel</option>
                     <option value="system">system</option>
+                </select>
+                <select id="log-priority-select" onchange="switchLogSource()" class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="debug">debug</option>
+                    <option value="info" selected>info</option>
+                    <option value="notice">notice</option>
+                    <option value="warning">warning</option>
+                    <option value="err">error</option>
+                    <option value="crit">critical</option>
                 </select>
             </div>
             <div class="flex space-x-1.5">
@@ -235,18 +243,22 @@
         document.addEventListener('DOMContentLoaded', function () {
             let eventSource = null;
             let currentLogSource = 'ais-catcher';
+            let currentPriority = 'info';
 
             updateStatus();
             setInterval(updateStatus, 3000);
 
             // Switch log source
-            window.switchLogSource = function(source) {
-                currentLogSource = source;
+            window.switchLogSource = function() {
+                const sourceSelect = document.getElementById('log-source-select');
+                const prioritySelect = document.getElementById('log-priority-select');
+                currentLogSource = sourceSelect.value;
+                currentPriority = prioritySelect.value;
                 const logsContentDiv = document.getElementById('logs-content');
                 logsContentDiv.innerHTML = '<div class="text-slate-500 italic text-sm" id="loading-message">Loading logs...</div>';
                 
                 // Fetch initial logs
-                fetch(`/api/recent-logs?source=${source}&lines=10`)
+                fetch(`/api/recent-logs?source=${currentLogSource}&lines=10&priority=${currentPriority}`)
                     .then(response => response.json())
                     .then(data => {
                         const loadingMsg = document.getElementById('loading-message');
@@ -305,7 +317,7 @@
                 const logsContentDiv = document.getElementById('logs-content');
                 const logsContainer = document.getElementById('logs-container');
 
-                const streamUrl = '/logs-stream?source=' + currentLogSource;
+                const streamUrl = '/logs-stream?source=' + currentLogSource + '&priority=' + currentPriority;
                 eventSource = new EventSource(streamUrl);
 
                 eventSource.onmessage = function (event) {

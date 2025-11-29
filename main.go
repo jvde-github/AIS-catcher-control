@@ -1816,6 +1816,11 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	priority := r.URL.Query().Get("priority")
+	if priority == "" {
+		priority = "info"
+	}
+
 	// Verify journalctl is available
 	if _, err := exec.LookPath("journalctl"); err != nil {
 		log.Printf("journalctl command not found: %v", err)
@@ -1835,11 +1840,11 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	var cmd *exec.Cmd
 	switch logSource {
 	case "ais-catcher":
-		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher.service", "-n", strconv.Itoa(lines), "--no-pager")
+		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher.service", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager")
 	case "control":
-		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher-control", "-n", strconv.Itoa(lines), "--no-pager")
+		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher-control", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager")
 	case "system":
-		cmd = exec.CommandContext(ctx, "journalctl", "-n", strconv.Itoa(lines), "--no-pager")
+		cmd = exec.CommandContext(ctx, "journalctl", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager")
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1898,6 +1903,11 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request, broadcaster *Broa
 		logSource = "ais-catcher"
 	}
 
+	priority := r.URL.Query().Get("priority")
+	if priority == "" {
+		priority = "info"
+	}
+
 	// Create dedicated channel for log streaming using journalctl
 	clientChan := make(chan LogMessage, 100)
 	defer close(clientChan)
@@ -1921,11 +1931,11 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request, broadcaster *Broa
 		var cmd *exec.Cmd
 		switch logSource {
 		case "ais-catcher":
-			cmd = exec.Command("journalctl", "-u", "ais-catcher.service", "-f", "-n", "0", "--no-pager")
+			cmd = exec.Command("journalctl", "-u", "ais-catcher.service", "-p", priority, "-f", "-n", "0", "--no-pager")
 		case "control":
-			cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-f", "-n", "0", "--no-pager")
+			cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-p", priority, "-f", "-n", "0", "--no-pager")
 		case "system":
-			cmd = exec.Command("journalctl", "-f", "-n", "0", "--no-pager")
+			cmd = exec.Command("journalctl", "-p", priority, "-f", "-n", "0", "--no-pager")
 		default:
 			log.Printf("Invalid log source: %s", logSource)
 			return
