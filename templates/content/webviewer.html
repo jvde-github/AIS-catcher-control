@@ -49,8 +49,8 @@
                     return response.json();
                 })
                 .then(data => {
-                    // Check if status is not "active (running)"
-                    if (data.status !== 'active (running)') {
+                    // Check if service is not running
+                    if (!data.running) {
                         webviewerDiv.innerHTML = `
                             <div class="flex items-center justify-center h-full bg-slate-50">
                                 <div class="max-w-md p-8 text-center">
@@ -88,30 +88,32 @@
                 url.hash = '';
                 var newUrl = url.toString();
 
-                // Test if the webviewer is reachable
-                fetch(newUrl, { method: 'HEAD', mode: 'no-cors' })
-                    .then(() => {
-                        iframe.src = newUrl;
-                        iframe.onload = function() {
-                            loadingDiv.classList.add('hidden');
-                            iframe.classList.remove('hidden');
-                        };
-                    })
-                    .catch(() => {
-                        // If fetch fails, still try to load but prepare error message
-                        iframe.src = newUrl;
-                        setTimeout(() => {
-                            if (!iframe.contentWindow || iframe.contentWindow.length === 0) {
-                                showError(
-                                    'Webviewer Not Accessible',
-                                    'The webviewer could not be loaded on port ' + port + '. Please ensure AIS-catcher is running and try restarting the service from the Control page.'
-                                );
-                            } else {
-                                loadingDiv.classList.add('hidden');
-                                iframe.classList.remove('hidden');
-                            }
-                        }, 3000);
-                    });
+                // Set iframe source immediately
+                iframe.src = newUrl;
+                
+                // Set a timeout to check if iframe loaded successfully
+                let loadTimeout = setTimeout(() => {
+                    showError(
+                        'Webviewer Not Accessible',
+                        'The webviewer could not be loaded on port ' + port + '. Please ensure AIS-catcher is running with webviewer enabled.'
+                    );
+                }, 8000);
+
+                // Handle successful iframe load
+                iframe.onload = function() {
+                    clearTimeout(loadTimeout);
+                    loadingDiv.classList.add('hidden');
+                    iframe.classList.remove('hidden');
+                };
+
+                // Handle iframe load errors
+                iframe.onerror = function() {
+                    clearTimeout(loadTimeout);
+                    showError(
+                        'Webviewer Load Error',
+                        'Failed to load the webviewer on port ' + port + '. Please check the service status on the Control page.'
+                    );
+                };
             } catch (e) {
                 console.error('Invalid URL:', e);
                 showError('Configuration Error', 'There was an error processing the webviewer URL.');

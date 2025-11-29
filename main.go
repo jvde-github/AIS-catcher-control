@@ -2132,9 +2132,11 @@ func apiConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
 	enabled, _ := getServiceEnabled()
+	status := getServiceStatus()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  getServiceStatus(),
+		"status":  status,
+		"running": status == "active (running)",
 		"uptime":  getServiceUptime(),
 		"enabled": enabled,
 	})
