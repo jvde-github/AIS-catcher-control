@@ -158,7 +158,7 @@ const tcpSchema = {
     },
     persist: {
         name: 'persist',
-        label: 'Auto Reconnect',
+        label: 'Reconnect',
         type: 'toggle',
         defaultValue: true,
         width: 25
