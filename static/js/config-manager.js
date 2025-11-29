@@ -294,7 +294,7 @@
                 const action = typeof field.withButton.onClick === 'function' 
                     ? field.withButton.onClick 
                     : ActionRegistry[field.withButton.onClick] || (() => {});
-                inputEl = el('div', 'flex gap-2', {}, 
+                inputEl = el('div', 'flex items-center gap-2', {}, 
                     el('div', 'flex-1', {}, inputEl),
                     el('button', Styles.buttonPrimary, { type: 'button', onClick: action }, 
                         el('span', '', { innerHTML: field.withButton.icon || 'Action' }))
@@ -428,17 +428,17 @@
             // Ensure JSON section exists first so we can insert buttons before it
             this.ensureJsonUI();
             
-            const btnGroup = el('div', `${containerIdClass} mt-6 sm:mt-8 px-4 sm:px-0 flex justify-end items-center gap-3 max-w-2xl sm:mx-auto`);
+            const btnGroup = el('div', `${containerIdClass} mt-6 sm:mt-8 px-4 sm:px-0 flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-2 sm:gap-3 max-w-2xl sm:mx-auto`);
             
             if (this.config.isList) {
-                btnGroup.appendChild(el('button', 'w-32 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50 transition duration-200 shadow-sm inline-flex items-center justify-center gap-2 text-sm font-medium', {
+                btnGroup.appendChild(el('button', 'w-full sm:w-32 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50 transition duration-200 shadow-sm inline-flex items-center justify-center gap-2 text-sm font-medium', {
                     type: 'button', onClick: () => this.addItem()
                 }, 
                 Icons.plus(),
                 'Add Item'));
             }
             
-            btnGroup.appendChild(el('button', 'w-32 bg-white border border-slate-300 text-slate-400 px-6 py-2 rounded-lg hover:bg-slate-50 shadow-sm transition-all duration-200 text-sm font-medium cursor-default', {
+            btnGroup.appendChild(el('button', 'w-full sm:w-32 bg-white border border-slate-300 text-slate-400 px-6 py-2 rounded-lg hover:bg-slate-50 shadow-sm transition-all duration-200 text-sm font-medium cursor-default', {
                 type: 'button', onClick: () => this.save()
             }, 'Save'));
 
