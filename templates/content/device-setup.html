@@ -8,10 +8,10 @@
 </div>
 
 <!-- Modals remain the same -->
-<div id="serial-device-modal" class="fixed inset-0 bg-gray-200 bg-opacity-75 flex items-center justify-center hidden z-50" style="background-color: rgba(0, 0, 0, 0.3);">
-    <div class="bg-white rounded-lg shadow-xl w-11/12 md:w-2/3 lg:w-1/2 max-w-2xl mx-4 relative z-10" style="background-color: white;">
-        <div class="flex justify-between items-center p-4 border-b">
-            <h3 class="text-lg font-medium text-gray-800">Select Serial Device</h3>
+<div id="serial-device-modal" class="fixed inset-0 bg-gray-200 bg-opacity-75 flex items-center justify-center hidden z-50 p-4" style="background-color: rgba(0, 0, 0, 0.3);">
+    <div class="bg-white rounded-lg shadow-xl w-full md:w-2/3 lg:w-1/2 max-w-2xl max-h-[90vh] flex flex-col relative z-10" style="background-color: white;">
+        <div class="flex justify-between items-center p-3 md:p-4 border-b flex-shrink-0">
+            <h3 class="text-base md:text-lg font-medium text-gray-800">Select Serial Device</h3>
             <button type="button" onclick="closeSerialDeviceModal()" class="text-gray-600 hover:text-gray-800">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor">
@@ -19,14 +19,14 @@
                 </svg>
             </button>
         </div>
-        <div class="p-4">
-            <ul id="serial-device-list" class="space-y-2 max-h-64 overflow-y-auto">
+        <div class="p-3 md:p-4 overflow-y-auto flex-1">
+            <ul id="serial-device-list" class="space-y-2">
                 <!-- Devices will be populated here -->
             </ul>
         </div>
-        <div class="flex justify-end p-4 border-t">
+        <div class="flex justify-end p-3 md:p-4 border-t flex-shrink-0">
             <button type="button" onclick="closeSerialDeviceModal()"
-                class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200">
+                class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200 text-sm">
                 Close
             </button>
         </div>
@@ -34,10 +34,10 @@
 </div>
 
 <div id="device-selection-modal"
-    class="fixed inset-0 bg-gray-200 bg-opacity-75 flex items-center justify-center hidden z-50" style="background-color: rgba(0, 0, 0, 0.3);">
-    <div class="bg-white rounded-lg shadow-xl w-11/12 md:w-2/3 lg:w-1/2 max-w-2xl mx-4 relative z-10" style="background-color: white;">
-        <div class="flex justify-between items-center p-4 border-b">
-            <h3 class="text-lg font-medium text-gray-800">Select Device</h3>
+    class="fixed inset-0 bg-gray-200 bg-opacity-75 flex items-center justify-center hidden z-50 p-4" style="background-color: rgba(0, 0, 0, 0.3);">
+    <div class="bg-white rounded-lg shadow-xl w-full md:w-2/3 lg:w-1/2 max-w-2xl max-h-[90vh] flex flex-col relative z-10" style="background-color: white;">
+        <div class="flex justify-between items-center p-3 md:p-4 border-b flex-shrink-0">
+            <h3 class="text-base md:text-lg font-medium text-gray-800">Select Device</h3>
             <button type="button" onclick="closeDeviceSelectionModal()" class="text-gray-600 hover:text-gray-800">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor">
@@ -45,14 +45,14 @@
                 </svg>
             </button>
         </div>
-        <div class="p-4">
-            <ul id="device-list" class="space-y-2 max-h-64 overflow-y-auto">
+        <div class="p-3 md:p-4 overflow-y-auto flex-1">
+            <ul id="device-list" class="space-y-2">
                 <!-- Devices will be populated here via JavaScript -->
             </ul>
         </div>
-        <div class="flex justify-end p-4 border-t">
+        <div class="flex justify-end p-3 md:p-4 border-t flex-shrink-0">
             <button type="button" onclick="closeDeviceSelectionModal()"
-                class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200">
+                class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200 text-sm">
                 Close
             </button>
         </div>

@@ -1803,9 +1803,57 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request, broadcaster *Broa
 
 	ctx := r.Context()
 
-	// Subscribe to the broadcaster
-	clientChan := broadcaster.Subscribe()
-	defer broadcaster.Unsubscribe(clientChan)
+	// Get log source from query parameter
+	logSource := r.URL.Query().Get("source")
+	if logSource == "" {
+		logSource = "ais-catcher"
+	}
+
+	// Subscribe to the broadcaster or create dedicated log stream
+	var clientChan chan LogMessage
+	if logSource == "ais-catcher" {
+		clientChan = broadcaster.Subscribe()
+		defer broadcaster.Unsubscribe(clientChan)
+	} else {
+		// Create a dedicated channel for other log sources
+		clientChan = make(chan LogMessage, 100)
+		defer close(clientChan)
+
+		// Start log tailing goroutine
+		go func() {
+			var cmd *exec.Cmd
+			if logSource == "control" {
+				cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-f", "-n", "100", "--no-pager")
+			} else if logSource == "system" {
+				cmd = exec.Command("journalctl", "-f", "-n", "100", "--no-pager")
+			} else {
+				return
+			}
+
+			stdout, err := cmd.StdoutPipe()
+			if err != nil {
+				log.Printf("Error creating pipe: %v", err)
+				return
+			}
+
+			if err := cmd.Start(); err != nil {
+				log.Printf("Error starting command: %v", err)
+				return
+			}
+
+			scanner := bufio.NewScanner(stdout)
+			for scanner.Scan() {
+				select {
+				case <-ctx.Done():
+					cmd.Process.Kill()
+					return
+				case clientChan <- LogMessage{Message: scanner.Text()}:
+				default:
+				}
+			}
+			cmd.Wait()
+		}()
+	}
 
 	// Heartbeat ticker
 	ticker := time.NewTicker(30 * time.Second)
@@ -1908,18 +1956,32 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	port := "8000"
+	port := ""
+	hasServer := false
 
 	jsonContent, err := readConfigJSON()
 	if err == nil && len(jsonContent) > 0 {
-		var cfg ConfigJSON
+		// Parse as generic map to access server array
+		var cfg map[string]interface{}
 		if err := json.Unmarshal(jsonContent, &cfg); err == nil {
-			port = cfg.Service.Port
+			// Check if server array exists and has at least one entry
+			if servers, ok := cfg["server"].([]interface{}); ok && len(servers) > 0 {
+				if firstServer, ok := servers[0].(map[string]interface{}); ok {
+					if portVal, ok := firstServer["port"].(float64); ok {
+						port = fmt.Sprintf("%.0f", portVal)
+						hasServer = true
+					} else if portStr, ok := firstServer["port"].(string); ok {
+						port = portStr
+						hasServer = true
+					}
+				}
+			}
 		}
 	}
 
 	data := map[string]interface{}{
 		"CssVersion":      cssVersion,
+		"HasServer":       hasServer,
 		"JsVersion":       jsVersion,
 		"Title":           "Webviewer",
 		"ContentTemplate": "webviewer",

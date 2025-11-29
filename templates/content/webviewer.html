@@ -1,37 +1,121 @@
 {{ define "webviewer" }}
-<div id="webviewer" class="p-0 bg-white shadow-md rounded-lg h-screen overflow-hidden">
-    <!-- The iframe will be inserted here -->
-    <iframe id="modifiedFrame" src="" class="w-full h-full border-none"
-        sandbox="allow-scripts allow-same-origin" title="Modified URL Viewer">
+<div id="webviewer" class="h-screen overflow-hidden flex items-center justify-center">
+    <div id="loading" class="text-center p-8">
+        <svg class="animate-spin h-12 w-12 text-slate-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-slate-600">Checking webviewer status...</p>
+    </div>
+    <iframe id="modifiedFrame" src="" class="w-full h-full border-none hidden"
+        sandbox="allow-scripts allow-same-origin" title="Webviewer">
         Your browser does not support iframes.
     </iframe>
 </div>
 
 <script>
     (function () {
-        // Get the current URL
-        var currentUrl = window.location.href;
+        const hasServer = {{.HasServer}};
+        const port = "{{.port}}";
+        const webviewerDiv = document.getElementById('webviewer');
+        const loadingDiv = document.getElementById('loading');
+        const iframe = document.getElementById('modifiedFrame');
 
-        try {
-            var url = new URL(currentUrl);
-            url.port = "{{.port }}";
-            url.pathname = '/';
-            url.search = '';
-            url.hash = '';
+        function showError(title, message) {
+            webviewerDiv.innerHTML = `
+                <div class="flex items-center justify-center h-full bg-slate-50">
+                    <div class="max-w-md p-8 text-center">
+                        <svg class="h-16 w-16 text-amber-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <h3 class="text-xl font-semibold text-slate-800 mb-2">${title}</h3>
+                        <p class="text-slate-600 mb-4">${message}</p>
+                        <a href="/server" class="inline-block bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg transition">
+                            Configure Webviewer
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
 
-            var newUrl = url.toString() + '?android=true';
+        function checkServiceStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.running) {
+                        webviewerDiv.innerHTML = `
+                            <div class="flex items-center justify-center h-full bg-slate-50">
+                                <div class="max-w-md p-8 text-center">
+                                    <svg class="h-16 w-16 text-amber-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                    </svg>
+                                    <h3 class="text-xl font-semibold text-slate-800 mb-2">AIS-catcher Not Running</h3>
+                                    <p class="text-slate-600 mb-4">The AIS-catcher service is not currently running. Please start the service from the Control page.</p>
+                                    <a href="/control" class="inline-block bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg transition">
+                                        Go to Control
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Service is running, try to load the webviewer
+                    loadWebviewer();
+                })
+                .catch(error => {
+                    console.error('Error checking service status:', error);
+                    loadWebviewer(); // Try anyway
+                });
+        }
 
-            var iframe = document.getElementById('modifiedFrame');
-            iframe.src = newUrl;
+        function loadWebviewer() {
+            try {
+                var url = new URL(window.location.href);
+                url.port = port;
+                url.pathname = '/';
+                url.search = '';
+                url.hash = '';
+                var newUrl = url.toString();
 
-            // Optional: Handle iframe load errors
-            iframe.onerror = function () {
-                document.getElementById('webviewer').innerHTML = '<p class="text-red-500">Failed to load the frame. Please check the URL and port.</p>';
-            };
-        } catch (e) {
-            // Handle invalid URLs or other errors
-            console.error('Invalid URL:', e);
-            document.getElementById('webviewer').innerHTML = '<p class="text-red-500">Error processing URL.</p>';
+                // Test if the webviewer is reachable
+                fetch(newUrl, { method: 'HEAD', mode: 'no-cors' })
+                    .then(() => {
+                        iframe.src = newUrl;
+                        iframe.onload = function() {
+                            loadingDiv.classList.add('hidden');
+                            iframe.classList.remove('hidden');
+                        };
+                    })
+                    .catch(() => {
+                        // If fetch fails, still try to load but prepare error message
+                        iframe.src = newUrl;
+                        setTimeout(() => {
+                            if (!iframe.contentWindow || iframe.contentWindow.length === 0) {
+                                showError(
+                                    'Webviewer Not Accessible',
+                                    'The webviewer could not be loaded on port ' + port + '. Please ensure AIS-catcher is running and try restarting the service from the Control page.'
+                                );
+                            } else {
+                                loadingDiv.classList.add('hidden');
+                                iframe.classList.remove('hidden');
+                            }
+                        }, 3000);
+                    });
+            } catch (e) {
+                console.error('Invalid URL:', e);
+                showError('Configuration Error', 'There was an error processing the webviewer URL.');
+            }
+        }
+
+        // Check if server is configured
+        if (!hasServer || !port) {
+            showError(
+                'Webviewer Not Configured',
+                'No webviewer server has been configured. Please add a server configuration in the Webviewer settings.'
+            );
+        } else {
+            checkServiceStatus();
         }
     })();
 </script>
