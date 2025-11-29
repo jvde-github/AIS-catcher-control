@@ -1789,6 +1789,57 @@ func (b *Broadcaster) Unsubscribe(clientChan chan LogMessage) {
 	}
 }
 
+func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
+	logSource := r.URL.Query().Get("source")
+	if logSource == "" {
+		logSource = "ais-catcher"
+	}
+
+	linesStr := r.URL.Query().Get("lines")
+	lines := 10
+	if linesStr != "" {
+		if parsedLines, err := strconv.Atoi(linesStr); err == nil && parsedLines > 0 {
+			lines = parsedLines
+		}
+	}
+
+	// Build journalctl command based on source
+	var cmd *exec.Cmd
+	switch logSource {
+	case "ais-catcher":
+		cmd = exec.Command("journalctl", "-u", "ais-catcher.service", "-n", strconv.Itoa(lines), "--no-pager", "--output=cat")
+	case "control":
+		cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-n", strconv.Itoa(lines), "--no-pager", "--output=cat")
+	case "system":
+		cmd = exec.Command("journalctl", "-n", strconv.Itoa(lines), "--no-pager", "--output=cat")
+	default:
+		http.Error(w, "Invalid log source", http.StatusBadRequest)
+		return
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("Error fetching recent logs: %v", err)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"logs": []LogMessage{},
+		})
+		return
+	}
+
+	lines_output := strings.Split(strings.TrimSpace(string(output)), "\n")
+	logs := make([]LogMessage, 0, len(lines_output))
+	for _, line := range lines_output {
+		if line != "" {
+			logs = append(logs, LogMessage{Message: line})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"logs": logs,
+	})
+}
+
 func logsStreamHandler(w http.ResponseWriter, r *http.Request, broadcaster *Broadcaster) {
 	// Set headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -1809,51 +1860,47 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request, broadcaster *Broa
 		logSource = "ais-catcher"
 	}
 
-	// Subscribe to the broadcaster or create dedicated log stream
-	var clientChan chan LogMessage
-	if logSource == "ais-catcher" {
-		clientChan = broadcaster.Subscribe()
-		defer broadcaster.Unsubscribe(clientChan)
-	} else {
-		// Create a dedicated channel for other log sources
-		clientChan = make(chan LogMessage, 100)
-		defer close(clientChan)
+	// Create dedicated channel for log streaming using journalctl
+	clientChan := make(chan LogMessage, 100)
+	defer close(clientChan)
 
-		// Start log tailing goroutine
-		go func() {
-			var cmd *exec.Cmd
-			if logSource == "control" {
-				cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-f", "-n", "100", "--no-pager")
-			} else if logSource == "system" {
-				cmd = exec.Command("journalctl", "-f", "-n", "100", "--no-pager")
-			} else {
+	// Start log tailing goroutine using journalctl
+	go func() {
+		var cmd *exec.Cmd
+		switch logSource {
+		case "ais-catcher":
+			cmd = exec.Command("journalctl", "-u", "ais-catcher.service", "-f", "-n", "0", "--no-pager", "--output=cat")
+		case "control":
+			cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-f", "-n", "0", "--no-pager", "--output=cat")
+		case "system":
+			cmd = exec.Command("journalctl", "-f", "-n", "0", "--no-pager", "--output=cat")
+		default:
+			return
+		}
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Printf("Error creating pipe: %v", err)
+			return
+		}
+
+		if err := cmd.Start(); err != nil {
+			log.Printf("Error starting command: %v", err)
+			return
+		}
+
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			select {
+			case <-ctx.Done():
+				cmd.Process.Kill()
 				return
+			case clientChan <- LogMessage{Message: scanner.Text()}:
+			default:
 			}
-
-			stdout, err := cmd.StdoutPipe()
-			if err != nil {
-				log.Printf("Error creating pipe: %v", err)
-				return
-			}
-
-			if err := cmd.Start(); err != nil {
-				log.Printf("Error starting command: %v", err)
-				return
-			}
-
-			scanner := bufio.NewScanner(stdout)
-			for scanner.Scan() {
-				select {
-				case <-ctx.Done():
-					cmd.Process.Kill()
-					return
-				case clientChan <- LogMessage{Message: scanner.Text()}:
-				default:
-				}
-			}
-			cmd.Wait()
-		}()
-	}
+		}
+		cmd.Wait()
+	}()
 
 	// Heartbeat ticker
 	ticker := time.NewTicker(30 * time.Second)
@@ -2314,6 +2361,7 @@ func main() {
 	http.HandleFunc("/api/restart", authMiddleware(serviceActionHandler("restart")))
 	http.HandleFunc("/api/enable", authMiddleware(serviceActionHandler("enable")))
 	http.HandleFunc("/api/disable", authMiddleware(serviceActionHandler("disable")))
+	http.HandleFunc("/api/recent-logs", authMiddleware(recentLogsHandler))
 	http.HandleFunc("/logs-stream", authMiddleware(func(w http.ResponseWriter, r *http.Request) { logsStreamHandler(w, r, broadcaster) }))
 	http.HandleFunc("/status", authMiddleware(statusHandler))
 	http.HandleFunc("/device", authMiddleware(makeConfigHandler("Device Configuration", "device-setup")))
