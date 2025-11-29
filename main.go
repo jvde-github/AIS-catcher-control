@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/process"
@@ -51,7 +50,6 @@ const (
 	configJSONFilePath = "/etc/AIS-catcher/config.json"
 	configCmdFilePath  = "/etc/AIS-catcher/config.cmd"
 	settingsFilePath   = "/etc/AIS-catcher/control.json"
-	logTxtFilePath     = "/etc/AIS-catcher/log.txt"
 )
 
 var (
@@ -1467,16 +1465,6 @@ func sanitizeFileContent(content string) string {
 	return content
 }
 
-func sanitizeLogLine(line string) string {
-	var sanitized strings.Builder
-	for _, r := range line {
-		if unicode.IsPrint(r) || unicode.IsSpace(r) {
-			sanitized.WriteRune(r)
-		}
-	}
-	return sanitized.String()
-}
-
 func parseJournalLine(line string) string {
 	// Parse JSON output from journalctl
 	var entry map[string]interface{}
@@ -1595,137 +1583,6 @@ func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// Broadcaster manages log collection and client subscriptions
-type Broadcaster struct {
-	journalChan chan string
-	logtxtChan  chan string
-	clients     map[chan LogMessage]bool
-	mu          sync.Mutex
-}
-
-func NewBroadcaster() *Broadcaster {
-	return &Broadcaster{
-		journalChan: make(chan string, 100),
-		logtxtChan:  make(chan string, 100),
-		clients:     make(map[chan LogMessage]bool),
-	}
-}
-
-func (b *Broadcaster) Run() {
-
-	if config.Docker {
-		go b.collectLogTxtLogs()
-	} else {
-		go b.collectJournalctlLogs()
-	}
-
-	for {
-		select {
-		case journalLine := <-b.journalChan:
-			msg := LogMessage{
-				Source:  "journalctl",
-				Message: sanitizeLogLine(journalLine),
-			}
-			b.broadcast(msg)
-		case logtxtLine := <-b.logtxtChan:
-			msg := LogMessage{
-				Source:  "log.txt",
-				Message: sanitizeLogLine(logtxtLine),
-			}
-			b.broadcast(msg)
-		}
-	}
-}
-
-func (b *Broadcaster) collectJournalctlLogs() {
-	cmd := exec.Command("journalctl", "-u", "ais-catcher.service", "-n", "0", "-f", "--no-pager", "--output=json")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Printf("Error obtaining stdout pipe for journalctl: %v", err)
-		return
-	}
-
-	if err := cmd.Start(); err != nil {
-		log.Printf("Error starting journalctl command: %v", err)
-		return
-	}
-
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := parseJournalLine(scanner.Text())
-		b.journalChan <- line
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading journalctl output: %v", err)
-	}
-}
-
-func (b *Broadcaster) collectLogTxtLogs() {
-	for {
-		cmd := exec.Command("tail", "-F", logTxtFilePath)
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Printf("Error obtaining stdout pipe for tail: %v", err)
-			time.Sleep(1 * time.Second)
-			continue
-		}
-
-		if err := cmd.Start(); err != nil {
-			log.Printf("Error starting tail command: %v", err)
-			time.Sleep(1 * time.Second)
-			continue
-		}
-
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			b.logtxtChan <- line
-		}
-
-		if err := scanner.Err(); err != nil {
-			log.Printf("Error reading tail output: %v", err)
-		}
-
-		cmd.Wait()
-
-		log.Println("Restarting tail command for log.txt")
-
-		time.Sleep(1 * time.Second)
-	}
-}
-
-func (b *Broadcaster) broadcast(msg LogMessage) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for clientChan := range b.clients {
-		select {
-		case clientChan <- msg:
-		default:
-			// If the client's channel is full, remove the client
-			close(clientChan)
-			delete(b.clients, clientChan)
-		}
-	}
-}
-
-func (b *Broadcaster) Subscribe() chan LogMessage {
-	clientChan := make(chan LogMessage, 100)
-	b.mu.Lock()
-	b.clients[clientChan] = true
-	b.mu.Unlock()
-	return clientChan
-}
-
-func (b *Broadcaster) Unsubscribe(clientChan chan LogMessage) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if _, exists := b.clients[clientChan]; exists {
-		close(clientChan)
-		delete(b.clients, clientChan)
-	}
-}
-
 func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	// Panic recovery to prevent crashes
 	defer func() {
@@ -1820,7 +1677,7 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func logsStreamHandler(w http.ResponseWriter, r *http.Request, broadcaster *Broadcaster) {
+func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 	// Set headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -2366,10 +2223,6 @@ func main() {
 		log.Fatal("Failed to read config.cmd:", err)
 	}
 
-	// Initialize the broadcaster
-	broadcaster := NewBroadcaster()
-	go broadcaster.Run()
-
 	http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, ".css") {
 			w.Header().Set("Content-Type", "text/css")
@@ -2397,7 +2250,7 @@ func main() {
 	http.HandleFunc("/api/enable", authMiddleware(serviceActionHandler("enable")))
 	http.HandleFunc("/api/disable", authMiddleware(serviceActionHandler("disable")))
 	http.HandleFunc("/api/recent-logs", authMiddleware(recentLogsHandler))
-	http.HandleFunc("/logs-stream", authMiddleware(func(w http.ResponseWriter, r *http.Request) { logsStreamHandler(w, r, broadcaster) }))
+	http.HandleFunc("/logs-stream", authMiddleware(logsStreamHandler))
 	http.HandleFunc("/status", authMiddleware(statusHandler))
 	http.HandleFunc("/device", authMiddleware(makeConfigHandler("Device Configuration", "device-setup")))
 	http.HandleFunc("/server", authMiddleware(makeConfigHandler("Webviewer Setup", "server-setup")))
