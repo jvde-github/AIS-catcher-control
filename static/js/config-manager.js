@@ -534,11 +534,16 @@
         }
 
         async save() {
-            const btn = document.querySelector('button[type="button"][class*="bg-slate-800"]');
-            if(btn) {
-                const originalText = btn.textContent;
-                btn.textContent = 'Saving...';
-                btn.disabled = true;
+            const btn = document.querySelector('button[type="button"]:not([data-action])');
+            const saveButtons = Array.from(document.querySelectorAll('button[type="button"]')).filter(b => 
+                b.textContent.trim() === 'Save' && !b.querySelector('svg')
+            );
+            const saveBtn = saveButtons[0];
+            
+            if(saveBtn) {
+                const originalText = saveBtn.textContent;
+                saveBtn.textContent = 'Saving...';
+                saveBtn.disabled = true;
             }
 
             try {
@@ -572,9 +577,9 @@
                 console.error(e);
                 App.notify('error', 'Failed to save configuration: ' + e.message);
             } finally {
-                if(btn) {
-                    btn.textContent = 'Save';
-                    btn.disabled = false;
+                if(saveBtn) {
+                    saveBtn.textContent = 'Save';
+                    saveBtn.disabled = false;
                 }
             }
         }

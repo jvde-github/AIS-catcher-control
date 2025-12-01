@@ -68,7 +68,6 @@ type SystemInfo struct {
 	TotalMemory           uint64    `json:"total_memory"`             // Total system memory
 	KernelVersion         string    `json:"kernel_version"`           // Linux kernel version
 	ServiceStatus         string    `json:"service_status"`           // systemd service status
-	DockerMode            bool      `json:"docker_mode"`              // Running in Docker
 	BuildVersion          string    `json:"build_version"`            // Git version/build info
 	ProcessID             int32     `json:"process_id"`
 	ProcessMemoryUsage    float64   `json:"process_memory_usage"` // in MB
@@ -93,7 +92,6 @@ type Control struct {
 	Status          string `json:"status"`
 	Uptime          string `json:"uptime"`
 	ServiceEnabled  bool   `json:"service_enabled"`
-	Docker          bool   `json:"docker"`
 	ContentTemplate string `json:"content_template"`
 }
 
@@ -304,9 +302,6 @@ func runSystemAction(actionName, script string, reload bool) {
 	useSystemd := false
 	if _, err := os.Stat("/run/systemd/system"); err == nil {
 		useSystemd = true
-	}
-	if config.Docker {
-		useSystemd = false
 	}
 
 	var runCmd *exec.Cmd
@@ -929,7 +924,6 @@ func collectSystemInfo() {
 
 	// Get service status
 	systemInfo.ServiceStatus = getServiceStatus()
-	systemInfo.DockerMode = getConfig().Docker
 }
 
 func init() {
@@ -1353,7 +1347,6 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 		CssVersion:      cssVersion,
 		JsVersion:       jsVersion,
 		Title:           "Control Dashboard",
-		Docker:          getConfig().Docker,
 		ContentTemplate: "control",
 	}
 
@@ -1453,27 +1446,11 @@ func formatDuration(d time.Duration) string {
 }
 
 func controlService(action string) error {
-	if getConfig().Docker {
-		// Use custom scripts for control if in Docker mode
-		script := fmt.Sprintf("/usr/bin/%s.sh", action)
-		fmt.Println("Running script:", script)
-		cmd := exec.Command(script)
-		return cmd.Run()
-	}
-
-	// Fallback to systemctl if not in Docker mode
 	cmd := exec.Command("systemctl", action, "ais-catcher.service")
 	return cmd.Run()
 }
 
 func getServiceEnabled() (bool, error) {
-	if getConfig().Docker {
-		// Use custom scripts for control if in Docker mode
-		cmd := exec.Command("/usr/bin/is-enabled.sh")
-		output, _ := cmd.Output()
-		status := strings.TrimSpace(string(output))
-		return status == "enabled", nil
-	}
 	cmd := exec.Command("systemctl", "is-enabled", "ais-catcher.service")
 	output, err := cmd.Output()
 	status := strings.TrimSpace(string(output))
