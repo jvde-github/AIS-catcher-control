@@ -431,12 +431,6 @@ func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
 		return nil, fmt.Errorf("unsupported configuration version")
 	}
 
-	// If receivers array already exists, no migration needed
-	if _, exists := config["receiver"]; exists {
-		log.Println("Configuration already has receivers array - no migration needed")
-		return json.MarshalIndent(config, "", "  ")
-	}
-
 	// Receiver-related keys that should be moved to receivers array
 	// Based on the C++ Config.cpp parser
 	receiverKeys := []string{
@@ -444,6 +438,23 @@ func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
 		"rtlsdr", "rtltcp", "airspy", "airspyhf", "sdrplay", "serialport",
 		"hackrf", "udpserver", "soapysdr", "nmea2000", "file", "zmq",
 		"spyserver", "wavfile",
+	}
+
+	// Check if receiver array exists and validate it's actually an array
+	var receiverArray []interface{}
+	if receiverValue, exists := config["receiver"]; exists {
+		// Try to cast to array
+		if arr, ok := receiverValue.([]interface{}); ok {
+			receiverArray = arr
+			log.Printf("Found existing receiver array with %d entries", len(receiverArray))
+		} else {
+			// receiver exists but is not an array, create new array
+			log.Println("Warning: 'receiver' exists but is not an array, creating new array")
+			receiverArray = []interface{}{}
+		}
+	} else {
+		// receiver doesn't exist, create new array
+		receiverArray = []interface{}{}
 	}
 
 	// Extract receiver settings from root
@@ -458,7 +469,7 @@ func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
 		}
 	}
 
-	// Create receiver array (singular, not plural!)
+	// If there are receiver settings in root, add them as an additional object to the array
 	if hasReceiverSettings {
 		// Set default input to "rtlsdr" if neither input nor serial are specified
 		_, hasInput := receiverConfig["input"]
@@ -468,8 +479,8 @@ func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
 			log.Println("No input or serial specified, defaulting to rtlsdr input")
 		}
 
-		config["receiver"] = []interface{}{receiverConfig}
-		log.Printf("Migrated receiver settings from root to receiver array")
+		receiverArray = append(receiverArray, receiverConfig)
+		log.Printf("Added receiver settings from root to receiver array")
 
 		// Log which keys were moved
 		var movedKeys []string
@@ -477,14 +488,10 @@ func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
 			movedKeys = append(movedKeys, key)
 		}
 		log.Printf("Moved keys: %v", movedKeys)
-	} else {
-		// Create a default receiver with rtlsdr input
-		defaultReceiver := map[string]interface{}{
-			"input": "rtlsdr",
-		}
-		config["receiver"] = []interface{}{defaultReceiver}
-		log.Println("No receiver settings found in root - created default receiver array with rtlsdr input")
 	}
+
+	// Update config with the receiver array (can be empty)
+	config["receiver"] = receiverArray
 
 	return json.MarshalIndent(config, "", "  ")
 }
@@ -557,8 +564,25 @@ func migrateConfigAtStartup() error {
 	needsServerArrayMigration := false
 
 	// Check if receiver array migration is needed
+	// Migration needed if receiver array doesn't exist OR if there are root-level receiver keys
+	receiverKeys := []string{
+		"serial", "input", "verbose", "model", "meta", "own_mmsi",
+		"rtlsdr", "rtltcp", "airspy", "airspyhf", "sdrplay", "serialport",
+		"hackrf", "udpserver", "soapysdr", "nmea2000", "file", "zmq",
+		"spyserver", "wavfile",
+	}
+	
 	if _, exists := configMap["receiver"]; !exists {
 		needsReceiverMigration = true
+	} else {
+		// Receiver array exists, but check if there are root-level receiver settings
+		for _, key := range receiverKeys {
+			if _, exists := configMap[key]; exists {
+				needsReceiverMigration = true
+				log.Printf("Found root-level receiver key '%s' with existing receiver array - migration needed", key)
+				break
+			}
+		}
 	}
 
 	// Check if server needs to be converted from object to array
