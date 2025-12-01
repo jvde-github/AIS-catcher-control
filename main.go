@@ -566,7 +566,7 @@ func migrateConfigAtStartup() error {
 		"hackrf", "udpserver", "soapysdr", "nmea2000", "file", "zmq",
 		"spyserver", "wavfile",
 	}
-	
+
 	if _, exists := configMap["receiver"]; !exists {
 		needsReceiverMigration = true
 	} else {

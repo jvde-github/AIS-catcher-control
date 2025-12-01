@@ -124,6 +124,9 @@
     .submenu.open {
       max-height: 500px;
     }
+    .submenu.no-transition {
+      transition: none;
+    }
     
     /* Scrollbar refinement for sidebar */
     #sidebar-scroll::-webkit-scrollbar {
@@ -359,6 +362,32 @@
           }
         });
       });
+
+      // Keep submenu open when clicking links within the same group
+      // Use no-transition class to avoid animation on page load
+      const currentPath = window.location.pathname;
+      const outputPaths = ['/sharing', '/udp', '/tcp', '/tcp-servers', '/server', '/http', '/mqtt'];
+      const advancedPaths = ['/editcmd', '/editjson'];
+
+      if (outputPaths.includes(currentPath)) {
+        const outputSubmenu = document.getElementById('output-submenu');
+        const outputChevron = document.querySelector('[data-target="output-submenu"] .chevron-icon');
+        if (outputSubmenu) {
+          outputSubmenu.classList.add('no-transition', 'open');
+          // Re-enable transitions after the browser has rendered
+          setTimeout(() => outputSubmenu.classList.remove('no-transition'), 50);
+        }
+        if (outputChevron) outputChevron.style.transform = 'rotate(180deg)';
+      } else if (advancedPaths.includes(currentPath)) {
+        const advancedSubmenu = document.getElementById('advanced-submenu');
+        const advancedChevron = document.querySelector('[data-target="advanced-submenu"] .chevron-icon');
+        if (advancedSubmenu) {
+          advancedSubmenu.classList.add('no-transition', 'open');
+          // Re-enable transitions after the browser has rendered
+          setTimeout(() => advancedSubmenu.classList.remove('no-transition'), 50);
+        }
+        if (advancedChevron) advancedChevron.style.transform = 'rotate(180deg)';
+      }
 
       // 3. Tablet Hover Logic
       function isTablet() {
