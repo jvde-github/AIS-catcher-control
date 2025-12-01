@@ -1,0 +1,28 @@
+services:
+  ais-catcher-control:
+    image: ghcr.io/jvde-github/ais-catcher-control:edge
+    pull_policy: always
+    container_name: ais-catcher-control
+    privileged: true
+    cgroup: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ais-data:/var/lib/ais-catcher
+      - ais-config:/etc/AIS-catcher
+    ports:
+      - "8110:8110"
+      - "8100:8100"
+    restart: unless-stopped
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+    stop_signal: SIGRTMIN+3
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    environment:
+      - container=docker
+
+volumes:
+  ais-data:
+  ais-config:

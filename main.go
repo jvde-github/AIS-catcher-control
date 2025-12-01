@@ -649,10 +649,17 @@ func migrateConfigAtStartup() error {
 			log.Printf("Failed to parse migrated content: %v", err)
 			return err
 		}
+		// Re-apply server array migration if needed (since we reparsed configMap)
+		if needsServerArrayMigration {
+			if serverValue, exists := configMap["server"]; exists {
+				if serverObj, isMap := serverValue.(map[string]interface{}); isMap {
+					configMap["server"] = []interface{}{serverObj}
+				}
+			}
+		}
 	}
 
-	// Server array migration has already been applied to configMap above
-	// Just need to set the flag for saving later
+	// Server array migration has been applied to configMap
 	if needsServerArrayMigration {
 		log.Println("Server object converted to array")
 	}
