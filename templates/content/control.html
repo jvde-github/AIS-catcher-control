@@ -187,12 +187,16 @@
                         // Matches "Active" style (Green text)
                         enabledStatusDiv.innerHTML = '<span class="text-emerald-600">Enabled</span>';
                         enableBtn.classList.add('hidden');
+                        enableBtn.disabled = true;
                         disableBtn.classList.remove('hidden');
+                        disableBtn.disabled = operationInProgress;
                     } else if (data.enabled === false) {
                         // Matches "Stopped" style (Grey text)
                         enabledStatusDiv.innerHTML = '<span class="text-slate-500">Disabled</span>';
                         enableBtn.classList.remove('hidden');
+                        enableBtn.disabled = operationInProgress;
                         disableBtn.classList.add('hidden');
+                        disableBtn.disabled = true;
                     } else {
                         enabledStatusDiv.innerHTML = '<span class="text-amber-600">Unknown</span>';
                     }
