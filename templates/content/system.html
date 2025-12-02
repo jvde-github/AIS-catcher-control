@@ -14,14 +14,15 @@
         <div class="relative flex-1">
           <select id="actionSelect" class="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 px-3 sm:px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent shadow-sm text-sm sm:text-base">
             <option value="" disabled selected>Select an operation...</option>
-            <option value="update-all">Upgrade All Components</option>
-            <option value="system-update">System Update (apt-get)</option>
-            <option value="ais-update-prebuilt">Upgrade AIS-catcher (Prebuilt)</option>
-            <option value="ais-update-source">Upgrade AIS-catcher (Source)</option>
-            <option value="control-update">Upgrade Control Panel</option>
-            <option value="update-all-reboot">Upgrade All & Reboot</option>
-            <option value="system-reboot">System Reboot</option>
-            <option value="system-halt">System Halt</option>
+            <option value="ais-update-prebuilt">upgrade AIS-catcher</option>
+            <option value="control-update">upgrade control tool</option>
+            <option value="update-all">upgrade all</option>
+            <option value="system-update">update system (apt-get)</option>
+            <option value="update-all-reboot">upgrade all & reboot</option>
+            <option value="system-reboot">system reboot</option>
+            <option value="system-halt">system halt</option>
+            <option value="ais-update-source">build AIS-catcher from source</option>
+
           </select>
           <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
