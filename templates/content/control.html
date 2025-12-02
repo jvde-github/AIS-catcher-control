@@ -415,7 +415,7 @@
             };
 
             document.getElementById('action-buttons').addEventListener('click', handleAction);
-            document.querySelector('.grid').addEventListener('click', handleAction);
+            document.querySelector('.bg-white.rounded-xl').addEventListener('click', handleAction);
 
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) { if (eventSource) eventSource.close(); }
