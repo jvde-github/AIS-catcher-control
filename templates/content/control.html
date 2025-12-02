@@ -190,11 +190,13 @@
                         enableBtn.disabled = true;
                         disableBtn.classList.remove('hidden');
                         disableBtn.disabled = operationInProgress;
+                        disableBtn.textContent = 'Disable';
                     } else if (data.enabled === false) {
                         // Matches "Stopped" style (Grey text)
                         enabledStatusDiv.innerHTML = '<span class="text-slate-500">Disabled</span>';
                         enableBtn.classList.remove('hidden');
                         enableBtn.disabled = operationInProgress;
+                        enableBtn.textContent = 'Enable';
                         disableBtn.classList.add('hidden');
                         disableBtn.disabled = true;
                     } else {
