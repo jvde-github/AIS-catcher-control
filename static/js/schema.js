@@ -960,6 +960,17 @@ const receiverSchema = {
             value: "SERIALPORT"
         }
     },
+    serialport_initseq: {
+        name: "serialport_init_seq",
+        label: "Init Sequence",
+        type: "text",
+        jsonpath: "serialport.init_seq",
+        placeholder: "",
+        dependsOn: {
+            field: "input",
+            value: "SERIALPORT"
+        }
+    },
     udpserver_server: {
         name: "udpserver_server",
         label: "Server Address",
