@@ -59,7 +59,15 @@
         openDeviceSelectionModal: () => {
             if (typeof window.openDeviceSelectionModal === 'function') window.openDeviceSelectionModal();
         },
-        openRegistration: () => window.open('https://aiscatcher.org/register', '_blank')
+        openRegistration: () => window.open('https://aiscatcher.org/register', '_blank'),
+        clearSerial: () => {
+            // Clear the serial field when device type changes
+            const serialField = document.querySelector('[data-field="serial"] input');
+            if (serialField) {
+                serialField.value = '';
+                serialField.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
     };
 
     // ============================================================================
@@ -168,7 +176,15 @@
             if (type === 'select') {
                 const valStr = currentValue !== undefined && currentValue !== null ? String(currentValue) : '';
                 return el('div', 'relative', {}, 
-                    el('select', `${Styles.input} ${Styles.select}`, { onChange: e => onUpdate(e.target.value) }, 
+                    el('select', `${Styles.input} ${Styles.select}`, { onChange: e => {
+                        onUpdate(e.target.value);
+                        if (field.onChange) {
+                            const action = typeof field.onChange === 'function' 
+                                ? field.onChange 
+                                : ActionRegistry[field.onChange];
+                            if (action) action();
+                        }
+                    } }, 
                         ...field.options.map(opt => el('option', '', { 
                             value: opt.value, 
                             selected: String(opt.value).toLowerCase() === valStr.toLowerCase() 
