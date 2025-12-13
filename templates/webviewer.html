@@ -158,7 +158,7 @@
         
         <nav id="bottom-bar">
             <div class="flex items-center justify-around sm:justify-center h-16 sm:gap-12">
-                <button class="hub-button" data-view="control" onclick="openConfig('control')">
+                <button class="hub-button" data-view="control" onclick="window.location.href='/control'">
                     <svg viewBox="0 -960 960 960" fill="currentColor">
                         <path d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z" />
                     </svg>
@@ -176,11 +176,11 @@
                     </svg>
                     <span>Output</span>
                 </button>
-                <button class="hub-button active" data-view="dashboard" onclick="window.location.href='/control'">
+                <button class="hub-button active" data-view="webviewer" onclick="openWebviewerInNewTab()">
                     <svg viewBox="0 -960 960 960" fill="currentColor">
-                        <path d="M520-600v-240h320v240H520ZM120-440v-400h320v400H120Zm400 320v-400h320v400H520Zm-400 0v-240h320v240H120Zm80-400h160v-240H200v240Zm400 320h160v-240H600v240Zm0-480h160v-80H600v80ZM200-200h160v-80H200v80Zm160-320Zm240-160Zm0 240ZM360-280Z" />
+                        <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z" />
                     </svg>
-                    <span>Dashboard</span>
+                    <span>Webviewer</span>
                 </button>
             </div>
         </nav>
@@ -258,6 +258,21 @@
                     console.error('Error checking service status:', error);
                     loadWebviewer();
                 });
+        }
+
+        function openWebviewerInNewTab() {
+            if (hasServer && port) {
+                try {
+                    var url = new URL(window.location.href);
+                    url.port = port;
+                    url.pathname = '/';
+                    url.search = '';
+                    url.hash = '';
+                    window.open(url.toString(), '_blank');
+                } catch (e) {
+                    console.error('Error opening webviewer:', e);
+                }
+            }
         }
 
         function loadWebviewer() {
