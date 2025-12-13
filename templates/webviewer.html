@@ -538,10 +538,20 @@
             const select = document.createElement('select');
             select.id = 'hub-output-type-selector';
             select.className = 'w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white mb-4';
-            ['sharing', 'udp', 'http', 'mqtt', 'tcp'].forEach(type => {
+            ['sharing', 'udp', 'http', 'mqtt', 'tcp', 'tcp-server', 'server'].forEach(type => {
                 const opt = document.createElement('option');
                 opt.value = type;
-                opt.textContent = type === 'sharing' ? 'Community Sharing' : type === 'tcp' ? 'TCP Client' : type.toUpperCase();
+                if (type === 'sharing') {
+                    opt.textContent = 'Community Sharing';
+                } else if (type === 'tcp') {
+                    opt.textContent = 'TCP Client';
+                } else if (type === 'tcp-server') {
+                    opt.textContent = 'TCP Server';
+                } else if (type === 'server') {
+                    opt.textContent = 'Webviewer';
+                } else {
+                    opt.textContent = type.toUpperCase();
+                }
                 select.appendChild(opt);
             });
             const container = document.createElement('div');
@@ -568,7 +578,9 @@
                 udp: typeof udpSchema !== 'undefined' ? udpSchema : {},
                 http: typeof httpSchema !== 'undefined' ? httpSchema : {},
                 mqtt: typeof mqttSchema !== 'undefined' ? mqttSchema : {},
-                tcp: typeof tcpSchema !== 'undefined' ? tcpSchema : {}
+                tcp: typeof tcpSchema !== 'undefined' ? tcpSchema : {},
+                'tcp-server': typeof tcpServerSchema !== 'undefined' ? tcpServerSchema : {},
+                server: typeof webviewerSchema !== 'undefined' ? webviewerSchema : {}
             };
 
             const schema = schemaMap[type];
