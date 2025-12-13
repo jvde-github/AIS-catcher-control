@@ -3,5 +3,5 @@
     "port": "8110",
     "config_json_hash": 2569903636,
     "config_cmd_hash": 435605018,
-    "docker": true
+    "docker": false
 }

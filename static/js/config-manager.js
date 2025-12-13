@@ -605,6 +605,7 @@
     // 5. EXPORTS
     // ============================================================================
 
+    global.App = App;
     global.createConfigManager = (config) => new ConfigManager(config);
     global.createSimpleConfigManager = (config) => { config.isList = false; return new ConfigManager(config); };
     global.createChannelManager = (config) => { config.isList = true; return new ConfigManager(config); };

@@ -952,12 +952,12 @@ func init() {
 		"templates/content/device-setup.html",
 		"templates/content/integrity-error.html",
 		"templates/content/server-setup.html",
-		"templates/content/webviewer.html",
 		"templates/content/system.html",
 		"templates/content/edit-config-json.html",
 		"templates/content/edit-config-cmd.html",
 		"templates/content/tcp-servers.html",
 		"templates/license.html",
+		"templates/webviewer.html",
 	)
 	if err != nil {
 		log.Fatalf("Failed to parse templates: %v", err)
@@ -1885,22 +1885,6 @@ func renderTemplateWithConfig(w http.ResponseWriter, title string, contentTempla
 }
 
 func webviewerHandler(w http.ResponseWriter, r *http.Request) {
-
-	if true && getIntegrityError() {
-		data := map[string]interface{}{
-			"Title":           "Configuration Integrity Error",
-			"ContentTemplate": "integrity-error",
-			"CssVersion":      cssVersion,
-			"JsVersion":       jsVersion,
-		}
-		err := templates.ExecuteTemplate(w, "layout.html", data)
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			log.Printf("Template execution error for integrity-error: %v", err)
-		}
-		return
-	}
-
 	port := ""
 	hasServer := false
 
@@ -1925,15 +1909,12 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"CssVersion":      cssVersion,
-		"HasServer":       hasServer,
-		"JsVersion":       jsVersion,
-		"Title":           "Webviewer",
-		"ContentTemplate": "webviewer",
-		"port":            port,
+		"CssVersion": cssVersion,
+		"HasServer":  hasServer,
+		"port":       port,
 	}
 
-	err = templates.ExecuteTemplate(w, "layout.html", data)
+	err = templates.ExecuteTemplate(w, "webviewer.html", data)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Printf("Template execution error: %v", err)
