@@ -597,8 +597,19 @@
                     saveButtonId: null
                 });
             } else if (typeof createChannelManager !== 'undefined') {
+                // Map display type to actual config field name
+                const channelTypeMap = {
+                    'tcp-server': 'tcp_listener',
+                    'tcp': 'tcp',
+                    'udp': 'udp',
+                    'http': 'http',
+                    'mqtt': 'mqtt',
+                    'server': 'server'
+                };
+                const actualChannelType = channelTypeMap[type] || type;
+                
                 currentOutputManager = createChannelManager({
-                    channelType: type,
+                    channelType: actualChannelType,
                     schema: schema,
                     containerId: 'hub-output-container',
                     addButtonId: null,
