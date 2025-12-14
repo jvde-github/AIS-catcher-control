@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>AIS-catcher Hub</title>
     <link rel="stylesheet" href="/static/css/tailwind.css?v={{.CssVersion}}">
     <style>
@@ -11,9 +12,14 @@
             padding: 0;
             overflow: hidden;
             height: 100vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             background: #f8fafc;
+            touch-action: pan-x pan-y;
+            overscroll-behavior: none;
+            position: fixed;
+            width: 100%;
         }
         
         #hub-container {
@@ -21,15 +27,19 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            padding-bottom: calc(4rem + env(safe-area-inset-bottom));
-            height: 100%;
+            position: relative;
+            height: calc(100vh - 4rem - env(safe-area-inset-bottom));
+            height: calc(100dvh - 4rem - env(safe-area-inset-bottom));
         }
         
         #webviewer-frame {
-            flex: 1;
+            position: absolute;
+            top: 0;
+            left: 0;
             border: none;
             width: 100%;
             height: 100%;
+            touch-action: pan-x pan-y;
         }
         
         #bottom-bar {
@@ -195,6 +205,30 @@
     <script src="/static/js/config-manager.js?v={{.CssVersion}}"></script>
 
     <script>
+        // Prevent double-tap zoom on mobile
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function (event) {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, { passive: false });
+
+        // Disable pinch-to-zoom on iOS
+        document.addEventListener('gesturestart', function(e) {
+            e.preventDefault();
+            document.body.style.transform = 'scale(1)';
+        }, { passive: false });
+
+        document.addEventListener('gesturechange', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('gestureend', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+
         const hasServer = {{.HasServer}};
         const port = "{{.port}}";
         const iframe = document.getElementById('webviewer-frame');
