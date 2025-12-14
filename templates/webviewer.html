@@ -28,8 +28,7 @@
             flex-direction: column;
             overflow: hidden;
             position: relative;
-            height: calc(100vh - 4rem - env(safe-area-inset-bottom));
-            height: calc(100dvh - 4rem - env(safe-area-inset-bottom));
+            min-height: 0;
         }
         
         #webviewer-frame {
@@ -43,10 +42,9 @@
         }
         
         #bottom-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
+            position: relative;
+            flex-shrink: 0;
+            width: 100%;
             background: #0f172a;
             border-top: 1px solid #334155;
             z-index: 50;
@@ -100,14 +98,6 @@
             padding-bottom: env(safe-area-inset-bottom);
         }
         
-        #config-panel-header {
-            flex-shrink: 0;
-            position: sticky;
-            top: 0;
-            background: white;
-            z-index: 10;
-        }
-        
         #config-content {
             flex: 1;
             overflow-y: auto;
@@ -141,7 +131,7 @@
     </style>
 </head>
 <body>
-    <div id="hub-container" style="position: relative;">
+    <div id="hub-container">
         <div id="loading" class="text-center p-8 absolute inset-0 flex items-center justify-center">
             <div>
                 <svg class="animate-spin h-12 w-12 text-slate-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24">
@@ -151,7 +141,7 @@
                 <p class="text-slate-600">Checking webviewer status...</p>
             </div>
         </div>
-        <iframe id="webviewer-frame" src="" class="w-full h-full border-none hidden" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+        <iframe id="webviewer-frame" src="" class="hidden" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
         
         <div id="config-overlay" onclick="closeConfigPanel()"></div>
         
@@ -171,35 +161,36 @@
             </div>
         </div>
         
-        <nav id="bottom-bar">
-            <div class="flex items-center justify-around sm:justify-center h-16 sm:gap-12">
-                <button class="hub-button" data-view="control" onclick="window.location.href='/control'">
-                    <svg viewBox="0 -960 960 960" fill="currentColor">
-                        <path d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z" />
-                    </svg>
-                    <span>Control</span>
-                </button>
-                <button class="hub-button" data-view="input" onclick="openConfig('input')">
-                    <svg viewBox="0 -960 960 960" fill="currentColor">
-                        <path d="M160-80q-33 0-56.5-23.5T80-160v-480q0-25 13.5-45t36.5-29l506-206 26 66-330 134h468q33 0 56.5 23.5T880-640v480q0 33-23.5 56.5T800-80H160Zm0-80h640v-280H160v280Zm160-40q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29ZM160-520h480v-80h80v80h80v-120H160v120Zm0 360v-280 280Z" />
-                    </svg>
-                    <span>Input</span>
-                </button>
-                <button class="hub-button" data-view="output" onclick="openConfig('output')">
-                    <svg viewBox="0 -960 960 960" fill="currentColor">
-                        <path d="M680-80q-50 0-85-35t-35-85q0-6 3-28L282-392q-16 15-37 23.5t-45 8.5q-50 0-85-35t-35-85q0-50 35-85t85-35q24 0 45 8.5t37 23.5l281-164q-2-7-2.5-13.5T560-760q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35q-24 0-45-8.5T598-672L317-508q2-7 2.5-13.5t.5-14.5q0-8-.5-14.5T317-452l281 164q16-15 37-23.5t45-8.5q50 0 85 35t35 85q0 50-35 85t-85 35Zm0-80q17 0 28.5-11.5T720-200q0-17-11.5-28.5T680-240q-17 0-28.5 11.5T640-200q0 17 11.5 28.5T680-160ZM200-440q17 0 28.5-11.5T240-480q0-17-11.5-28.5T200-520q-17 0-28.5 11.5T160-480q0 17 11.5 28.5T200-440Zm480-280q17 0 28.5-11.5T720-760q0-17-11.5-28.5T680-800q-17 0-28.5 11.5T640-760q0 17 11.5 28.5T680-720Zm0 520ZM200-480Zm480-280Z" />
-                    </svg>
-                    <span>Output</span>
-                </button>
-                <button class="hub-button active" data-view="webviewer" onclick="openWebviewerInNewTab()">
-                    <svg viewBox="0 -960 960 960" fill="currentColor">
-                        <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z" />
-                    </svg>
-                    <span>Webviewer</span>
-                </button>
-            </div>
-        </nav>
     </div>
+    
+    <nav id="bottom-bar">
+        <div class="flex items-center justify-around sm:justify-center h-16 sm:gap-12">
+            <button class="hub-button" data-view="control" onclick="window.location.href='/control'">
+                <svg viewBox="0 -960 960 960" fill="currentColor">
+                    <path d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z" />
+                </svg>
+                <span>Control</span>
+            </button>
+            <button class="hub-button" data-view="input" onclick="openConfig('input')">
+                <svg viewBox="0 -960 960 960" fill="currentColor">
+                    <path d="M160-80q-33 0-56.5-23.5T80-160v-480q0-25 13.5-45t36.5-29l506-206 26 66-330 134h468q33 0 56.5 23.5T880-640v480q0 33-23.5 56.5T800-80H160Zm0-80h640v-280H160v280Zm160-40q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29ZM160-520h480v-80h80v80h80v-120H160v120Zm0 360v-280 280Z" />
+                </svg>
+                <span>Input</span>
+            </button>
+            <button class="hub-button" data-view="output" onclick="openConfig('output')">
+                <svg viewBox="0 -960 960 960" fill="currentColor">
+                    <path d="M680-80q-50 0-85-35t-35-85q0-6 3-28L282-392q-16 15-37 23.5t-45 8.5q-50 0-85-35t-35-85q0-50 35-85t85-35q24 0 45 8.5t37 23.5l281-164q-2-7-2.5-13.5T560-760q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35q-24 0-45-8.5T598-672L317-508q2-7 2.5-13.5t.5-14.5q0-8-.5-14.5T317-452l281 164q16-15 37-23.5t45-8.5q50 0 85 35t35 85q0 50-35 85t-85 35Zm0-80q17 0 28.5-11.5T720-200q0-17-11.5-28.5T680-240q-17 0-28.5 11.5T640-200q0 17 11.5 28.5T680-160ZM200-440q17 0 28.5-11.5T240-480q0-17-11.5-28.5T200-520q-17 0-28.5 11.5T160-480q0 17 11.5 28.5T200-440Zm480-280q17 0 28.5-11.5T720-760q0-17-11.5-28.5T680-800q-17 0-28.5 11.5T640-760q0 17 11.5 28.5T680-720Zm0 520ZM200-480Zm480-280Z" />
+                </svg>
+                <span>Output</span>
+            </button>
+            <button class="hub-button active" data-view="webviewer" onclick="openWebviewerInNewTab()">
+                <svg viewBox="0 -960 960 960" fill="currentColor">
+                    <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z" />
+                </svg>
+                <span>Webviewer</span>
+            </button>
+        </div>
+    </nav>
     
     <script src="/static/js/schema.js?v={{.CssVersion}}"></script>
     <script src="/static/js/config-manager.js?v={{.CssVersion}}"></script>
@@ -349,19 +340,6 @@
                 console.error('Invalid URL:', e);
                 showError('Configuration Error', 'There was an error processing the webviewer URL.');
             }
-        }
-
-        function switchView(view) {
-            currentView = view;
-            closeConfigPanel();
-            
-            // Update button states
-            document.querySelectorAll('.hub-button').forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.dataset.view === view) {
-                    btn.classList.add('active');
-                }
-            });
         }
 
         function openConfig(type) {
