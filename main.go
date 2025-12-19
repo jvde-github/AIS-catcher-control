@@ -461,6 +461,14 @@ func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
 			receiverConfig[key] = value
 			delete(config, key)
 			hasReceiverSettings = true
+			log.Printf("Moved receiver key '%s' from root to receiver config", key)
+		}
+	}
+	
+	// Verify that receiver keys have been removed from root
+	for _, key := range receiverKeys {
+		if _, stillExists := config[key]; stillExists {
+			log.Printf("WARNING: Key '%s' still exists at root after deletion!", key)
 		}
 	}
 
@@ -487,6 +495,12 @@ func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
 
 	// Update config with the receiver array (can be empty)
 	config["receiver"] = receiverArray
+
+	// Final verification: check for any receiver keys still at root level
+	log.Println("Final config keys at root level:")
+	for key := range config {
+		log.Printf("  - %s", key)
+	}
 
 	return json.MarshalIndent(config, "", "  ")
 }
@@ -640,6 +654,8 @@ func migrateConfigAtStartup() error {
 			return err
 		}
 		// Re-parse the migrated content for further processing
+		// IMPORTANT: Create a fresh map to avoid retaining old keys
+		configMap = make(map[string]interface{})
 		if err := json.Unmarshal(migratedContent, &configMap); err != nil {
 			log.Printf("Failed to parse migrated content: %v", err)
 			return err

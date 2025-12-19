@@ -1,6 +1,6 @@
 // script.js
 
-(function(global) {
+(function (global) {
     'use strict';
 
     // ============================================================================
@@ -9,7 +9,7 @@
 
     const el = (tag, className = '', attrs = {}, ...children) => {
         const isSvg = ['svg', 'path', 'circle'].includes(tag);
-        const element = isSvg 
+        const element = isSvg
             ? document.createElementNS('http://www.w3.org/2000/svg', tag)
             : document.createElement(tag);
 
@@ -17,14 +17,14 @@
             if (isSvg) element.setAttribute('class', className);
             else element.className = className;
         }
-        
+
         Object.entries(attrs).forEach(([key, value]) => {
             if (value === false || value === null || value === undefined) return;
             if (key === 'innerHTML') element.innerHTML = value;
             else if (key.startsWith('on') && typeof value === 'function') element.addEventListener(key.substring(2).toLowerCase(), value);
             else if (key === 'value') element.value = value;
             else if (key === 'checked') element.checked = !!value;
-            else if (key === 'dataset') Object.entries(value).forEach(([k, v]) => 
+            else if (key === 'dataset') Object.entries(value).forEach(([k, v]) =>
                 element.setAttribute('data-' + k.replace(/([A-Z])/g, "-$1").toLowerCase(), v));
             else element.setAttribute(key, value);
         });
@@ -38,9 +38,9 @@
     const Utils = {
         debounce: (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; },
         getNested: (obj, path) => path?.split('.').reduce((a, p) => a?.[p], obj),
-        setNested: (obj, path, val) => { 
-            const keys = path.split('.'), last = keys.pop(); 
-            keys.reduce((a, k) => a[k] ||= {}, obj)[last] = val; 
+        setNested: (obj, path, val) => {
+            const keys = path.split('.'), last = keys.pop();
+            keys.reduce((a, k) => a[k] ||= {}, obj)[last] = val;
         },
         parseInteger: value => {
             if (typeof value === 'number') return Math.floor(value);
@@ -94,14 +94,14 @@
     };
 
     const Icons = {
-        chevronDown: () => el('svg', 'h-4 w-4', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, 
+        chevronDown: () => el('svg', 'h-4 w-4', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
             el('path', '', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M19 9l-7 7-7-7' })
         ),
-        delete: () => el('svg', 'h-5 w-5', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, 
+        delete: () => el('svg', 'h-5 w-5', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
             el('path', '', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' })
         ),
-        plus: () => el('svg', 'w-4 h-4 text-slate-500', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24'}, 
-            el('path', '', {'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M12 4v16m8-8H4'})
+        plus: () => el('svg', 'w-4 h-4 text-slate-500', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
+            el('path', '', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M12 4v16m8-8H4' })
         ),
     };
 
@@ -111,19 +111,19 @@
 
     const App = {
         state: { data: {}, unsaved: false },
-        
+
         notify(type, message) {
             const container = document.getElementById('toast-container') || this.createToastContainer();
             // Matching the Slate/Emerald/Rose theme
-            const colorClass = type === 'error' 
-                ? 'bg-rose-600 text-white' 
+            const colorClass = type === 'error'
+                ? 'bg-rose-600 text-white'
                 : 'bg-slate-800 text-white border border-slate-700';
-            
-            const toast = el('div', `mb-3 px-4 py-3 rounded-lg shadow-xl transform transition-all duration-300 translate-y-2 opacity-0 flex items-center gap-3 ${colorClass}`, {}, 
+
+            const toast = el('div', `mb-3 px-4 py-3 rounded-lg shadow-xl transform transition-all duration-300 translate-y-2 opacity-0 flex items-center gap-3 ${colorClass}`, {},
                 type === 'success' ? el('span', 'font-bold text-emerald-400', {}, '✓') : el('span', 'font-bold text-white', {}, '!'),
                 el('span', 'text-sm font-medium', {}, message)
             );
-            
+
             container.appendChild(toast);
             requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
             setTimeout(() => {
@@ -141,7 +141,7 @@
         setUnsaved(bool) {
             this.state.unsaved = bool;
             const statusEl = document.getElementById('status-message');
-            
+
             // Styled Unsaved Indicator
             if (statusEl) {
                 if (bool) {
@@ -172,22 +172,24 @@
     const Renderer = {
         createInput(field, currentValue, onUpdate) {
             const type = field.type;
-            
+
             if (type === 'select') {
                 const valStr = currentValue !== undefined && currentValue !== null ? String(currentValue) : '';
-                return el('div', 'relative', {}, 
-                    el('select', `${Styles.input} ${Styles.select}`, { onChange: e => {
-                        onUpdate(e.target.value);
-                        if (field.onChange) {
-                            const action = typeof field.onChange === 'function' 
-                                ? field.onChange 
-                                : ActionRegistry[field.onChange];
-                            if (action) action();
+                return el('div', 'relative', {},
+                    el('select', `${Styles.input} ${Styles.select}`, {
+                        onChange: e => {
+                            onUpdate(e.target.value);
+                            if (field.onChange) {
+                                const action = typeof field.onChange === 'function'
+                                    ? field.onChange
+                                    : ActionRegistry[field.onChange];
+                                if (action) action();
+                            }
                         }
-                    } }, 
-                        ...field.options.map(opt => el('option', '', { 
-                            value: opt.value, 
-                            selected: String(opt.value).toLowerCase() === valStr.toLowerCase() 
+                    },
+                        ...field.options.map(opt => el('option', '', {
+                            value: opt.value,
+                            selected: String(opt.value).toLowerCase() === valStr.toLowerCase()
                         }, opt.label))
                     ),
                     el('div', Styles.chevron, {}, Icons.chevronDown())
@@ -196,8 +198,8 @@
 
             if (type === 'toggle') {
                 return el('label', 'relative inline-flex items-center cursor-pointer group', {},
-                    el('input', 'sr-only peer', { 
-                        type: 'checkbox', 
+                    el('input', 'sr-only peer', {
+                        type: 'checkbox',
                         checked: Utils.toBoolean(currentValue),
                         onChange: e => onUpdate(e.target.checked)
                     }),
@@ -208,7 +210,7 @@
             if (type === 'integer-select') {
                 const parsedCurrent = Utils.parseInteger(currentValue);
                 const isPreset = field.presets && field.presets.some(p => Utils.parseInteger(p.value) === parsedCurrent);
-                
+
                 const customInput = el('input', `${Styles.input} mt-2`, {
                     type: 'number',
                     value: isPreset ? '' : parsedCurrent,
@@ -217,7 +219,7 @@
                     onInput: (e) => onUpdate(parseInt(e.target.value, 10))
                 });
 
-                const select = el('div', 'relative', {}, 
+                const select = el('div', 'relative', {},
                     el('select', `${Styles.input} ${Styles.select}`, {
                         onChange: (e) => {
                             if (e.target.value === 'custom') {
@@ -228,9 +230,9 @@
                                 onUpdate(parseInt(e.target.value, 10));
                             }
                         }
-                    }, 
-                    ...(field.presets || []).map(p => el('option', '', { value: p.value, selected: Utils.parseInteger(p.value) === parsedCurrent }, p.label)),
-                    el('option', '', { value: 'custom', selected: !isPreset }, 'Custom Value...')
+                    },
+                        ...(field.presets || []).map(p => el('option', '', { value: p.value, selected: Utils.parseInteger(p.value) === parsedCurrent }, p.label)),
+                        el('option', '', { value: 'custom', selected: !isPreset }, 'Custom Value...')
                     ),
                     el('div', Styles.chevron, {}, Icons.chevronDown())
                 );
@@ -243,18 +245,18 @@
                 const display = el('span', Styles.sliderDisplay, {}, isNaN(numVal) ? 0 : numVal);
 
                 const slider = el('input', Styles.slider, {
-                    type: 'range', 
-                    min: field.min, max: field.max, step: field.step || (field.type === 'auto-integer' ? 1 : 0.1), 
+                    type: 'range',
+                    min: field.min, max: field.max, step: field.step || (field.type === 'auto-integer' ? 1 : 0.1),
                     value: isNaN(numVal) ? (field.min || 0) : numVal,
                     onInput: (e) => {
-                         display.textContent = e.target.value;
-                         if (selector.querySelector('select').value === 'custom') onUpdate(parseFloat(e.target.value));
+                        display.textContent = e.target.value;
+                        if (selector.querySelector('select').value === 'custom') onUpdate(parseFloat(e.target.value));
                     }
                 });
-                
+
                 const sliderContainer = el('div', `${Styles.sliderContainer} mt-2`, { style: isAuto ? 'display: none' : 'display: flex' }, slider, display);
-                
-                const selector = el('div', 'relative', {}, 
+
+                const selector = el('div', 'relative', {},
                     el('select', `${Styles.input} ${Styles.select}`, {
                         onChange: (e) => {
                             const isNowAuto = e.target.value === 'auto';
@@ -262,24 +264,60 @@
                             onUpdate(isNowAuto ? 'auto' : parseFloat(slider.value));
                         }
                     },
-                    el('option', '', { value: 'auto', selected: isAuto }, 'Auto'),
-                    el('option', '', { value: 'custom', selected: !isAuto }, `Custom`)
+                        el('option', '', { value: 'auto', selected: isAuto }, 'Auto'),
+                        el('option', '', { value: 'custom', selected: !isAuto }, `Custom`)
                     ),
                     el('div', Styles.chevron, {}, Icons.chevronDown())
                 );
                 return el('div', '', {}, selector, sliderContainer);
             }
 
+            if (type === 'switch-integer') {
+                const isOff = currentValue === false || currentValue === 'false';
+                const numVal = isOff ? (field.defaultInteger || field.min || 0) : parseInt(currentValue, 10);
+                const display = el('span', Styles.sliderDisplay, {}, isNaN(numVal) ? 0 : numVal);
+                const unit = el('span', 'text-xs sm:text-sm text-slate-600 ml-1', {}, 's');
+
+                const slider = el('input', Styles.slider, {
+                    type: 'range',
+                    min: field.min, max: field.max, step: field.step || 1,
+                    value: isNaN(numVal) ? (field.defaultInteger || field.min || 0) : numVal,
+                    onInput: (e) => {
+                        display.textContent = e.target.value;
+                        onUpdate(parseInt(e.target.value, 10));
+                    }
+                });
+
+                const sliderContainer = el('div', `${Styles.sliderContainer} mt-2`, { style: isOff ? 'display: none' : 'display: flex' }, slider, display, unit);
+
+                const toggleContainer = el('label', 'relative inline-flex items-center cursor-pointer', {});
+                const checkbox = el('input', 'sr-only peer', {
+                    type: 'checkbox',
+                    checked: !isOff,
+                    onChange: (e) => {
+                        const isNowOff = !e.target.checked;
+                        sliderContainer.style.display = isNowOff ? 'none' : 'flex';
+                        onUpdate(isNowOff ? false : parseInt(slider.value, 10));
+                    }
+                });
+                const toggleSwitch = el('div', Styles.toggle, {});
+
+                toggleContainer.appendChild(checkbox);
+                toggleContainer.appendChild(toggleSwitch);
+
+                return el('div', '', {}, toggleContainer, sliderContainer);
+            }
+
             if (type === 'range') {
-                 const display = el('span', Styles.sliderDisplay, {}, currentValue || 0);
-                 const slider = el('input', Styles.slider, {
+                const display = el('span', Styles.sliderDisplay, {}, currentValue || 0);
+                const slider = el('input', Styles.slider, {
                     type: 'range', min: field.min, max: field.max, step: field.step, value: currentValue || 0,
                     onInput: (e) => {
                         display.textContent = e.target.value;
                         onUpdate(e.target.value);
                     }
-                 });
-                 return el('div', Styles.sliderContainer, {}, slider, display);
+                });
+                return el('div', Styles.sliderContainer, {}, slider, display);
             }
 
             return el('input', Styles.input, {
@@ -307,12 +345,12 @@
                 : this.createInput(field, val, newValue => { onUpdateCallback(field, newValue); onDepencyCheck(); });
 
             if (field.withButton && field.type !== 'button') {
-                const action = typeof field.withButton.onClick === 'function' 
-                    ? field.withButton.onClick 
-                    : ActionRegistry[field.withButton.onClick] || (() => {});
-                inputEl = el('div', 'flex items-center gap-2', {}, 
+                const action = typeof field.withButton.onClick === 'function'
+                    ? field.withButton.onClick
+                    : ActionRegistry[field.withButton.onClick] || (() => { });
+                inputEl = el('div', 'flex items-center gap-2', {},
                     el('div', 'flex-1', {}, inputEl),
-                    el('button', Styles.buttonPrimary, { type: 'button', onClick: action }, 
+                    el('button', Styles.buttonPrimary, { type: 'button', onClick: action },
                         el('span', '', { innerHTML: field.withButton.icon || 'Action' }))
                 );
             }
@@ -325,7 +363,7 @@
             if (field.type !== 'button') container.appendChild(el('label', Styles.label, {}, field.label));
             container.appendChild(inputEl);
             if (field.description) container.appendChild(el('p', Styles.description, {}, field.description));
-            
+
             return container;
         },
 
@@ -336,22 +374,22 @@
                     if (!rawDep || rawDep === 'null') return;
                     const dep = JSON.parse(rawDep);
                     const ctrl = container.querySelector(`[data-field="${dep.field}"]`);
-                    
+
                     if (ctrl && getComputedStyle(ctrl).display === 'none') {
                         div.style.display = 'none';
                         div.querySelectorAll('input, select, button').forEach(el => el.disabled = true);
                         return;
                     }
-                    
+
                     const input = ctrl?.querySelector('input, select');
-                    const val = input ? (input.type === 'checkbox' ? input.checked : input.value) 
-                                     : Utils.getNested(dataContext, dep.field) ?? dataContext[dep.field];
-                    
+                    const val = input ? (input.type === 'checkbox' ? input.checked : input.value)
+                        : Utils.getNested(dataContext, dep.field) ?? dataContext[dep.field];
+
                     const valStr = String(val).toLowerCase();
-                    const match = Array.isArray(dep.value) 
+                    const match = Array.isArray(dep.value)
                         ? dep.value.some(v => String(v).toLowerCase() === valStr)
                         : String(dep.value).toLowerCase() === valStr;
-                    
+
                     div.style.display = match ? 'block' : 'none';
                     div.querySelectorAll('input, select, button').forEach(el => el.disabled = !match);
                 });
@@ -369,7 +407,7 @@
             this.container = document.getElementById(config.containerId);
             this.fields = Object.values(config.schema);
             this.data = config.isList ? [] : {};
-            
+
             if (!this.container) return;
 
             this.loadData().then(() => {
@@ -383,7 +421,7 @@
                 const res = await fetch('/api/config');
                 if (!res.ok) throw new Error('Fetch failed');
                 const fullConfig = await res.json();
-                this.data = this.config.channelType 
+                this.data = this.config.channelType
                     ? (fullConfig[this.config.channelType] || (this.config.isList ? [] : {}))
                     : fullConfig;
             } catch {
@@ -391,10 +429,10 @@
                 if (jsonEl?.textContent.trim()) {
                     try {
                         const fullConfig = JSON.parse(jsonEl.textContent);
-                        this.data = this.config.channelType 
+                        this.data = this.config.channelType
                             ? (fullConfig[this.config.channelType] || (this.config.isList ? [] : {}))
                             : fullConfig;
-                    } catch {}
+                    } catch { }
                 }
             }
             if (!this.config.isList) {
@@ -407,20 +445,20 @@
             const items = this.config.isList ? this.data : [this.data];
 
             items.forEach((item, index) => {
-                const wrapper = el('div', Styles.card, {}, 
-                    this.config.isList ? el('div', Styles.cardHeader, {}, 
+                const wrapper = el('div', Styles.card, {},
+                    this.config.isList ? el('div', Styles.cardHeader, {},
                         el('h4', 'text-base sm:text-lg font-semibold text-slate-800', {}, `${this.config.title} ${index + 1}`),
-                        el('button', Styles.deleteBtn, { 
-                            type: 'button', 
+                        el('button', Styles.deleteBtn, {
+                            type: 'button',
                             title: 'Remove Item',
-                            onClick: () => this.removeItem(index) 
+                            onClick: () => this.removeItem(index)
                         }, Icons.delete())
                     ) : null
                 );
-                
+
                 const fieldsDiv = el('div', 'flex flex-wrap gap-x-3 gap-y-2');
                 this.fields.forEach(field => {
-                    const fieldEl = Renderer.renderField(field, index, item, 
+                    const fieldEl = Renderer.renderField(field, index, item,
                         (fld, val) => this.updateValue(index, fld, val),
                         () => Renderer.updateVisibility(fieldsDiv, item)
                     );
@@ -429,7 +467,7 @@
 
                 wrapper.appendChild(fieldsDiv);
                 this.container.appendChild(wrapper);
-                
+
                 Renderer.updateVisibility(fieldsDiv, item);
             });
 
@@ -443,17 +481,17 @@
 
             // Ensure JSON section exists first so we can insert buttons before it
             this.ensureJsonUI();
-            
+
             const btnGroup = el('div', `${containerIdClass} mt-6 sm:mt-8 px-4 sm:px-0 flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-2 sm:gap-3 max-w-2xl sm:mx-auto`);
-            
+
             if (this.config.isList) {
                 btnGroup.appendChild(el('button', 'w-full sm:w-32 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50 transition duration-200 shadow-sm inline-flex items-center justify-center gap-2 text-sm font-medium', {
                     type: 'button', onClick: () => this.addItem()
-                }, 
-                Icons.plus(),
-                'Add Item'));
+                },
+                    Icons.plus(),
+                    'Add Item'));
             }
-            
+
             btnGroup.appendChild(el('button', 'w-full sm:w-32 bg-white border border-slate-300 text-slate-400 px-6 py-2 rounded-lg hover:bg-slate-50 shadow-sm transition-all duration-200 text-sm font-medium cursor-default', {
                 type: 'button', onClick: () => this.save()
             }, 'Save'));
@@ -465,14 +503,14 @@
             } else {
                 this.container.parentElement.appendChild(btnGroup);
             }
-            
-            if(App.state.unsaved) App.setUnsaved(true);
+
+            if (App.state.unsaved) App.setUnsaved(true);
         }
 
         ensureJsonUI() {
             const parent = this.container.parentElement;
             const existingContainer = document.getElementById('json-content-container');
-            
+
             // If JSON section already exists, move it to the end to ensure proper order
             if (existingContainer) {
                 const toggleDiv = existingContainer.parentElement;
@@ -481,13 +519,13 @@
                 }
                 return;
             }
-            
+
             // Collapsible JSON Debugger
             const toggleDiv = el('div', 'mt-6 sm:mt-8 px-4 sm:px-0 max-w-2xl sm:mx-auto border-t border-slate-200 pt-6');
-            const btn = el('button', 'flex items-center text-slate-500 hover:text-slate-800 transition-colors focus:outline-none group text-sm font-medium', { 
-                type: 'button', onClick: () => global.toggleJsonContent() 
+            const btn = el('button', 'flex items-center text-slate-500 hover:text-slate-800 transition-colors focus:outline-none group text-sm font-medium', {
+                type: 'button', onClick: () => global.toggleJsonContent()
             });
-            
+
             const chevron = el('svg', 'h-4 w-4 mr-2 transform transition-transform duration-200 text-slate-400 group-hover:text-slate-600', {
                 id: 'chevron-icon', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor'
             }, el('path', '', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M19 9l-7 7-7-7' }));
@@ -542,7 +580,7 @@
             const el = document.getElementById('json_content');
             if (!el) return;
             let cfg = {};
-            try { cfg = JSON.parse(el.textContent) || {}; } catch {}
+            try { cfg = JSON.parse(el.textContent) || {}; } catch { }
             if (this.config.channelType) cfg[this.config.channelType] = this.data;
             else Object.assign(cfg, this.data);
             el.textContent = JSON.stringify(cfg, null, 2);
@@ -551,12 +589,12 @@
 
         async save() {
             const btn = document.querySelector('button[type="button"]:not([data-action])');
-            const saveButtons = Array.from(document.querySelectorAll('button[type="button"]')).filter(b => 
+            const saveButtons = Array.from(document.querySelectorAll('button[type="button"]')).filter(b =>
                 b.textContent.trim() === 'Save' && !b.querySelector('svg')
             );
             const saveBtn = saveButtons[0];
-            
-            if(saveBtn) {
+
+            if (saveBtn) {
                 const originalText = saveBtn.textContent;
                 saveBtn.textContent = 'Saving...';
                 saveBtn.disabled = true;
@@ -567,14 +605,14 @@
                 const fullConfigRes = await fetch('/api/config');
                 if (!fullConfigRes.ok) throw new Error('Failed to fetch current config');
                 const fullConfig = await fullConfigRes.json();
-                
+
                 // Merge current section data into full config
                 if (this.config.channelType) {
                     fullConfig[this.config.channelType] = this.data;
                 } else {
                     Object.assign(fullConfig, this.data);
                 }
-                
+
                 // Ensure required top-level fields are present
                 if (!fullConfig.config) fullConfig.config = 'aiscatcher';
                 if (!fullConfig.version) fullConfig.version = 1;
@@ -585,7 +623,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(fullConfig)
                 });
-                
+
                 if (!saveRes.ok) throw new Error('Save Failed');
                 App.setUnsaved(false);
                 App.notify('success', 'Configuration saved successfully');
@@ -593,7 +631,7 @@
                 console.error(e);
                 App.notify('error', 'Failed to save configuration: ' + e.message);
             } finally {
-                if(saveBtn) {
+                if (saveBtn) {
                     saveBtn.textContent = 'Save';
                     saveBtn.disabled = false;
                 }
@@ -609,13 +647,13 @@
     global.createConfigManager = (config) => new ConfigManager(config);
     global.createSimpleConfigManager = (config) => { config.isList = false; return new ConfigManager(config); };
     global.createChannelManager = (config) => { config.isList = true; return new ConfigManager(config); };
-    
+
     global.toggleJsonContent = () => {
         const c = document.getElementById('json-content-container');
         const i = document.getElementById('chevron-icon');
         if (c) {
             const hidden = c.classList.toggle('hidden');
-            if(i) i.setAttribute('class', `h-4 w-4 mr-2 transform transition-transform duration-200 text-slate-400 group-hover:text-slate-600 ${hidden ? '' : 'rotate-180'}`);
+            if (i) i.setAttribute('class', `h-4 w-4 mr-2 transform transition-transform duration-200 text-slate-400 group-hover:text-slate-600 ${hidden ? '' : 'rotate-180'}`);
             const label = i ? i.nextElementSibling : null;
             if (label) label.textContent = hidden ? 'Advanced: Show JSON Config' : 'Advanced: Hide JSON Config';
         }

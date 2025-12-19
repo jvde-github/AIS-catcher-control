@@ -61,12 +61,22 @@ const httpSchema = {
         defaultValue: true,
         width: 25
     },
-    filter: {
-        name: 'filter',
-        label: 'Filter',
+    unique: {
+        name: 'unique',
+        label: 'Unique',
         type: 'toggle',
         defaultValue: false,
         width: 25
+    },
+    position_interval: {
+        name: 'position_interval',
+        label: 'Downsample Position',
+        type: 'switch-integer',
+        defaultValue: false,
+        defaultInteger: 60,
+        min: 0,
+        max: 300,
+        step: 1
     }
 };
 
@@ -110,6 +120,13 @@ const udpSchema = {
         defaultValue: false,
         width: 25
     },
+    unique: {
+        name: 'unique',
+        label: 'Unique',
+        type: 'toggle',
+        defaultValue: false,
+        width: 25
+    },
     msgformat: {
         name: 'msgformat',
         label: 'Message Format',
@@ -120,6 +137,17 @@ const udpSchema = {
             { value: 'JSON_NMEA', label: 'JSON with NMEA' },
             { value: 'JSON_FULL', label: 'JSON Full' }
         ]
+    },
+    position_interval: {
+        name: 'position_interval',
+        label: 'Downsample Position Messages',
+        type: 'switch-integer',
+        defaultValue: false,
+        defaultInteger: 60,
+        min: 0,
+        max: 300,
+        step: 1,
+        placeholder: '0-300 seconds'
     }
 };
 
@@ -170,6 +198,13 @@ const tcpSchema = {
         defaultValue: false,
         width: 25
     },
+    unique: {
+        name: 'unique',
+        label: 'Unique',
+        type: 'toggle',
+        defaultValue: false,
+        width: 25
+    },
     msgformat: {
         name: 'msgformat',
         label: 'Message Format',
@@ -180,6 +215,16 @@ const tcpSchema = {
             { value: 'JSON_NMEA', label: 'JSON with NMEA' },
             { value: 'JSON_FULL', label: 'JSON Full' }
         ]
+    },
+    position_interval: {
+        name: 'position_interval',
+        label: 'Downsample Position',
+        type: 'switch-integer',
+        defaultValue: false,
+        defaultInteger: 60,
+        min: 0,
+        max: 300,
+        step: 1
     }
 };
 
@@ -203,7 +248,15 @@ const tcpServerSchema = {
         name: 'active',
         label: 'Active',
         type: 'toggle',
-        defaultValue: true
+        defaultValue: true,
+        width: 25
+    },
+    unique: {
+        name: 'unique',
+        label: 'Unique',
+        type: 'toggle',
+        defaultValue: false,
+        width: 25
     },
     msgformat: {
         name: 'msgformat',
@@ -215,6 +268,16 @@ const tcpServerSchema = {
             { value: 'JSON_NMEA', label: 'JSON with NMEA' },
             { value: 'JSON_FULL', label: 'JSON Full' }
         ]
+    },
+    position_interval: {
+        name: 'position_interval',
+        label: 'Downsample Position',
+        type: 'switch-integer',
+        defaultValue: false,
+        defaultInteger: 60,
+        min: 0,
+        max: 300,
+        step: 1
     }
 };
 
@@ -262,6 +325,23 @@ const mqttSchema = {
             { value: 'JSON_NMEA', label: 'JSON with NMEA' },
             { value: 'JSON_FULL', label: 'JSON Full' }
         ]
+    },
+    unique: {
+        name: 'unique',
+        label: 'Unique',
+        type: 'toggle',
+        defaultValue: false,
+        width: 25
+    },
+    position_interval: {
+        name: 'position_interval',
+        label: 'Downsample Position',
+        type: 'switch-integer',
+        defaultValue: false,
+        defaultInteger: 60,
+        min: 0,
+        max: 300,
+        step: 1
     }
 };
 
@@ -373,7 +453,7 @@ const webviewerSchema = {
         label: 'Realtime',
         type: 'toggle',
         jsonpath: 'realtime',
-        defaultValue: true,
+        defaultValue: false,
         width: 24
     },
     geojson: {
@@ -381,7 +461,7 @@ const webviewerSchema = {
         label: 'GeoJSON',
         type: 'toggle',
         jsonpath: 'geojson',
-        defaultValue: true,
+        defaultValue: false,
         width: 24
     },
     prome: {
@@ -389,7 +469,7 @@ const webviewerSchema = {
         label: 'Prometheus',
         type: 'toggle',
         jsonpath: 'prome',
-        defaultValue: true,
+        defaultValue: false,
         width: 24
     },
     log: {
@@ -397,7 +477,7 @@ const webviewerSchema = {
         label: 'Show Log',
         type: 'toggle',
         jsonpath: 'log',
-        defaultValue: true,
+        defaultValue: false,
         width: 24
     },
     decoder: {
