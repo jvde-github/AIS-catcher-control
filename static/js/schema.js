@@ -528,6 +528,7 @@ const receiverSchema = {
             { value: "AIRSPY", label: "AIRSPY" },
             { value: "AIRSPYHF", label: "AIRSPYHF" },
             { value: "HACKRF", label: "HACKRF" },
+            { value: "HYDRASDR", label: "HydraSDR" },
             { value: "SERIALPORT", label: "SERIAL" },
             { value: "UDPSERVER", label: "UDP Server" },
             { value: "RTLTCP", label: "TCP Client" },
@@ -551,7 +552,7 @@ const receiverSchema = {
         placeholder: "Optional Serial Key",
         dependsOn: {
             field: "input",
-            value: ["RTLSDR", "AIRSPY", "AIRSPYHF", "HACKRF"]
+            value: ["RTLSDR", "AIRSPY", "AIRSPYHF", "HYDRASDR", "HACKRF"]
         }
     },
     rtlsdr_tuner: {
@@ -792,6 +793,112 @@ const receiverSchema = {
         dependsOn: {
             field: "input",
             value: "AIRSPY"
+        }
+    },
+    hydrasdr_gain_mode: {
+        name: "hydrasdr_gain_mode",
+        label: "Gain Mode",
+        type: "select",
+        jsonpath: "hydrasdr.gain_mode",
+        defaultValue: "linearity",
+        options: [
+            { value: "free", label: "Free" },
+            { value: "linearity", label: "Linearity" },
+            { value: "sensitivity", label: "Sensitivity" }
+        ],
+        dependsOn: {
+            field: "input",
+            value: "HYDRASDR"
+        }
+    },
+    hydrasdr_vga: {
+        name: "hydrasdr_vga",
+        label: "VGA",
+        type: "number",
+        jsonpath: "hydrasdr.vga",
+        min: 0,
+        max: 14,
+        step: 1,
+        defaultValue: 10,
+        placeholder: "0-14",
+        width: 33,
+        dependsOn: {
+            field: "hydrasdr_gain_mode",
+            value: "free"
+        }
+    },
+    hydrasdr_mixer: {
+        name: "hydrasdr_mixer",
+        label: "Mixer",
+        type: "auto-integer",
+        jsonpath: "hydrasdr.mixer",
+        min: 0,
+        max: 14,
+        step: 1,
+        defaultValue: "auto",
+        placeholder: "auto or 0-14",
+        width: 33,
+        dependsOn: {
+            field: "hydrasdr_gain_mode",
+            value: "free"
+        }
+    },
+    hydrasdr_lna: {
+        name: "hydrasdr_lna",
+        label: "LNA",
+        type: "auto-integer",
+        jsonpath: "hydrasdr.lna",
+        min: 0,
+        max: 14,
+        step: 1,
+        defaultValue: "auto",
+        placeholder: "auto or 0-14",
+        width: 32,
+        dependsOn: {
+            field: "hydrasdr_gain_mode",
+            value: "free"
+        }
+    },
+    hydrasdr_linearity: {
+        name: "hydrasdr_linearity",
+        label: "Linearity",
+        type: "number",
+        jsonpath: "hydrasdr.linearity",
+        min: 0,
+        max: 21,
+        step: 1,
+        defaultValue: 17,
+        placeholder: "0-21",
+        dependsOn: {
+            field: "hydrasdr_gain_mode",
+            value: "linearity"
+        }
+    },
+    hydrasdr_sensitivity: {
+        name: "hydrasdr_sensitivity",
+        label: "Sensitivity",
+        type: "number",
+        jsonpath: "hydrasdr.sensitivity",
+        min: 0,
+        max: 21,
+        step: 1,
+        defaultValue: 17,
+        placeholder: "0-21",
+        dependsOn: {
+            field: "hydrasdr_gain_mode",
+            value: "sensitivity"
+        }
+    },
+    hydrasdr_biastee: {
+        name: "hydrasdr_biastee",
+        label: "Bias tee",
+        type: "toggle",
+        jsonpath: "hydrasdr.biastee",
+        defaultValue: false,
+        width: 25,
+        dependsOn: {
+            field: "input",
+            value: "HYDRASDR"
         }
     },
     rtltcp_protocol: {

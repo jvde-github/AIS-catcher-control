@@ -430,7 +430,7 @@ func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
 	// Based on the C++ Config.cpp parser
 	receiverKeys := []string{
 		"serial", "input", "verbose", "model", "meta", "own_mmsi",
-		"rtlsdr", "rtltcp", "airspy", "airspyhf", "sdrplay", "serialport",
+		"rtlsdr", "rtltcp", "airspy", "airspyhf", "hydrasdr", "sdrplay", "serialport",
 		"hackrf", "udpserver", "soapysdr", "nmea2000", "file", "zmq",
 		"spyserver", "wavfile",
 	}
@@ -576,7 +576,7 @@ func migrateConfigAtStartup() error {
 	// Migration needed if receiver array doesn't exist OR if there are root-level receiver keys
 	receiverKeys := []string{
 		"serial", "input", "verbose", "model", "meta", "own_mmsi",
-		"rtlsdr", "rtltcp", "airspy", "airspyhf", "sdrplay", "serialport",
+		"rtlsdr", "rtltcp", "airspy", "airspyhf", "hydrasdr", "sdrplay", "serialport",
 		"hackrf", "udpserver", "soapysdr", "nmea2000", "file", "zmq",
 		"spyserver", "wavfile",
 	}
