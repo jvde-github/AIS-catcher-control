@@ -148,7 +148,7 @@ func getActionScript(action string) (string, bool) {
 	case "ais-update-prebuilt":
 		script = `echo "Starting AIS-catcher prebuilt update..." && \
         echo "Downloading and executing installation script..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p && \
         echo "AIS-catcher installation completed"`
 
 	case "ais-update-source":
@@ -175,7 +175,7 @@ func getActionScript(action string) (string, bool) {
 	case "update-all":
 		script = `echo "Starting full system update..." && \
         echo "Step 1: Installing AIS-catcher..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p && \
         echo "Step 2: Installing AIS-catcher Control..." && \
         curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
         echo "Full system update completed"`
@@ -184,7 +184,7 @@ func getActionScript(action string) (string, bool) {
 	case "update-all-reboot":
 		script = `echo "Starting full system update with reboot..." && \
         echo "Step 1: Installing AIS-catcher..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- _ -p && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p && \
         echo "Step 2: Installing AIS-catcher Control..." && \
         curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
         echo "Full system update completed" && \
@@ -464,7 +464,7 @@ func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
 			log.Printf("Moved receiver key '%s' from root to receiver config", key)
 		}
 	}
-	
+
 	// Verify that receiver keys have been removed from root
 	for _, key := range receiverKeys {
 		if _, stillExists := config[key]; stillExists {

@@ -16,9 +16,9 @@
             <option value="" disabled selected>Select an operation...</option>
             <option value="ais-update-prebuilt">upgrade AIS-catcher</option>
             <option value="control-update">upgrade control tool</option>
-            <option value="update-all">upgrade all</option>
-            <option value="system-update">update system (apt-get)</option>
+            <option value="update-all">upgrade all (AIS-catcher + control)</option>
             <option value="update-all-reboot">upgrade all & reboot</option>
+            <option value="system-update">update system (apt-get)</option>
             <option value="system-reboot">system reboot</option>
             <option value="system-halt">system halt</option>
             <option value="ais-update-source">build AIS-catcher from source</option>
@@ -271,6 +271,12 @@
       }
       currentAction = null;
       
+      // Reset dropdown to default
+      const select = document.getElementById('actionSelect');
+      if (select && !connectionLost) {
+          select.value = '';
+      }
+      
       // Re-enable button
       const executeButton = document.getElementById('executeButton');
       executeButton.disabled = false;
@@ -297,6 +303,7 @@
           'ais-update-prebuilt': 'AIS-catcher Update (Binary)',
           'ais-update-source': 'AIS-catcher Update (Source)',
           'control-update': 'Control Panel Update',
+          'update-all': 'Full Upgrade (AIS-catcher + Control)',
           'update-all-reboot': 'Full Upgrade & Reboot',
           'system-reboot': 'System Reboot',
           'system-halt': 'System Shutdown'
@@ -340,7 +347,7 @@
           } else if (data.type === 'status') {
               updateStatus(data.content);
           } else if (data.type === 'complete') {
-              appendOutput('\n<span class="text-emerald-400">Operation completed successfully.</span>\n');
+              appendOutput('\n<span class="text-emerald-400">✓ Operation completed successfully.</span>\n');
               
               let shouldReload = false;
               try {
@@ -351,12 +358,18 @@
               }
 
               if (shouldReload) {
-                  appendOutput('\n<span class="text-amber-400">System will reboot in 5 seconds...</span>');
+                  appendOutput('\n<span class="text-amber-400">⟳ Page will reload in 5 seconds to reflect changes...</span>');
                   setTimeout(() => window.location.reload(), 5000);
+              } else {
+                  appendOutput('\n<span class="text-sky-400">→ Refreshing system diagnostics...</span>');
+                  // Refresh system diagnostics after 2 seconds
+                  setTimeout(() => window.location.reload(), 2000);
               }
+              
               finishOperation('Completed', false);
           } else if (data.type === 'error') {
-              appendOutput('\n<span class="text-rose-400">Error: ' + data.content + '</span>\n');
+              appendOutput('\n<span class="text-rose-400">✗ Error: ' + data.content + '</span>\n');
+              appendOutput('<span class="text-slate-500">→ Operation failed. Please check the logs above.</span>\n');
               finishOperation('Failed', true);
           }
       };
