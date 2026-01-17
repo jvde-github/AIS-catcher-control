@@ -1097,10 +1097,19 @@ func checkLatestVersion() {
 			}
 		}
 
-		// Check if versions differ OR if commits differ (for same version)
-		systemInfo.UpdateAvailable = (currentVersion != latestTag && latestTag != "") ||
-			(currentVersion == latestTag && systemInfo.AISCatcherCommit != "" &&
-				systemInfo.LatestCommit != "" && systemInfo.AISCatcherCommit != systemInfo.LatestCommit)
+		// For Source builds, only check commit hash
+		// For prebuilt packages, check version OR commit
+		if systemInfo.AISCatcherBuildType == "Source" {
+			// Source build: only suggest update if commit differs
+			systemInfo.UpdateAvailable = systemInfo.AISCatcherCommit != "" &&
+				systemInfo.LatestCommit != "" &&
+				systemInfo.AISCatcherCommit != systemInfo.LatestCommit
+		} else {
+			// Prebuilt package: suggest update if version differs OR commit differs
+			systemInfo.UpdateAvailable = (currentVersion != latestTag && latestTag != "") ||
+				(currentVersion == latestTag && systemInfo.AISCatcherCommit != "" &&
+					systemInfo.LatestCommit != "" && systemInfo.AISCatcherCommit != systemInfo.LatestCommit)
+		}
 	}
 
 	cachedSysInfo.info = systemInfo
