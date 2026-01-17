@@ -133,10 +133,20 @@
         </div>
         <div>
           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Version</p>
-          <div id="currentVersionDisplay">
-            <p class="text-sm font-medium text-slate-700 font-mono">{{if not .SystemInfo.AISCatcherAvailable}}&lt; 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
+          <p class="text-sm font-medium text-slate-700 font-mono" id="currentVersionDisplay">{{if not .SystemInfo.AISCatcherAvailable}}&lt; 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Build Type</p>
+          <div id="buildTypeDisplay">
             {{if .SystemInfo.AISCatcherBuildType}}
-              <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.AISCatcherBuildType}}</p>
+              <p class="text-sm font-medium text-slate-700 font-mono">{{.SystemInfo.AISCatcherBuildType}}</p>
+              {{if .SystemInfo.AISCatcherCommit}}
+                {{if ne .SystemInfo.AISCatcherBuildType "Source"}}
+                  <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.AISCatcherCommit}}</p>
+                {{end}}
+              {{end}}
+            {{else}}
+              <p class="text-sm font-medium text-slate-500">-</p>
             {{end}}
           </div>
         </div>
@@ -163,15 +173,12 @@
     </div>
 
     <!-- Process Statistics -->
+    {{if ne .SystemInfo.ProcessID 0}}
     <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 overflow-hidden">
         <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50">
-          <h3 class="text-sm sm:text-base font-medium text-slate-700">AIS-catcher Process Telemetry</h3>
+          <h3 class="text-sm sm:text-base font-medium text-slate-700">AIS-catcher Process (PID {{.SystemInfo.ProcessID}})</h3>
         </div>
         <div class="p-4 sm:p-6 grid grid-cols-2 md:grid-cols-3 gap-y-4 sm:gap-y-6 gap-x-3 sm:gap-x-4">
-          <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">PID</p>
-            <p class="text-sm font-medium text-slate-700 font-mono">{{if eq .SystemInfo.ProcessID 0}}-{{else}}{{.SystemInfo.ProcessID}}{{end}}</p>
-          </div>
           <div>
             <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Memory (RSS)</p>
             <p class="text-sm font-medium text-slate-700 font-mono">{{if lt .SystemInfo.ProcessMemoryUsage 0.01}}-{{else}}{{printf "%.2f MB" .SystemInfo.ProcessMemoryUsage}}{{end}}</p>
@@ -194,6 +201,7 @@
           </div>
         </div>
     </div>
+    {{end}}
 
     <!-- Host Information -->
     <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 overflow-hidden">
@@ -203,7 +211,22 @@
         <div class="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           <div>
             <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Control Panel Version</p>
-            <p class="text-sm font-medium text-slate-700 font-mono">{{.SystemInfo.BuildVersion}}</p>
+            <div>
+              <p class="text-sm font-medium text-slate-700 font-mono">{{.SystemInfo.BuildVersion}}</p>
+              {{if .SystemInfo.ControlLatestCommit}}
+                <div class="mt-2">
+                  <p class="text-xs text-slate-500">Latest: 
+                    {{if .SystemInfo.ControlUpdateAvailable}}
+                      <span class="font-mono text-amber-600">{{.SystemInfo.ControlLatestCommit}}</span>
+                      <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">update</span>
+                    {{else}}
+                      <span class="font-mono text-emerald-600">{{.SystemInfo.ControlLatestCommit}}</span>
+                      <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700">✓</span>
+                    {{end}}
+                  </p>
+                </div>
+              {{end}}
+            </div>
           </div>
           <div class="pt-2 border-t border-slate-50 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
              <div>
@@ -375,11 +398,18 @@
       // Update current version display
       const currentVersionEl = document.getElementById('currentVersionDisplay');
       if (currentVersionEl && data.ais_catcher_version) {
-          let html = `<p class="text-sm font-medium text-slate-700 font-mono">${data.ais_catcher_version}</p>`;
-          if (data.ais_catcher_build_type) {
-              html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.ais_catcher_build_type}</p>`;
+          currentVersionEl.textContent = data.ais_catcher_version;
+      }
+      
+      // Update build type display
+      const buildTypeEl = document.getElementById('buildTypeDisplay');
+      if (buildTypeEl && data.ais_catcher_build_type) {
+          let html = `<p class="text-sm font-medium text-slate-700 font-mono">${data.ais_catcher_build_type}</p>`;
+          // Show commit hash for prebuilt packages (not for Source builds)
+          if (data.ais_catcher_commit && data.ais_catcher_build_type !== 'Source') {
+              html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.ais_catcher_commit}</p>`;
           }
-          currentVersionEl.innerHTML = html;
+          buildTypeEl.innerHTML = html;
       }
       
       // Update latest version and badge

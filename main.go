@@ -83,6 +83,9 @@ type SystemInfo struct {
 	LatestCommit          string    `json:"latest_commit"`       // Latest commit hash from GitHub
 	UpdateAvailable       bool      `json:"update_available"`    // Whether update is available
 	LastChecked           time.Time `json:"last_checked"`        // Last time we checked GitHub
+	ControlLatestCommit   string    `json:"control_latest_commit"`   // Latest Control panel commit from GitHub
+	ControlUpdateAvailable bool     `json:"control_update_available"` // Whether Control panel update is available
+	ControlLastChecked    time.Time `json:"control_last_checked"`    // Last time we checked Control repo
 }
 
 type GitHubRelease struct {
@@ -903,6 +906,13 @@ func collectSystemInfo() {
 				systemInfo.ProcessThreadCount = numThreads
 			}
 		}
+	} else {
+		// Process not found - reset all process-related fields
+		systemInfo.ProcessID = 0
+		systemInfo.ProcessMemoryUsage = 0
+		systemInfo.ProcessCPUUsage = 0
+		systemInfo.ProcessStartTime = time.Time{}
+		systemInfo.ProcessThreadCount = 0
 	}
 
 	// System-wide CPU usage
@@ -1021,6 +1031,9 @@ func collectSystemInfo() {
 	if time.Since(systemInfo.LastChecked) > 10*time.Minute {
 		go checkLatestVersion()
 	}
+	if time.Since(systemInfo.ControlLastChecked) > 10*time.Minute {
+		go checkControlLatestVersion()
+	}
 }
 
 // checkLatestVersion fetches the latest release from GitHub
@@ -1088,6 +1101,52 @@ func checkLatestVersion() {
 		systemInfo.UpdateAvailable = (currentVersion != latestTag && latestTag != "") ||
 			(currentVersion == latestTag && systemInfo.AISCatcherCommit != "" &&
 				systemInfo.LatestCommit != "" && systemInfo.AISCatcherCommit != systemInfo.LatestCommit)
+	}
+
+	cachedSysInfo.info = systemInfo
+}
+
+// checkControlLatestVersion fetches the latest commit from Control GitHub repo
+func checkControlLatestVersion() {
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	// Get the latest commit from main branch
+	resp, err := client.Get("https://api.github.com/repos/jvde-github/AIS-catcher-control/commits/main")
+	if err != nil {
+		log.Printf("Failed to check Control latest version: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("GitHub API returned status %d for Control repo", resp.StatusCode)
+		return
+	}
+
+	var commit struct {
+		SHA string `json:"sha"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil {
+		log.Printf("Failed to decode Control commit: %v", err)
+		return
+	}
+
+	cachedSysInfo.Lock()
+	defer cachedSysInfo.Unlock()
+
+	systemInfo.ControlLatestCommit = commit.SHA[:7] // First 7 chars
+	systemInfo.ControlLastChecked = time.Now()
+
+	// Check if update is available - compare current build version with latest commit
+	if systemInfo.BuildVersion != "" {
+		currentCommit := systemInfo.BuildVersion
+		// BuildVersion might be full commit or just short hash
+		if len(currentCommit) > 7 {
+			currentCommit = currentCommit[:7]
+		}
+		systemInfo.ControlUpdateAvailable = currentCommit != systemInfo.ControlLatestCommit
 	}
 
 	cachedSysInfo.info = systemInfo
