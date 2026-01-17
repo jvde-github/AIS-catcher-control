@@ -1076,21 +1076,16 @@ func checkLatestVersion() {
 	systemInfo.LatestVersionTag = release.TagName
 	systemInfo.LastChecked = time.Now()
 
-	// Get commit SHA from release
-	if release.TagName != "" {
-		// Fetch commit SHA for the tag
-		commitResp, err := client.Get(fmt.Sprintf("https://api.github.com/repos/jvde-github/AIS-catcher/git/refs/tags/%s", release.TagName))
-		if err == nil && commitResp.StatusCode == http.StatusOK {
-			var tagRef struct {
-				Object struct {
-					SHA string `json:"sha"`
-				} `json:"object"`
-			}
-			if json.NewDecoder(commitResp.Body).Decode(&tagRef) == nil {
-				systemInfo.LatestCommit = tagRef.Object.SHA[:8] // First 8 chars of commit
-			}
-			commitResp.Body.Close()
+	// Get the latest commit from main branch (not from the release tag)
+	commitResp, err := client.Get("https://api.github.com/repos/jvde-github/AIS-catcher/commits/main")
+	if err == nil && commitResp.StatusCode == http.StatusOK {
+		var commit struct {
+			SHA string `json:"sha"`
 		}
+		if json.NewDecoder(commitResp.Body).Decode(&commit) == nil {
+			systemInfo.LatestCommit = commit.SHA[:8] // First 8 chars of commit
+		}
+		commitResp.Body.Close()
 	}
 
 	// Check if update is available
