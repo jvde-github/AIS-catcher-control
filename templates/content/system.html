@@ -136,9 +136,7 @@
           <div id="currentVersionDisplay">
             <p class="text-sm font-medium text-slate-700 font-mono">{{if not .SystemInfo.AISCatcherAvailable}}&lt; 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
             {{if .SystemInfo.AISCatcherCommit}}
-              {{if ne .SystemInfo.AISCatcherBuildType "Source"}}
-                <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.AISCatcherCommit}}</p>
-              {{end}}
+              <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.AISCatcherCommit}}</p>
             {{end}}
           </div>
         </div>
@@ -147,11 +145,6 @@
           <div id="buildTypeDisplay">
             {{if .SystemInfo.AISCatcherBuildType}}
               <p class="text-sm font-medium text-slate-700 font-mono">{{.SystemInfo.AISCatcherBuildType}}</p>
-              {{if .SystemInfo.AISCatcherCommit}}
-                {{if ne .SystemInfo.AISCatcherBuildType "Source"}}
-                  <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.AISCatcherCommit}}</p>
-                {{end}}
-              {{end}}
             {{else}}
               <p class="text-sm font-medium text-slate-500">-</p>
             {{end}}
@@ -406,8 +399,7 @@
       const currentVersionEl = document.getElementById('currentVersionDisplay');
       if (currentVersionEl && data.ais_catcher_version) {
           let html = `<p class="text-sm font-medium text-slate-700 font-mono">${data.ais_catcher_version}</p>`;
-          // Show commit hash for prebuilt packages (not for Source builds)
-          if (data.ais_catcher_commit && data.ais_catcher_build_type && data.ais_catcher_build_type !== 'Source') {
+          if (data.ais_catcher_commit) {
               html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.ais_catcher_commit}</p>`;
           }
           currentVersionEl.innerHTML = html;
@@ -417,10 +409,6 @@
       const buildTypeEl = document.getElementById('buildTypeDisplay');
       if (buildTypeEl && data.ais_catcher_build_type) {
           let html = `<p class="text-sm font-medium text-slate-700 font-mono">${data.ais_catcher_build_type}</p>`;
-          // Show commit hash for prebuilt packages (not for Source builds)
-          if (data.ais_catcher_commit && data.ais_catcher_build_type !== 'Source') {
-              html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.ais_catcher_commit}</p>`;
-          }
           buildTypeEl.innerHTML = html;
       }
       
