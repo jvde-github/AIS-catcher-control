@@ -62,6 +62,7 @@ type SystemInfo struct {
 	AISCatcherVersionCode int       `json:"ais_catcher_version_code"` // Numeric version
 	AISCatcherDescribe    string    `json:"ais_catcher_describe"`     // Detailed version info
 	AISCatcherCommit      string    `json:"ais_catcher_commit"`       // Git commit hash
+	AISCatcherBuildType   string    `json:"ais_catcher_build_type"`   // Build type: "Source", "Build #123", etc.
 	AISCatcherAvailable   bool      `json:"ais_catcher_available"`    // Is AIS-catcher installed
 	OS                    string    `json:"os"`                       // Operating system
 	Architecture          string    `json:"architecture"`             // CPU architecture
@@ -77,11 +78,11 @@ type SystemInfo struct {
 	ProcessThreadCount    int32     `json:"process_thread_count"`
 	SystemCPUUsage        float64   `json:"system_cpu_usage"`    // percentage
 	SystemMemoryUsage     float64   `json:"system_memory_usage"` // percentage
-	LatestVersion         string    `json:"latest_version"`       // Latest release from GitHub
-	LatestVersionTag      string    `json:"latest_version_tag"`   // Latest tag
-	LatestCommit          string    `json:"latest_commit"`        // Latest commit hash from GitHub
-	UpdateAvailable       bool      `json:"update_available"`     // Whether update is available
-	LastChecked           time.Time `json:"last_checked"`         // Last time we checked GitHub
+	LatestVersion         string    `json:"latest_version"`      // Latest release from GitHub
+	LatestVersionTag      string    `json:"latest_version_tag"`  // Latest tag
+	LatestCommit          string    `json:"latest_commit"`       // Latest commit hash from GitHub
+	UpdateAvailable       bool      `json:"update_available"`    // Whether update is available
+	LastChecked           time.Time `json:"last_checked"`        // Last time we checked GitHub
 }
 
 type GitHubRelease struct {
@@ -913,20 +914,36 @@ func collectSystemInfo() {
 	systemInfo.OS = runtime.GOOS
 	systemInfo.Architecture = runtime.GOARCH
 
-	cmd := exec.Command("/usr/bin/AIS-catcher", "-h", "JSON")
-	output, err := cmd.CombinedOutput()
-	firstLine := strings.Split(string(output), "\n")[0]
+	// Skip version check if system action is running or service is down
+	// to avoid collision with binary file being updated
+	globalActionState.Lock()
+	isActionRunning := globalActionState.IsRunning
+	globalActionState.Unlock()
+	
+	serviceStatus := getServiceStatus()
+	systemInfo.ServiceStatus = serviceStatus
+	
+	// Only check version if no action is running or if service is running
+	skipVersionCheck := isActionRunning && serviceStatus != "active (running)"
+	
+	if skipVersionCheck {
+		// Keep existing version info during updates
+		log.Printf("Skipping version check - system action running and service down")
+	} else {
+		cmd := exec.Command("/usr/bin/AIS-catcher", "-h", "JSON")
+		output, err := cmd.CombinedOutput()
+		firstLine := strings.Split(string(output), "\n")[0]
 
-	if err != nil {
-		log.Printf("Command error: %v", err)
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			log.Printf("Exit error code: %d", exitErr.ExitCode())
-			systemInfo.AISCatcherAvailable = true
-			systemInfo.AISCatcherVersion = "v0.60 or earlier"
-			systemInfo.AISCatcherVersionCode = -1
-			systemInfo.AISCatcherDescribe = "Version before JSON support"
-		} else {
-			systemInfo.AISCatcherAvailable = false
+		if err != nil {
+			log.Printf("Command error: %v", err)
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				log.Printf("Exit error code: %d", exitErr.ExitCode())
+				systemInfo.AISCatcherAvailable = true
+				systemInfo.AISCatcherVersion = "v0.60 or earlier"
+				systemInfo.AISCatcherVersionCode = -1
+				systemInfo.AISCatcherDescribe = "Version before JSON support"
+			} else {
+				systemInfo.AISCatcherAvailable = false
 			systemInfo.AISCatcherVersion = "not installed"
 			systemInfo.AISCatcherVersionCode = 0
 			systemInfo.AISCatcherDescribe = "Not found in system"
@@ -944,18 +961,27 @@ func collectSystemInfo() {
 			systemInfo.AISCatcherVersion = jsonOutput["version"].(string)
 			systemInfo.AISCatcherVersionCode = int(jsonOutput["version_code"].(float64))
 			systemInfo.AISCatcherDescribe = jsonOutput["version_describe"].(string)
+
+		// Parse build type from describe string (format: v0.66-0-g1abc2def or v0.66-123-g1abc2def)
+		describe := systemInfo.AISCatcherDescribe
+		if idx := strings.LastIndex(describe, "-g"); idx != -1 {
+			systemInfo.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
 			
-			// Extract commit hash from describe string (format: v0.66-123-g1abc2def or v0.66)
-			describe := systemInfo.AISCatcherDescribe
-			if idx := strings.LastIndex(describe, "-g"); idx != -1 {
-				systemInfo.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
+			// Find the build number between version and -g
+			// Format: v0.66-123-g1abc2def
+			parts := strings.Split(describe[:idx], "-")
+			if len(parts) >= 2 {
+				buildNum := parts[len(parts)-1]
+				if buildNum == "0" {
+					systemInfo.AISCatcherBuildType = "Source"
+				} else {
+					systemInfo.AISCatcherBuildType = "#" + buildNum
+				}
+			}
+		}
 			}
 		}
 	}
-
-	// Get OS and Architecture
-	systemInfo.OS = runtime.GOOS
-	systemInfo.Architecture = runtime.GOARCH
 
 	// Get CPU Info
 	if cpuinfo, err := os.ReadFile("/proc/cpuinfo"); err == nil {
@@ -990,9 +1016,6 @@ func collectSystemInfo() {
 	if kernel, err := exec.Command("uname", "-r").Output(); err == nil {
 		systemInfo.KernelVersion = strings.TrimSpace(string(kernel))
 	}
-
-	// Get service status
-	systemInfo.ServiceStatus = getServiceStatus()
 
 	// Check for updates from GitHub (async, non-blocking)
 	if time.Since(systemInfo.LastChecked) > 10*time.Minute {
@@ -1052,7 +1075,7 @@ func checkLatestVersion() {
 	if systemInfo.AISCatcherAvailable && systemInfo.AISCatcherVersion != "" {
 		currentVersion := systemInfo.AISCatcherVersion
 		latestTag := strings.TrimPrefix(release.TagName, "v")
-		
+
 		// Extract version from current version string (e.g., "v0.66" from full string)
 		if strings.Contains(currentVersion, "v") {
 			parts := strings.Fields(currentVersion)
@@ -1060,11 +1083,11 @@ func checkLatestVersion() {
 				currentVersion = strings.TrimPrefix(parts[0], "v")
 			}
 		}
-		
+
 		// Check if versions differ OR if commits differ (for same version)
 		systemInfo.UpdateAvailable = (currentVersion != latestTag && latestTag != "") ||
-			(currentVersion == latestTag && systemInfo.AISCatcherCommit != "" && 
-			 systemInfo.LatestCommit != "" && systemInfo.AISCatcherCommit != systemInfo.LatestCommit)
+			(currentVersion == latestTag && systemInfo.AISCatcherCommit != "" &&
+				systemInfo.LatestCommit != "" && systemInfo.AISCatcherCommit != systemInfo.LatestCommit)
 	}
 
 	cachedSysInfo.info = systemInfo
@@ -2296,7 +2319,7 @@ func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 // systemStatusAPIHandler provides real-time system status as JSON
 func systemStatusAPIHandler(w http.ResponseWriter, r *http.Request) {
 	sysInfo := getCachedSystemInfo()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(sysInfo)
 }

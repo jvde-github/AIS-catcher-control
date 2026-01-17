@@ -97,7 +97,12 @@
 
   <!-- System Information Grid -->
   <div class="space-y-4 sm:space-y-6">
-    <h2 class="text-lg sm:text-xl font-semibold text-slate-800 px-1">System Diagnostics</h2>
+    <div class="relative px-1">
+      <h2 class="text-lg sm:text-xl font-semibold text-slate-800">System Diagnostics</h2>
+      <div class="mt-2 h-1 bg-slate-100 rounded-full overflow-hidden">
+        <div id="refreshProgress" class="h-full bg-slate-400 rounded-full" style="width: 0%; transition: none;"></div>
+      </div>
+    </div>
 
     <!-- AIS-catcher Information -->
     <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 overflow-hidden">
@@ -130,8 +135,8 @@
           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Version</p>
           <div id="currentVersionDisplay">
             <p class="text-sm font-medium text-slate-700 font-mono">{{if not .SystemInfo.AISCatcherAvailable}}&lt; 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
-            {{if .SystemInfo.AISCatcherCommit}}
-              <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.AISCatcherCommit}}</p>
+            {{if .SystemInfo.AISCatcherBuildType}}
+              <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.AISCatcherBuildType}}</p>
             {{end}}
           </div>
         </div>
@@ -153,10 +158,6 @@
               <p class="text-xs text-slate-400">Checking...</p>
             {{end}}
           </div>
-        </div>
-        <div class="sm:col-span-2 lg:col-span-4 border-t border-slate-50 pt-4 mt-2">
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Version Details</p>
-          <p class="text-xs text-slate-500 font-mono bg-slate-50 p-2 rounded border border-slate-100" id="versionDetails">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}No detailed version information available.{{else}}{{.SystemInfo.AISCatcherDescribe}}{{end}}</p>
         </div>
       </div>
     </div>
@@ -284,9 +285,13 @@
   function startStatusPolling() {
       if (statusPoller) return;
       
-      // Poll every 2 seconds for live system status
+      // Poll every 4 seconds for live system status (balanced for performance)
       updateLiveStatus(); // Initial update
-      statusPoller = setInterval(updateLiveStatus, 2000);
+      startRefreshAnimation(4000);
+      statusPoller = setInterval(() => {
+          updateLiveStatus();
+          startRefreshAnimation(4000);
+      }, 4000);
   }
 
   function stopStatusPolling() {
@@ -294,6 +299,22 @@
           clearInterval(statusPoller);
           statusPoller = null;
       }
+  }
+  
+  function startRefreshAnimation(duration) {
+      const progressBar = document.getElementById('refreshProgress');
+      if (!progressBar) return;
+      
+      // Reset animation
+      progressBar.style.transition = 'none';
+      progressBar.style.width = '0%';
+      
+      // Trigger reflow to restart animation
+      progressBar.offsetHeight;
+      
+      // Start animation
+      progressBar.style.transition = `width ${duration}ms linear`;
+      progressBar.style.width = '100%';
   }
 
   async function updateLiveStatus() {
@@ -303,7 +324,7 @@
           
           const data = await response.json();
           
-          // Update service status
+          // Update live status panel (shown during operations)
           const serviceEl = document.getElementById('serviceStatus');
           const serviceIndicator = document.getElementById('serviceIndicator');
           if (serviceEl && data.service_status) {
@@ -314,7 +335,7 @@
               }
           }
           
-          // Update version
+          // Update version in live panel
           const versionEl = document.getElementById('versionStatus');
           if (versionEl && data.ais_catcher_version) {
               versionEl.textContent = data.ais_catcher_version;
@@ -331,8 +352,62 @@
           if (memEl && data.process_memory_usage !== undefined) {
               memEl.textContent = data.process_memory_usage > 0 ? `${data.process_memory_usage.toFixed(0)} MB` : '-';
           }
+          
+          // ALSO update main diagnostic cards during operations
+          if (currentOperation) {
+              updateMainDiagnosticCards(data);
+          }
       } catch (error) {
           console.error('Failed to update live status:', error);
+      }
+  }
+  
+  function updateMainDiagnosticCards(data) {
+      // Update main service state display
+      const serviceStateEl = document.getElementById('serviceStateDisplay');
+      if (serviceStateEl && data.service_status) {
+          const isRunning = data.service_status === 'active (running)';
+          serviceStateEl.innerHTML = isRunning 
+              ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800"><svg class="w-2 h-2 mr-1 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"></circle></svg>Running</span>'
+              : `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 capitalize">${data.service_status}</span>`;
+      }
+      
+      // Update current version display
+      const currentVersionEl = document.getElementById('currentVersionDisplay');
+      if (currentVersionEl && data.ais_catcher_version) {
+          let html = `<p class="text-sm font-medium text-slate-700 font-mono">${data.ais_catcher_version}</p>`;
+          if (data.ais_catcher_build_type) {
+              html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.ais_catcher_build_type}</p>`;
+          }
+          currentVersionEl.innerHTML = html;
+      }
+      
+      // Update latest version and badge
+      const latestVersionEl = document.getElementById('latestVersionDisplay');
+      if (latestVersionEl && data.latest_version_tag) {
+          const color = data.update_available ? 'text-amber-600' : 'text-emerald-600';
+          let html = `<p class="text-sm font-medium font-mono"><span class="${color}">${data.latest_version_tag}</span></p>`;
+          if (data.latest_commit) {
+              html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.latest_commit}</p>`;
+          }
+          latestVersionEl.innerHTML = html;
+      }
+      
+      const updateBadge = document.getElementById('updateBadge');
+      const updateBadgeText = document.getElementById('updateBadgeText');
+      if (updateBadge && data.update_available !== undefined) {
+          if (data.update_available) {
+              updateBadge.classList.remove('hidden');
+              updateBadge.classList.add('inline-flex');
+              if (data.latest_version_tag && data.ais_catcher_version) {
+                  const currentVer = data.ais_catcher_version.replace('v', '').split(/[\s-]/)[0];
+                  const latestVer = data.latest_version_tag.replace('v', '');
+                  updateBadgeText.textContent = (currentVer !== latestVer) ? 'New Version Available' : 'Updates Available';
+              }
+          } else {
+              updateBadge.classList.add('hidden');
+              updateBadge.classList.remove('inline-flex');
+          }
       }
   }
 
@@ -457,15 +532,19 @@
           })
           .catch(console.error);
       
-      // Start polling for system info updates every 5 seconds (when not in operation)
+      // Start polling for system info updates every 6 seconds when idle (resource-efficient)
       setInterval(() => {
           if (!currentOperation) {
               updateSystemInfo();
+              startRefreshAnimation(6000);
           }
-      }, 5000);
+      }, 6000);
       
       // Initial system info update after page load
-      setTimeout(updateSystemInfo, 1000);
+      setTimeout(() => {
+          updateSystemInfo();
+          startRefreshAnimation(6000);
+      }, 1000);
   });
 
   async function updateSystemInfo() {
@@ -474,65 +553,7 @@
           if (!response.ok) return;
           
           const data = await response.json();
-          
-          // Update service state
-          const serviceStateEl = document.getElementById('serviceStateDisplay');
-          if (serviceStateEl && data.service_status) {
-              const isRunning = data.service_status === 'active (running)';
-              serviceStateEl.innerHTML = isRunning 
-                  ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800"><svg class="w-2 h-2 mr-1 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"></circle></svg>Running</span>'
-                  : `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 capitalize">${data.service_status}</span>`;
-          }
-          
-          // Update current version
-          const currentVersionEl = document.getElementById('currentVersionDisplay');
-          if (currentVersionEl && data.ais_catcher_version) {
-              let html = `<p class="text-sm font-medium text-slate-700 font-mono">${data.ais_catcher_version}</p>`;
-              if (data.ais_catcher_commit) {
-                  html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.ais_catcher_commit}</p>`;
-              }
-              currentVersionEl.innerHTML = html;
-          }
-          
-          // Update latest version
-          const latestVersionEl = document.getElementById('latestVersionDisplay');
-          if (latestVersionEl && data.latest_version_tag) {
-              const color = data.update_available ? 'text-amber-600' : 'text-emerald-600';
-              let html = `<p class="text-sm font-medium font-mono"><span class="${color}">${data.latest_version_tag}</span></p>`;
-              if (data.latest_commit) {
-                  html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.latest_commit}</p>`;
-              }
-              latestVersionEl.innerHTML = html;
-          }
-          
-          // Update version details
-          const versionDetailsEl = document.getElementById('versionDetails');
-          if (versionDetailsEl && data.ais_catcher_describe) {
-              versionDetailsEl.textContent = data.ais_catcher_describe;
-          }
-          
-          // Update badge
-          const updateBadge = document.getElementById('updateBadge');
-          const updateBadgeText = document.getElementById('updateBadgeText');
-          if (updateBadge && data.update_available !== undefined) {
-              if (data.update_available) {
-                  updateBadge.classList.remove('hidden');
-                  updateBadge.classList.add('inline-flex');
-                  // Determine if it's a major version update or commit update
-                  if (data.latest_version_tag && data.ais_catcher_version) {
-                      const currentVer = data.ais_catcher_version.replace('v', '').split(/[\\s-]/)[0];
-                      const latestVer = data.latest_version_tag.replace('v', '');
-                      if (currentVer !== latestVer) {
-                          updateBadgeText.textContent = 'New Version Available';
-                      } else {
-                          updateBadgeText.textContent = 'Updates Available';
-                      }
-                  }
-              } else {
-                  updateBadge.classList.add('hidden');
-                  updateBadge.classList.remove('inline-flex');
-              }
-          }
+          updateMainDiagnosticCards(data);
       } catch (error) {
           console.error('Failed to update system info:', error);
       }
