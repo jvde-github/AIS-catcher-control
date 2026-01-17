@@ -937,8 +937,8 @@ func collectSystemInfo() {
 	skipVersionCheck := isActionRunning && serviceStatus != "active (running)"
 
 	if skipVersionCheck {
-		// Keep existing version info during updates
-		log.Printf("Skipping version check - system action running and service down")
+		// Keep existing version info during updates - don't log repeatedly
+		// Version info is preserved from previous checks in systemInfo global
 	} else {
 		cmd := exec.Command("/usr/bin/AIS-catcher", "-h", "JSON")
 		output, err := cmd.CombinedOutput()
