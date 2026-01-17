@@ -133,7 +133,14 @@
         </div>
         <div>
           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Version</p>
-          <p class="text-sm font-medium text-slate-700 font-mono" id="currentVersionDisplay">{{if not .SystemInfo.AISCatcherAvailable}}&lt; 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
+          <div id="currentVersionDisplay">
+            <p class="text-sm font-medium text-slate-700 font-mono">{{if not .SystemInfo.AISCatcherAvailable}}&lt; 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
+            {{if .SystemInfo.AISCatcherCommit}}
+              {{if ne .SystemInfo.AISCatcherBuildType "Source"}}
+                <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.AISCatcherCommit}}</p>
+              {{end}}
+            {{end}}
+          </div>
         </div>
         <div>
           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Build Type</p>
@@ -398,7 +405,12 @@
       // Update current version display
       const currentVersionEl = document.getElementById('currentVersionDisplay');
       if (currentVersionEl && data.ais_catcher_version) {
-          currentVersionEl.textContent = data.ais_catcher_version;
+          let html = `<p class="text-sm font-medium text-slate-700 font-mono">${data.ais_catcher_version}</p>`;
+          // Show commit hash for prebuilt packages (not for Source builds)
+          if (data.ais_catcher_commit && data.ais_catcher_build_type && data.ais_catcher_build_type !== 'Source') {
+              html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.ais_catcher_commit}</p>`;
+          }
+          currentVersionEl.innerHTML = html;
       }
       
       // Update build type display
