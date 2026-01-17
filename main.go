@@ -58,34 +58,34 @@ var (
 )
 
 type SystemInfo struct {
-	AISCatcherVersion     string    `json:"ais_catcher_version"`      // Full version string
-	AISCatcherVersionCode int       `json:"ais_catcher_version_code"` // Numeric version
-	AISCatcherDescribe    string    `json:"ais_catcher_describe"`     // Detailed version info
-	AISCatcherCommit      string    `json:"ais_catcher_commit"`       // Git commit hash
-	AISCatcherBuildType   string    `json:"ais_catcher_build_type"`   // Build type: "Source", "Build #123", etc.
-	AISCatcherAvailable   bool      `json:"ais_catcher_available"`    // Is AIS-catcher installed
-	OS                    string    `json:"os"`                       // Operating system
-	Architecture          string    `json:"architecture"`             // CPU architecture
-	CPUInfo               string    `json:"cpu_info"`                 // CPU information
-	TotalMemory           uint64    `json:"total_memory"`             // Total system memory
-	KernelVersion         string    `json:"kernel_version"`           // Linux kernel version
-	ServiceStatus         string    `json:"service_status"`           // systemd service status
-	BuildVersion          string    `json:"build_version"`            // Git version/build info
-	ProcessID             int32     `json:"process_id"`
-	ProcessMemoryUsage    float64   `json:"process_memory_usage"` // in MB
-	ProcessCPUUsage       float64   `json:"process_cpu_usage"`    // percentage
-	ProcessStartTime      time.Time `json:"process_start_time"`
-	ProcessThreadCount    int32     `json:"process_thread_count"`
-	SystemCPUUsage        float64   `json:"system_cpu_usage"`    // percentage
-	SystemMemoryUsage     float64   `json:"system_memory_usage"` // percentage
-	LatestVersion         string    `json:"latest_version"`      // Latest release from GitHub
-	LatestVersionTag      string    `json:"latest_version_tag"`  // Latest tag
-	LatestCommit          string    `json:"latest_commit"`       // Latest commit hash from GitHub
-	UpdateAvailable       bool      `json:"update_available"`    // Whether update is available
-	LastChecked           time.Time `json:"last_checked"`        // Last time we checked GitHub
-	ControlLatestCommit   string    `json:"control_latest_commit"`   // Latest Control panel commit from GitHub
-	ControlUpdateAvailable bool     `json:"control_update_available"` // Whether Control panel update is available
-	ControlLastChecked    time.Time `json:"control_last_checked"`    // Last time we checked Control repo
+	AISCatcherVersion      string    `json:"ais_catcher_version"`      // Full version string
+	AISCatcherVersionCode  int       `json:"ais_catcher_version_code"` // Numeric version
+	AISCatcherDescribe     string    `json:"ais_catcher_describe"`     // Detailed version info
+	AISCatcherCommit       string    `json:"ais_catcher_commit"`       // Git commit hash
+	AISCatcherBuildType    string    `json:"ais_catcher_build_type"`   // Build type: "Source", "Build #123", etc.
+	AISCatcherAvailable    bool      `json:"ais_catcher_available"`    // Is AIS-catcher installed
+	OS                     string    `json:"os"`                       // Operating system
+	Architecture           string    `json:"architecture"`             // CPU architecture
+	CPUInfo                string    `json:"cpu_info"`                 // CPU information
+	TotalMemory            uint64    `json:"total_memory"`             // Total system memory
+	KernelVersion          string    `json:"kernel_version"`           // Linux kernel version
+	ServiceStatus          string    `json:"service_status"`           // systemd service status
+	BuildVersion           string    `json:"build_version"`            // Git version/build info
+	ProcessID              int32     `json:"process_id"`
+	ProcessMemoryUsage     float64   `json:"process_memory_usage"` // in MB
+	ProcessCPUUsage        float64   `json:"process_cpu_usage"`    // percentage
+	ProcessStartTime       time.Time `json:"process_start_time"`
+	ProcessThreadCount     int32     `json:"process_thread_count"`
+	SystemCPUUsage         float64   `json:"system_cpu_usage"`         // percentage
+	SystemMemoryUsage      float64   `json:"system_memory_usage"`      // percentage
+	LatestVersion          string    `json:"latest_version"`           // Latest release from GitHub
+	LatestVersionTag       string    `json:"latest_version_tag"`       // Latest tag
+	LatestCommit           string    `json:"latest_commit"`            // Latest commit hash from GitHub
+	UpdateAvailable        bool      `json:"update_available"`         // Whether update is available
+	LastChecked            time.Time `json:"last_checked"`             // Last time we checked GitHub
+	ControlLatestCommit    string    `json:"control_latest_commit"`    // Latest Control panel commit from GitHub
+	ControlUpdateAvailable bool      `json:"control_update_available"` // Whether Control panel update is available
+	ControlLastChecked     time.Time `json:"control_last_checked"`     // Last time we checked Control repo
 }
 
 type GitHubRelease struct {
@@ -929,13 +929,13 @@ func collectSystemInfo() {
 	globalActionState.Lock()
 	isActionRunning := globalActionState.IsRunning
 	globalActionState.Unlock()
-	
+
 	serviceStatus := getServiceStatus()
 	systemInfo.ServiceStatus = serviceStatus
-	
+
 	// Only check version if no action is running or if service is running
 	skipVersionCheck := isActionRunning && serviceStatus != "active (running)"
-	
+
 	if skipVersionCheck {
 		// Keep existing version info during updates
 		log.Printf("Skipping version check - system action running and service down")
@@ -954,41 +954,41 @@ func collectSystemInfo() {
 				systemInfo.AISCatcherDescribe = "Version before JSON support"
 			} else {
 				systemInfo.AISCatcherAvailable = false
-			systemInfo.AISCatcherVersion = "not installed"
-			systemInfo.AISCatcherVersionCode = 0
-			systemInfo.AISCatcherDescribe = "Not found in system"
-		}
-	} else {
-		var jsonOutput map[string]interface{}
-		if err := json.Unmarshal([]byte(firstLine), &jsonOutput); err != nil {
-			log.Printf("JSON unmarshal error: %v", err)
-			systemInfo.AISCatcherAvailable = true
-			systemInfo.AISCatcherVersion = "unknown"
-			systemInfo.AISCatcherVersionCode = -1
-			systemInfo.AISCatcherDescribe = "Invalid JSON output"
-		} else {
-			systemInfo.AISCatcherAvailable = true
-			systemInfo.AISCatcherVersion = jsonOutput["version"].(string)
-			systemInfo.AISCatcherVersionCode = int(jsonOutput["version_code"].(float64))
-			systemInfo.AISCatcherDescribe = jsonOutput["version_describe"].(string)
-
-		// Parse build type from describe string (format: v0.66-0-g1abc2def or v0.66-123-g1abc2def)
-		describe := systemInfo.AISCatcherDescribe
-		if idx := strings.LastIndex(describe, "-g"); idx != -1 {
-			systemInfo.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
-			
-			// Find the build number between version and -g
-			// Format: v0.66-123-g1abc2def
-			parts := strings.Split(describe[:idx], "-")
-			if len(parts) >= 2 {
-				buildNum := parts[len(parts)-1]
-				if buildNum == "0" {
-					systemInfo.AISCatcherBuildType = "Source"
-				} else {
-					systemInfo.AISCatcherBuildType = "#" + buildNum
-				}
+				systemInfo.AISCatcherVersion = "not installed"
+				systemInfo.AISCatcherVersionCode = 0
+				systemInfo.AISCatcherDescribe = "Not found in system"
 			}
-		}
+		} else {
+			var jsonOutput map[string]interface{}
+			if err := json.Unmarshal([]byte(firstLine), &jsonOutput); err != nil {
+				log.Printf("JSON unmarshal error: %v", err)
+				systemInfo.AISCatcherAvailable = true
+				systemInfo.AISCatcherVersion = "unknown"
+				systemInfo.AISCatcherVersionCode = -1
+				systemInfo.AISCatcherDescribe = "Invalid JSON output"
+			} else {
+				systemInfo.AISCatcherAvailable = true
+				systemInfo.AISCatcherVersion = jsonOutput["version"].(string)
+				systemInfo.AISCatcherVersionCode = int(jsonOutput["version_code"].(float64))
+				systemInfo.AISCatcherDescribe = jsonOutput["version_describe"].(string)
+
+				// Parse build type from describe string (format: v0.66-0-g1abc2def or v0.66-123-g1abc2def)
+				describe := systemInfo.AISCatcherDescribe
+				if idx := strings.LastIndex(describe, "-g"); idx != -1 {
+					systemInfo.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
+
+					// Find the build number between version and -g
+					// Format: v0.66-123-g1abc2def
+					parts := strings.Split(describe[:idx], "-")
+					if len(parts) >= 2 {
+						buildNum := parts[len(parts)-1]
+						if buildNum == "0" {
+							systemInfo.AISCatcherBuildType = "Source"
+						} else {
+							systemInfo.AISCatcherBuildType = "#" + buildNum
+						}
+					}
+				}
 			}
 		}
 	}
@@ -2375,6 +2375,38 @@ func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// updateCheckHandler provides update status with 15-minute caching
+func updateCheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check if we need to refresh version info (15 minute cache)
+	cachedSysInfo.RLock()
+	needAISCatcherCheck := time.Since(systemInfo.LastChecked) > 15*time.Minute
+	needControlCheck := time.Since(systemInfo.ControlLastChecked) > 15*time.Minute
+	cachedSysInfo.RUnlock()
+
+	if needAISCatcherCheck {
+		go checkLatestVersion()
+	}
+	if needControlCheck {
+		go checkControlLatestVersion()
+	}
+
+	// Return current update status
+	info := getCachedSystemInfo()
+	response := map[string]interface{}{
+		"ais_catcher_update_available": info.UpdateAvailable,
+		"ais_catcher_available":        info.AISCatcherAvailable,
+		"ais_catcher_current":          info.AISCatcherVersion,
+		"ais_catcher_latest":           info.LatestVersionTag,
+		"control_update_available":     info.ControlUpdateAvailable,
+		"control_current":              info.BuildVersion,
+		"control_latest":               info.ControlLatestCommit,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
 // systemStatusAPIHandler provides real-time system status as JSON
 func systemStatusAPIHandler(w http.ResponseWriter, r *http.Request) {
 	sysInfo := getCachedSystemInfo()
@@ -2499,6 +2531,7 @@ func main() {
 	http.HandleFunc("/editjson", authMiddleware(editConfigJSONHandler))
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
 	http.HandleFunc("/system", authMiddleware(systemInfoHandler))
+	http.HandleFunc("/api/update-check", authMiddleware(updateCheckHandler))
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
 	http.HandleFunc("/system-action-status", authMiddleware(systemActionStatusHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
