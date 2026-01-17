@@ -981,10 +981,26 @@ func collectSystemInfo() {
 				systemInfo.AISCatcherVersionCode = int(jsonOutput["version_code"].(float64))
 				systemInfo.AISCatcherDescribe = jsonOutput["version_describe"].(string)
 
+				// Try to get commit directly from JSON if available
+				if commitVal, ok := jsonOutput["commit"]; ok {
+					if commitStr, ok := commitVal.(string); ok && commitStr != "" {
+						systemInfo.AISCatcherCommit = commitStr
+						if len(commitStr) > 8 {
+							systemInfo.AISCatcherCommit = commitStr[:8]
+						}
+					}
+				}
+
 				// Parse build type from describe string (format: v0.66-0-g1abc2def or v0.66-123-g1abc2def)
 				describe := systemInfo.AISCatcherDescribe
 				if idx := strings.LastIndex(describe, "-g"); idx != -1 {
-					systemInfo.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
+					// If we didn't get commit from JSON, extract from describe
+					if systemInfo.AISCatcherCommit == "" {
+						systemInfo.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
+						if len(systemInfo.AISCatcherCommit) > 8 {
+							systemInfo.AISCatcherCommit = systemInfo.AISCatcherCommit[:8]
+						}
+					}
 
 					// Find the build number between version and -g
 					// Format: v0.66-123-g1abc2def
@@ -992,11 +1008,14 @@ func collectSystemInfo() {
 					if len(parts) >= 2 {
 						buildNum := parts[len(parts)-1]
 						if buildNum == "0" {
-							systemInfo.AISCatcherBuildType = "Source"
+							systemInfo.AISCatcherBuildType = "source"
 						} else {
-							systemInfo.AISCatcherBuildType = "#" + buildNum
+							systemInfo.AISCatcherBuildType = "package (#" + buildNum + ")"
 						}
 					}
+				} else if systemInfo.AISCatcherCommit == "" {
+					// If no -g in describe and no commit from JSON, it's a release build
+					systemInfo.AISCatcherBuildType = "Release"
 				}
 			}
 		}
@@ -1103,7 +1122,7 @@ func checkLatestVersion() {
 
 		// For Source builds, only check commit hash
 		// For prebuilt packages, check version OR commit
-		if systemInfo.AISCatcherBuildType == "Source" {
+		if systemInfo.AISCatcherBuildType == "source" {
 			// Source build: only suggest update if commit differs
 			systemInfo.UpdateAvailable = systemInfo.AISCatcherCommit != "" &&
 				systemInfo.LatestCommit != "" &&
