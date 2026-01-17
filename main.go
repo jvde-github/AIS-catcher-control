@@ -434,6 +434,15 @@ func broadcastResult(msgType, content string) {
 		// Let's just clear the map here since everyone is done.
 		delete(globalActionState.Subscribers, ch)
 	}
+
+	// Refresh system info after action completes to get updated version
+	go func() {
+		time.Sleep(2 * time.Second) // Brief delay to ensure any file writes are complete
+		cachedSysInfo.Lock()
+		cachedSysInfo.lastFetch = time.Time{} // Force cache refresh
+		cachedSysInfo.Unlock()
+		getCachedSystemInfo() // Trigger immediate refresh
+	}()
 }
 
 func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
