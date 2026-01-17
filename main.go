@@ -61,6 +61,7 @@ type SystemInfo struct {
 	AISCatcherVersion     string    `json:"ais_catcher_version"`      // Full version string
 	AISCatcherVersionCode int       `json:"ais_catcher_version_code"` // Numeric version
 	AISCatcherDescribe    string    `json:"ais_catcher_describe"`     // Detailed version info
+	AISCatcherCommit      string    `json:"ais_catcher_commit"`       // Git commit hash
 	AISCatcherAvailable   bool      `json:"ais_catcher_available"`    // Is AIS-catcher installed
 	OS                    string    `json:"os"`                       // Operating system
 	Architecture          string    `json:"architecture"`             // CPU architecture
@@ -76,9 +77,30 @@ type SystemInfo struct {
 	ProcessThreadCount    int32     `json:"process_thread_count"`
 	SystemCPUUsage        float64   `json:"system_cpu_usage"`    // percentage
 	SystemMemoryUsage     float64   `json:"system_memory_usage"` // percentage
+	LatestVersion         string    `json:"latest_version"`       // Latest release from GitHub
+	LatestVersionTag      string    `json:"latest_version_tag"`   // Latest tag
+	LatestCommit          string    `json:"latest_commit"`        // Latest commit hash from GitHub
+	UpdateAvailable       bool      `json:"update_available"`     // Whether update is available
+	LastChecked           time.Time `json:"last_checked"`         // Last time we checked GitHub
+}
+
+type GitHubRelease struct {
+	TagName string `json:"tag_name"`
+	Name    string `json:"name"`
+}
+
+type CachedSystemInfo struct {
+	sync.RWMutex
+	info      SystemInfo
+	lastFetch time.Time
+	cacheTTL  time.Duration
 }
 
 var templates *template.Template
+
+var cachedSysInfo = &CachedSystemInfo{
+	cacheTTL: 3 * time.Second, // Cache for 3 seconds
+}
 
 type LogMessage struct {
 	Source  string `json:"source"`
@@ -828,6 +850,31 @@ func findAISCatcherPID() (int32, error) {
 	return 0, fmt.Errorf("AIS-catcher process not found")
 }
 
+// getCachedSystemInfo returns cached system info or fetches new if expired
+func getCachedSystemInfo() SystemInfo {
+	cachedSysInfo.RLock()
+	if time.Since(cachedSysInfo.lastFetch) < cachedSysInfo.cacheTTL {
+		info := cachedSysInfo.info
+		cachedSysInfo.RUnlock()
+		return info
+	}
+	cachedSysInfo.RUnlock()
+
+	// Need to fetch new data
+	cachedSysInfo.Lock()
+	defer cachedSysInfo.Unlock()
+
+	// Double-check after acquiring write lock
+	if time.Since(cachedSysInfo.lastFetch) < cachedSysInfo.cacheTTL {
+		return cachedSysInfo.info
+	}
+
+	collectSystemInfo()
+	cachedSysInfo.info = systemInfo
+	cachedSysInfo.lastFetch = time.Now()
+	return systemInfo
+}
+
 func collectSystemInfo() {
 
 	systemInfo.BuildVersion = buildVersion
@@ -897,6 +944,12 @@ func collectSystemInfo() {
 			systemInfo.AISCatcherVersion = jsonOutput["version"].(string)
 			systemInfo.AISCatcherVersionCode = int(jsonOutput["version_code"].(float64))
 			systemInfo.AISCatcherDescribe = jsonOutput["version_describe"].(string)
+			
+			// Extract commit hash from describe string (format: v0.66-123-g1abc2def or v0.66)
+			describe := systemInfo.AISCatcherDescribe
+			if idx := strings.LastIndex(describe, "-g"); idx != -1 {
+				systemInfo.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
+			}
 		}
 	}
 
@@ -940,6 +993,81 @@ func collectSystemInfo() {
 
 	// Get service status
 	systemInfo.ServiceStatus = getServiceStatus()
+
+	// Check for updates from GitHub (async, non-blocking)
+	if time.Since(systemInfo.LastChecked) > 10*time.Minute {
+		go checkLatestVersion()
+	}
+}
+
+// checkLatestVersion fetches the latest release from GitHub
+func checkLatestVersion() {
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	resp, err := client.Get("https://api.github.com/repos/jvde-github/AIS-catcher/releases/latest")
+	if err != nil {
+		log.Printf("Failed to check latest version: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("GitHub API returned status %d", resp.StatusCode)
+		return
+	}
+
+	var release GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		log.Printf("Failed to decode GitHub release: %v", err)
+		return
+	}
+
+	cachedSysInfo.Lock()
+	defer cachedSysInfo.Unlock()
+
+	systemInfo.LatestVersion = release.Name
+	systemInfo.LatestVersionTag = release.TagName
+	systemInfo.LastChecked = time.Now()
+
+	// Get commit SHA from release
+	if release.TagName != "" {
+		// Fetch commit SHA for the tag
+		commitResp, err := client.Get(fmt.Sprintf("https://api.github.com/repos/jvde-github/AIS-catcher/git/refs/tags/%s", release.TagName))
+		if err == nil && commitResp.StatusCode == http.StatusOK {
+			var tagRef struct {
+				Object struct {
+					SHA string `json:"sha"`
+				} `json:"object"`
+			}
+			if json.NewDecoder(commitResp.Body).Decode(&tagRef) == nil {
+				systemInfo.LatestCommit = tagRef.Object.SHA[:8] // First 8 chars of commit
+			}
+			commitResp.Body.Close()
+		}
+	}
+
+	// Check if update is available
+	if systemInfo.AISCatcherAvailable && systemInfo.AISCatcherVersion != "" {
+		currentVersion := systemInfo.AISCatcherVersion
+		latestTag := strings.TrimPrefix(release.TagName, "v")
+		
+		// Extract version from current version string (e.g., "v0.66" from full string)
+		if strings.Contains(currentVersion, "v") {
+			parts := strings.Fields(currentVersion)
+			if len(parts) > 0 {
+				currentVersion = strings.TrimPrefix(parts[0], "v")
+			}
+		}
+		
+		// Check if versions differ OR if commits differ (for same version)
+		systemInfo.UpdateAvailable = (currentVersion != latestTag && latestTag != "") ||
+			(currentVersion == latestTag && systemInfo.AISCatcherCommit != "" && 
+			 systemInfo.LatestCommit != "" && systemInfo.AISCatcherCommit != systemInfo.LatestCommit)
+	}
+
+	cachedSysInfo.info = systemInfo
 }
 
 func init() {
@@ -2132,22 +2260,45 @@ type SystemInfoTemplate struct {
 }
 
 func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
-	collectSystemInfo()
+	// Return immediately with cached data (even if stale) for fast page load
+	cachedSysInfo.RLock()
+	sysInfo := cachedSysInfo.info
+	if sysInfo.BuildVersion == "" {
+		// First time, need to collect at least basic info
+		cachedSysInfo.RUnlock()
+		sysInfo = getCachedSystemInfo()
+	} else {
+		cachedSysInfo.RUnlock()
+		// Trigger async refresh if data is getting old
+		if time.Since(cachedSysInfo.lastFetch) > cachedSysInfo.cacheTTL {
+			go func() {
+				getCachedSystemInfo() // Refresh in background
+			}()
+		}
+	}
 
-	memoryGB := float64(systemInfo.TotalMemory) / 1073741824.0
+	memoryGB := float64(sysInfo.TotalMemory) / 1073741824.0
 
 	err := templates.ExecuteTemplate(w, "layout.html", map[string]interface{}{
 		"CssVersion":      cssVersion,
 		"JsVersion":       jsVersion,
 		"Title":           "System Information",
 		"ContentTemplate": "system",
-		"SystemInfo":      systemInfo,
+		"SystemInfo":      sysInfo,
 		"MemoryGB":        memoryGB,
 	})
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Printf("Template execution error: %v", err)
 	}
+}
+
+// systemStatusAPIHandler provides real-time system status as JSON
+func systemStatusAPIHandler(w http.ResponseWriter, r *http.Request) {
+	sysInfo := getCachedSystemInfo()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sysInfo)
 }
 
 func main() {
@@ -2269,6 +2420,7 @@ func main() {
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
 	http.HandleFunc("/system-action-status", authMiddleware(systemActionStatusHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
+	http.HandleFunc("/api/system-status", authMiddleware(systemStatusAPIHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
 	http.HandleFunc("/tcp-servers", authMiddleware(makeConfigHandler("TCP Servers", "tcp-servers")))
 

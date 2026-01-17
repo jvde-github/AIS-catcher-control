@@ -14,11 +14,11 @@
         <div class="relative flex-1">
           <select id="actionSelect" class="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 px-3 sm:px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent shadow-sm text-sm sm:text-base">
             <option value="" disabled selected>Select an operation...</option>
-            <option value="ais-update-prebuilt">upgrade AIS-catcher</option>
-            <option value="control-update">upgrade control tool</option>
-            <option value="update-all">upgrade all (AIS-catcher + control)</option>
-            <option value="update-all-reboot">upgrade all & reboot</option>
-            <option value="system-update">update system (apt-get)</option>
+            <option value="ais-update-prebuilt">update AIS-catcher (prebuilt binary)</option>
+            <option value="control-update">update control tool</option>
+            <option value="update-all">update all (AIS-catcher + control)</option>
+            <option value="update-all-reboot">update all & reboot</option>
+            <option value="system-update">upgrade system packages (apt)</option>
             <option value="system-reboot">system reboot</option>
             <option value="system-halt">system halt</option>
             <option value="ais-update-source">build AIS-catcher from source</option>
@@ -42,11 +42,36 @@
         <div class="bg-slate-900 rounded-none sm:rounded-lg overflow-hidden border-x-0 sm:border-x border border-slate-700 shadow-inner">
           <div class="flex items-center justify-between px-3 sm:px-4 py-2 bg-slate-800 border-b border-slate-700">
             <div class="flex items-center gap-2">
-              <div class="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-slate-600"></div>
+              <div class="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-slate-600 animate-pulse" id="terminalIndicator"></div>
               <h4 class="text-[10px] sm:text-xs font-mono text-slate-300" id="progressTitle">Terminal</h4>
             </div>
             <span class="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] uppercase font-bold tracking-wide rounded bg-slate-700 text-slate-300" id="progressStatus">Ready</span>
           </div>
+          
+          <!-- Live System Status During Operation -->
+          <div id="liveStatus" class="hidden px-3 sm:px-4 py-2 bg-slate-800/50 border-b border-slate-700 grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] sm:text-xs">
+            <div class="flex items-center gap-1.5">
+              <div class="w-1.5 h-1.5 rounded-full bg-emerald-500" id="serviceIndicator"></div>
+              <span class="text-slate-400">Service:</span>
+              <span class="text-slate-300 font-mono" id="serviceStatus">-</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              <span class="text-slate-400">Version:</span>
+              <span class="text-slate-300 font-mono" id="versionStatus">-</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+              <span class="text-slate-400">CPU:</span>
+              <span class="text-slate-300 font-mono" id="cpuStatus">-</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path></svg>
+              <span class="text-slate-400">Memory:</span>
+              <span class="text-slate-300 font-mono" id="memStatus">-</span>
+            </div>
+          </div>
+          
           <div class="h-48 sm:h-64 overflow-auto p-3 sm:p-4 font-mono text-[11px] sm:text-xs leading-relaxed text-slate-300" id="progressOutput" style="white-space: pre;"></div>
         </div>
       </div>
@@ -76,35 +101,62 @@
 
     <!-- AIS-catcher Information -->
     <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 overflow-hidden">
-      <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50">
+      <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
         <h3 class="text-sm sm:text-base font-medium text-slate-700">AIS-catcher Application</h3>
+        <span id="updateBadge" class="hidden items-center px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+          <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+          <span id="updateBadgeText">Update Available</span>
+        </span>
       </div>
       <div class="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <div>
           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Installed</p>
-          <p class="text-sm font-medium text-slate-700">{{if .SystemInfo.AISCatcherAvailable}}<span class="text-emerald-600">Yes</span>{{else}}<span class="text-rose-600">No</span>{{end}}</p>
+          <p class="text-sm font-medium text-slate-700" id="installedStatus">{{if .SystemInfo.AISCatcherAvailable}}<span class="text-emerald-600">Yes</span>{{else}}<span class="text-rose-600">No</span>{{end}}</p>
         </div>
         <div>
           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Service State</p>
-          <div class="text-sm font-medium text-slate-700">
+          <div class="text-sm font-medium text-slate-700" id="serviceStateDisplay">
             {{if eq .SystemInfo.ServiceStatus "active (running)"}}
-              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">Running</span>
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
+                <svg class="w-2 h-2 mr-1 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"></circle></svg>
+                Running
+              </span>
             {{else}}
               <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 capitalize">{{.SystemInfo.ServiceStatus}}</span>
             {{end}}
           </div>
         </div>
         <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Version</p>
-          <p class="text-sm font-medium text-slate-700 font-mono">{{if not .SystemInfo.AISCatcherAvailable}}&lt; 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Version</p>
+          <div id="currentVersionDisplay">
+            <p class="text-sm font-medium text-slate-700 font-mono">{{if not .SystemInfo.AISCatcherAvailable}}&lt; 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
+            {{if .SystemInfo.AISCatcherCommit}}
+              <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.AISCatcherCommit}}</p>
+            {{end}}
+          </div>
         </div>
         <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Build Code</p>
-          <p class="text-sm font-medium text-slate-700 font-mono">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}N/A{{else}}{{.SystemInfo.AISCatcherVersionCode}}{{end}}</p>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Latest Version</p>
+          <div id="latestVersionDisplay">
+            {{if .SystemInfo.LatestVersionTag}}
+              <p class="text-sm font-medium font-mono">
+                {{if .SystemInfo.UpdateAvailable}}
+                  <span class="text-amber-600">{{.SystemInfo.LatestVersionTag}}</span>
+                {{else}}
+                  <span class="text-emerald-600">{{.SystemInfo.LatestVersionTag}}</span>
+                {{end}}
+              </p>
+              {{if .SystemInfo.LatestCommit}}
+                <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.LatestCommit}}</p>
+              {{end}}
+            {{else}}
+              <p class="text-xs text-slate-400">Checking...</p>
+            {{end}}
+          </div>
         </div>
         <div class="sm:col-span-2 lg:col-span-4 border-t border-slate-50 pt-4 mt-2">
           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Version Details</p>
-          <p class="text-xs text-slate-500 font-mono bg-slate-50 p-2 rounded border border-slate-100">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}No detailed version information available.{{else}}{{.SystemInfo.AISCatcherDescribe}}{{end}}</p>
+          <p class="text-xs text-slate-500 font-mono bg-slate-50 p-2 rounded border border-slate-100" id="versionDetails">{{if or (not .SystemInfo.AISCatcherAvailable) (eq .SystemInfo.AISCatcherVersionCode -1)}}No detailed version information available.{{else}}{{.SystemInfo.AISCatcherDescribe}}{{end}}</p>
         </div>
       </div>
     </div>
@@ -183,13 +235,21 @@
 <script>
   let currentOperation = null;
   let currentAction = null;
+  let statusPoller = null;
 
   function showProgress(show = true) {
       const display = document.getElementById('progressDisplay');
+      const liveStatus = document.getElementById('liveStatus');
       const executeButton = document.getElementById('executeButton');
+      const terminalIndicator = document.getElementById('terminalIndicator');
       
       if (show) {
           display.classList.remove('hidden');
+          liveStatus.classList.remove('hidden');
+          
+          // Start polling for live system status
+          startStatusPolling();
+          
           // Visual disable
           executeButton.disabled = true;
           executeButton.classList.add('opacity-70', 'cursor-not-allowed', 'bg-slate-600');
@@ -202,6 +262,14 @@
             Processing...
           `;
       } else {
+          // Stop polling
+          stopStatusPolling();
+          
+          // Stop pulse animation
+          if (terminalIndicator) {
+              terminalIndicator.classList.remove('animate-pulse');
+          }
+          
           // Revert button
           executeButton.disabled = false;
           executeButton.classList.remove('opacity-70', 'cursor-not-allowed', 'bg-slate-600');
@@ -210,6 +278,61 @@
             <span>Execute</span>
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
           `;
+      }
+  }
+
+  function startStatusPolling() {
+      if (statusPoller) return;
+      
+      // Poll every 2 seconds for live system status
+      updateLiveStatus(); // Initial update
+      statusPoller = setInterval(updateLiveStatus, 2000);
+  }
+
+  function stopStatusPolling() {
+      if (statusPoller) {
+          clearInterval(statusPoller);
+          statusPoller = null;
+      }
+  }
+
+  async function updateLiveStatus() {
+      try {
+          const response = await fetch('/api/system-status');
+          if (!response.ok) return;
+          
+          const data = await response.json();
+          
+          // Update service status
+          const serviceEl = document.getElementById('serviceStatus');
+          const serviceIndicator = document.getElementById('serviceIndicator');
+          if (serviceEl && data.service_status) {
+              const isRunning = data.service_status === 'active (running)';
+              serviceEl.textContent = isRunning ? 'Running' : 'Stopped';
+              if (serviceIndicator) {
+                  serviceIndicator.className = `w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-500' : 'bg-slate-500'}`;
+              }
+          }
+          
+          // Update version
+          const versionEl = document.getElementById('versionStatus');
+          if (versionEl && data.ais_catcher_version) {
+              versionEl.textContent = data.ais_catcher_version;
+          }
+          
+          // Update CPU
+          const cpuEl = document.getElementById('cpuStatus');
+          if (cpuEl && data.process_cpu_usage !== undefined) {
+              cpuEl.textContent = data.process_cpu_usage > 0 ? `${data.process_cpu_usage.toFixed(1)}%` : '-';
+          }
+          
+          // Update Memory
+          const memEl = document.getElementById('memStatus');
+          if (memEl && data.process_memory_usage !== undefined) {
+              memEl.textContent = data.process_memory_usage > 0 ? `${data.process_memory_usage.toFixed(0)} MB` : '-';
+          }
+      } catch (error) {
+          console.error('Failed to update live status:', error);
       }
   }
 
@@ -313,6 +436,7 @@
 
   // Check status on load
   document.addEventListener('DOMContentLoaded', () => {
+      // Check if any operation is running
       fetch('/system-action-status')
           .then(response => response.json())
           .then(data => {
@@ -332,7 +456,87 @@
               }
           })
           .catch(console.error);
+      
+      // Start polling for system info updates every 5 seconds (when not in operation)
+      setInterval(() => {
+          if (!currentOperation) {
+              updateSystemInfo();
+          }
+      }, 5000);
+      
+      // Initial system info update after page load
+      setTimeout(updateSystemInfo, 1000);
   });
+
+  async function updateSystemInfo() {
+      try {
+          const response = await fetch('/api/system-status');
+          if (!response.ok) return;
+          
+          const data = await response.json();
+          
+          // Update service state
+          const serviceStateEl = document.getElementById('serviceStateDisplay');
+          if (serviceStateEl && data.service_status) {
+              const isRunning = data.service_status === 'active (running)';
+              serviceStateEl.innerHTML = isRunning 
+                  ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800"><svg class="w-2 h-2 mr-1 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"></circle></svg>Running</span>'
+                  : `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 capitalize">${data.service_status}</span>`;
+          }
+          
+          // Update current version
+          const currentVersionEl = document.getElementById('currentVersionDisplay');
+          if (currentVersionEl && data.ais_catcher_version) {
+              let html = `<p class="text-sm font-medium text-slate-700 font-mono">${data.ais_catcher_version}</p>`;
+              if (data.ais_catcher_commit) {
+                  html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.ais_catcher_commit}</p>`;
+              }
+              currentVersionEl.innerHTML = html;
+          }
+          
+          // Update latest version
+          const latestVersionEl = document.getElementById('latestVersionDisplay');
+          if (latestVersionEl && data.latest_version_tag) {
+              const color = data.update_available ? 'text-amber-600' : 'text-emerald-600';
+              let html = `<p class="text-sm font-medium font-mono"><span class="${color}">${data.latest_version_tag}</span></p>`;
+              if (data.latest_commit) {
+                  html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.latest_commit}</p>`;
+              }
+              latestVersionEl.innerHTML = html;
+          }
+          
+          // Update version details
+          const versionDetailsEl = document.getElementById('versionDetails');
+          if (versionDetailsEl && data.ais_catcher_describe) {
+              versionDetailsEl.textContent = data.ais_catcher_describe;
+          }
+          
+          // Update badge
+          const updateBadge = document.getElementById('updateBadge');
+          const updateBadgeText = document.getElementById('updateBadgeText');
+          if (updateBadge && data.update_available !== undefined) {
+              if (data.update_available) {
+                  updateBadge.classList.remove('hidden');
+                  updateBadge.classList.add('inline-flex');
+                  // Determine if it's a major version update or commit update
+                  if (data.latest_version_tag && data.ais_catcher_version) {
+                      const currentVer = data.ais_catcher_version.replace('v', '').split(/[\\s-]/)[0];
+                      const latestVer = data.latest_version_tag.replace('v', '');
+                      if (currentVer !== latestVer) {
+                          updateBadgeText.textContent = 'New Version Available';
+                      } else {
+                          updateBadgeText.textContent = 'Updates Available';
+                      }
+                  }
+              } else {
+                  updateBadge.classList.add('hidden');
+                  updateBadge.classList.remove('inline-flex');
+              }
+          }
+      } catch (error) {
+          console.error('Failed to update system info:', error);
+      }
+  }
 
   function connectSSE(action) {
       if (currentOperation) return;
