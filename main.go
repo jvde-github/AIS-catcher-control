@@ -440,6 +440,8 @@ func broadcastResult(msgType, content string) {
 		time.Sleep(2 * time.Second) // Brief delay to ensure any file writes are complete
 		cachedSysInfo.Lock()
 		cachedSysInfo.lastFetch = time.Time{} // Force cache refresh
+		systemInfo.LastChecked = time.Time{}  // Force version check
+		systemInfo.ControlLastChecked = time.Time{} // Force control version check
 		cachedSysInfo.Unlock()
 		getCachedSystemInfo() // Trigger immediate refresh
 	}()
