@@ -987,8 +987,8 @@ func collectSystemInfo() {
 				if commitVal, ok := jsonOutput["commit"]; ok {
 					if commitStr, ok := commitVal.(string); ok && commitStr != "" {
 						systemInfo.AISCatcherCommit = commitStr
-						if len(commitStr) > 8 {
-							systemInfo.AISCatcherCommit = commitStr[:8]
+						if len(commitStr) > 7 {
+							systemInfo.AISCatcherCommit = commitStr[:7]
 						}
 					}
 				}
@@ -999,8 +999,8 @@ func collectSystemInfo() {
 					// If we didn't get commit from JSON, extract from describe
 					if systemInfo.AISCatcherCommit == "" {
 						systemInfo.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
-						if len(systemInfo.AISCatcherCommit) > 8 {
-							systemInfo.AISCatcherCommit = systemInfo.AISCatcherCommit[:8]
+						if len(systemInfo.AISCatcherCommit) > 7 {
+							systemInfo.AISCatcherCommit = systemInfo.AISCatcherCommit[:7]
 						}
 					}
 
@@ -1104,7 +1104,7 @@ func checkLatestVersion() {
 			SHA string `json:"sha"`
 		}
 		if json.NewDecoder(commitResp.Body).Decode(&commit) == nil {
-			systemInfo.LatestCommit = commit.SHA[:8] // First 8 chars of commit
+			systemInfo.LatestCommit = commit.SHA[:7] // First 7 chars of commit (git standard)
 		}
 		commitResp.Body.Close()
 	}
