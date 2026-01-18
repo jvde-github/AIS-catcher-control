@@ -318,7 +318,17 @@
                         } else if (data.ais_catcher_update_available) {
                             aisCatcherCard.classList.remove('hidden');
                             aisCatcherTitle.textContent = 'AIS-catcher Update Available';
-                            aisCatcherInfo.textContent = `${data.ais_catcher_current || 'Current'} → ${data.ais_catcher_latest || 'Latest'}`;
+                            // Show commit info if versions are the same
+                            const currentVersion = data.ais_catcher_current || 'Current';
+                            const latestVersion = data.ais_catcher_latest || 'Latest';
+                            const currentCommit = data.ais_catcher_current_commit;
+                            const latestCommit = data.ais_catcher_latest_commit;
+                            
+                            if (currentCommit && latestCommit && currentCommit !== latestCommit) {
+                                aisCatcherInfo.textContent = `${currentVersion} (${currentCommit}) → ${latestVersion} (${latestCommit})`;
+                            } else {
+                                aisCatcherInfo.textContent = `${currentVersion} → ${latestVersion}`;
+                            }
                             hasUpdates = true;
                         } else {
                             aisCatcherCard.classList.add('hidden');

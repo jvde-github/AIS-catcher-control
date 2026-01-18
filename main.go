@@ -2431,6 +2431,8 @@ func updateCheckHandler(w http.ResponseWriter, r *http.Request) {
 		"ais_catcher_available":        info.AISCatcherAvailable,
 		"ais_catcher_current":          info.AISCatcherVersion,
 		"ais_catcher_latest":           info.LatestVersionTag,
+		"ais_catcher_current_commit":   info.AISCatcherCommit,
+		"ais_catcher_latest_commit":    info.LatestCommit,
 		"control_update_available":     info.ControlUpdateAvailable,
 		"control_current":              info.BuildVersion,
 		"control_latest":               info.ControlLatestCommit,
