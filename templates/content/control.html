@@ -153,7 +153,7 @@
             <!-- Auto-Start Toggle -->
             <div class="flex items-center justify-between pt-4 border-t border-slate-100">
                 <span class="text-sm text-slate-600">Auto-start configuration</span>
-                <div class="flex space-x-2">
+                <div id="enable-disable-buttons" class="flex space-x-2">
                     <button id="enable-button" data-action="enable"
                         class="hidden px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors action-button">
                         Enable
@@ -478,10 +478,14 @@
 
             const handleAction = (e) => {
                 const button = e.target.closest('.action-button');
-                if (!button || operationInProgress) return;
+                if (!button || operationInProgress) {
+                    console.log('Button click ignored:', {button: !!button, operationInProgress});
+                    return;
+                }
 
                 e.preventDefault();
                 const action = button.getAttribute('data-action');
+                console.log('Action triggered:', action);
 
                 // Set operation in progress
                 operationInProgress = true;
@@ -494,8 +498,12 @@
                 document.querySelectorAll('.action-button').forEach(btn => btn.disabled = true);
 
                 fetch(`/api/${action}`, { method: 'POST' })
-                    .then(response => response.json())
+                    .then(response => {
+                        console.log('Response status:', response.status);
+                        return response.json();
+                    })
                     .then(data => {
+                        console.log('Response data:', data);
                         if (data.status) {
                             // For restart, wait a bit longer before allowing button updates
                             if (action === 'restart') {
@@ -508,12 +516,13 @@
                                 updateStatus();
                             }
                         } else {
-                            alert('Action failed');
+                            alert('Action failed: ' + (data.message || 'Unknown error'));
                             operationInProgress = false;
                             updateStatus();
                         }
                     })
                     .catch(err => {
+                        console.error('Error:', err);
                         alert('Error: ' + err);
                         operationInProgress = false;
                         updateStatus();
@@ -521,7 +530,7 @@
             };
 
             document.getElementById('action-buttons').addEventListener('click', handleAction);
-            document.querySelector('.bg-white.rounded-xl').addEventListener('click', handleAction);
+            document.getElementById('enable-disable-buttons').addEventListener('click', handleAction);
 
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) { if (eventSource) eventSource.close(); }
