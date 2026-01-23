@@ -505,13 +505,14 @@
                     .then(data => {
                         console.log('Response data:', data);
                         if (data.status) {
-                            // For restart, wait a bit longer before allowing button updates
-                            if (action === 'restart') {
+                            // For enable/disable and restart, add delay for systemd state to update
+                            if (action === 'restart' || action === 'enable' || action === 'disable') {
                                 setTimeout(() => {
                                     operationInProgress = false;
                                     updateStatus();
-                                }, 3000);
+                                }, action === 'restart' ? 3000 : 1000);
                             } else {
+                                // Reset operation flag before updateStatus so buttons get enabled
                                 operationInProgress = false;
                                 updateStatus();
                             }
