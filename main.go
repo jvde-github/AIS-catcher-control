@@ -1057,12 +1057,22 @@ func collectSystemInfo() {
 		systemInfo.KernelVersion = strings.TrimSpace(string(kernel))
 	}
 
-	// Check for updates from GitHub (async, non-blocking)
+	// Check for updates from GitHub
+	// On first check (LastChecked is zero), do synchronous check for immediate data availability
+	// Subsequent checks are async to avoid blocking
 	if time.Since(systemInfo.LastChecked) > 10*time.Minute {
-		go checkLatestVersion()
+		if systemInfo.LastChecked.IsZero() {
+			checkLatestVersion() // Synchronous on first call
+		} else {
+			go checkLatestVersion() // Async on subsequent calls
+		}
 	}
 	if time.Since(systemInfo.ControlLastChecked) > 10*time.Minute {
-		go checkControlLatestVersion()
+		if systemInfo.ControlLastChecked.IsZero() {
+			checkControlLatestVersion() // Synchronous on first call
+		} else {
+			go checkControlLatestVersion() // Async on subsequent calls
+		}
 	}
 }
 

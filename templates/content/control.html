@@ -293,7 +293,8 @@
             setInterval(updateStatus, 3000);
 
             // Check for updates on page load and every 15 minutes
-            checkForUpdates();
+            // Add 3-second delay on initial load to allow backend version check to complete
+            setTimeout(checkForUpdates, 3000);
             setInterval(checkForUpdates, 15 * 60 * 1000);
 
             function checkForUpdates() {

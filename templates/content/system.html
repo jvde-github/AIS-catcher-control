@@ -376,10 +376,9 @@
               memEl.textContent = data.process_memory_usage > 0 ? `${data.process_memory_usage.toFixed(0)} MB` : '-';
           }
           
-          // ALSO update main diagnostic cards during operations
-          if (currentOperation) {
-              updateMainDiagnosticCards(data);
-          }
+          // Always update main diagnostic cards to reflect current system state
+          // (not just during operations, so version updates are visible after completion)
+          updateMainDiagnosticCards(data);
       } catch (error) {
           console.error('Failed to update live status:', error);
       }
