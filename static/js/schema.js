@@ -1277,5 +1277,13 @@ const receiverSchema = {
             field: "input",
             value: "NMEA2000"
         }
+    },
+    verbose: {
+        name: "verbose",
+        label: "Verbose",
+        type: "toggle",
+        jsonpath: "verbose",
+        defaultValue: false,
+        width: 25
     }
 };
