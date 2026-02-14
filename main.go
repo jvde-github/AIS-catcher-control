@@ -439,8 +439,8 @@ func broadcastResult(msgType, content string) {
 	go func() {
 		time.Sleep(2 * time.Second) // Brief delay to ensure any file writes are complete
 		cachedSysInfo.Lock()
-		cachedSysInfo.lastFetch = time.Time{} // Force cache refresh
-		systemInfo.LastChecked = time.Time{}  // Force version check
+		cachedSysInfo.lastFetch = time.Time{}       // Force cache refresh
+		systemInfo.LastChecked = time.Time{}        // Force version check
 		systemInfo.ControlLastChecked = time.Time{} // Force control version check
 		cachedSysInfo.Unlock()
 		getCachedSystemInfo() // Trigger immediate refresh
@@ -926,8 +926,9 @@ func collectSystemInfo() {
 		systemInfo.ProcessThreadCount = 0
 	}
 
-	// System-wide CPU usage
-	if cpuPercent, err := cpu.Percent(time.Second, false); err == nil && len(cpuPercent) > 0 {
+	// System-wide CPU usage - use non-blocking measurement (0 duration)
+	// This returns the average since the last call instead of blocking
+	if cpuPercent, err := cpu.Percent(0, false); err == nil && len(cpuPercent) > 0 {
 		systemInfo.SystemCPUUsage = cpuPercent[0]
 	}
 
@@ -1058,21 +1059,13 @@ func collectSystemInfo() {
 	}
 
 	// Check for updates from GitHub
-	// On first check (LastChecked is zero), do synchronous check for immediate data availability
-	// Subsequent checks are async to avoid blocking
+	// Always use async to avoid blocking page load (especially on slow/unreachable GitHub API)
+	// JavaScript on system page will fetch this data via AJAX after page loads
 	if time.Since(systemInfo.LastChecked) > 10*time.Minute {
-		if systemInfo.LastChecked.IsZero() {
-			checkLatestVersion() // Synchronous on first call
-		} else {
-			go checkLatestVersion() // Async on subsequent calls
-		}
+		go checkLatestVersion()
 	}
 	if time.Since(systemInfo.ControlLastChecked) > 10*time.Minute {
-		if systemInfo.ControlLastChecked.IsZero() {
-			checkControlLatestVersion() // Synchronous on first call
-		} else {
-			go checkControlLatestVersion() // Async on subsequent calls
-		}
+		go checkControlLatestVersion()
 	}
 }
 
