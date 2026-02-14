@@ -190,6 +190,12 @@ func getActionScript(action string) (string, bool) {
         echo "AIS-catcher Control installation completed"`
 		reload = true
 
+	case "control-restart":
+		script = `echo "Restarting AIS-catcher Control..." && \
+        systemctl restart ais-catcher-control && \
+        echo "AIS-catcher Control restarted successfully"`
+		reload = true
+
 	case "system-reboot":
 		script = `echo "Initiating system reboot..." && reboot`
 		reload = true
