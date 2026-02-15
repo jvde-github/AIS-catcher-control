@@ -508,9 +508,12 @@ const sharingSchema = {
     _create_key_button: {
         name: '_create_key_button',
         type: 'button',
-        buttonLabel: 'Create New Sharing Key',
+        buttonLabel: (dataContext) => {
+            const sharingKey = dataContext.sharing_key || '';
+            return sharingKey.trim() === '' ? 'Create New Sharing Key' : 'Edit Station Details';
+        },
         buttonIcon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8L10 14" /></svg>',
-        onClick: () => window.open('https://aiscatcher.org/register', '_blank'),
+        onClick: 'openSharingManagement',
         skipSave: true  // Don't save this field to JSON
     }
 };

@@ -60,6 +60,18 @@
             if (typeof window.openDeviceSelectionModal === 'function') window.openDeviceSelectionModal();
         },
         openRegistration: () => window.open('https://aiscatcher.org/register', '_blank'),
+        openSharingManagement: () => {
+            // Get the current value of the sharing_key field
+            const sharingKeyInput = document.querySelector('[data-field="sharing_key"] input');
+            const sharingKey = sharingKeyInput ? sharingKeyInput.value.trim() : '';
+            
+            // If empty, open registration page; otherwise, open edit station page
+            if (sharingKey === '') {
+                window.open('https://aiscatcher.org/register', '_blank');
+            } else {
+                window.open(`https://www.aiscatcher.org/editstation/${sharingKey}`, '_blank');
+            }
+        },
         clearSerial: () => {
             // Clear the serial field when device type changes
             const serialField = document.querySelector('[data-field="serial"] input');
@@ -341,7 +353,8 @@
                 ? el('button', Styles.button, {
                     type: 'button',
                     onClick: () => (typeof field.onClick === 'function' ? field.onClick : ActionRegistry[field.onClick])?.()
-                }, field.buttonIcon && el('span', '', { innerHTML: field.buttonIcon }), field.buttonLabel || 'Action')
+                }, field.buttonIcon && el('span', '', { innerHTML: field.buttonIcon }), 
+                typeof field.buttonLabel === 'function' ? field.buttonLabel(dataContext) : (field.buttonLabel || 'Action'))
                 : this.createInput(field, val, newValue => { onUpdateCallback(field, newValue); onDepencyCheck(); });
 
             if (field.withButton && field.type !== 'button') {
@@ -362,6 +375,13 @@
 
             if (field.type !== 'button') container.appendChild(el('label', Styles.label, {}, field.label));
             container.appendChild(inputEl);
+            
+            // Store reference for dynamic button updates
+            if (field.type === 'button' && typeof field.buttonLabel === 'function') {
+                container._buttonEl = inputEl;
+                container._field = field;
+                container._dataContext = dataContext;
+            }
             if (field.description) container.appendChild(el('p', Styles.description, {}, field.description));
 
             return container;
@@ -551,6 +571,9 @@
             else target[field.name] = value;
             App.setUnsaved(true);
             this.updateJsonDebug();
+            
+            // Update dynamic button labels
+            this.updateDynamicButtons(index);
         }
 
         addItem() {
@@ -574,6 +597,28 @@
                 App.setUnsaved(true);
                 this.updateJsonDebug();
             }
+        }
+
+        updateDynamicButtons(index) {
+            // Find all dynamic buttons in the current context and update their labels
+            const containers = this.config.isList 
+                ? this.container.querySelectorAll('.bg-white.rounded-lg.border.border-slate-200')
+                : [this.container];
+            
+            const targetContainer = this.config.isList ? containers[index] : containers[0];
+            if (!targetContainer) return;
+            
+            const dataContext = this.config.isList ? this.data[index] : this.data;
+            
+            targetContainer.querySelectorAll('[data-field]').forEach(fieldContainer => {
+                if (fieldContainer._buttonEl && fieldContainer._field && typeof fieldContainer._field.buttonLabel === 'function') {
+                    const newLabel = fieldContainer._field.buttonLabel(dataContext);
+                    const textNode = Array.from(fieldContainer._buttonEl.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
+                    if (textNode) {
+                        textNode.textContent = newLabel;
+                    }
+                }
+            });
         }
 
         updateJsonDebug() {
