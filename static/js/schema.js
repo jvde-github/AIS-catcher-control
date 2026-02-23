@@ -34,6 +34,12 @@ const httpSchema = {
         required: true,
         placeholder: 'https://example.com'
     },
+    description: {
+        name: 'description',
+        label: 'Description',
+        type: 'text',
+        placeholder: 'Optional description'
+    },
     id: {
         name: 'id',
         label: 'ID',
@@ -289,6 +295,12 @@ const mqttSchema = {
         type: 'text',
         required: true,
         placeholder: 'mqtt[s]://[user:pass@]host[:port]'
+    },
+    description: {
+        name: 'description',
+        label: 'Description',
+        type: 'text',
+        placeholder: 'Optional description'
     },
     topic: {
         name: 'topic',
