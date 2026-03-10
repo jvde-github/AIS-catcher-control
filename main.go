@@ -1283,6 +1283,9 @@ type Config struct {
 	ConfigJSONHash  uint32 `json:"config_json_hash"`
 	Docker          bool   `json:"docker"`
 	LicenseAccepted bool   `json:"license_accepted"`
+	HTTPS           bool   `json:"https"`
+	CertFile        string `json:"cert_file"`
+	KeyFile         string `json:"key_file"`
 }
 
 var (
@@ -2601,7 +2604,16 @@ func main() {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	})
 
-	addr := ":" + getConfig().Port
-	log.Printf("Server started at %s\n", addr)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	cfg := getConfig()
+	addr := ":" + cfg.Port
+	if cfg.HTTPS {
+		if cfg.CertFile == "" || cfg.KeyFile == "" {
+			log.Fatal("HTTPS is enabled but cert_file and/or key_file are not set in control.json")
+		}
+		log.Printf("Server started at https://localhost%s\n", addr)
+		log.Fatal(http.ListenAndServeTLS(addr, cfg.CertFile, cfg.KeyFile, nil))
+	} else {
+		log.Printf("Server started at http://localhost%s\n", addr)
+		log.Fatal(http.ListenAndServe(addr, nil))
+	}
 }
