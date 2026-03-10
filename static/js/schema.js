@@ -1302,3 +1302,27 @@ const receiverSchema = {
         width: 25
     }
 };
+
+// General Settings Schema (top-level config.json fields)
+const generalSettingsSchema = {
+    timeout: {
+        name: 'timeout',
+        label: 'Timeout (seconds)',
+        type: 'off-number',
+        jsonpath: 'timeout',
+        defaultValue: false,
+        defaultNumber: 60,
+        min: 1,
+        max: 3600,
+        step: 1,
+        unit: 's'
+    },
+    timeout_only_when_idle: {
+        name: 'timeout_only_when_idle',
+        label: 'Only When Idle',
+        type: 'toggle',
+        jsonpath: 'timeout_only_when_idle',
+        defaultValue: false,
+        width: 50
+    }
+};

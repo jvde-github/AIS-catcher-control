@@ -1,0 +1,20 @@
+{{ define "general-settings" }}
+<div id="general-settings" class="max-w-2xl mx-auto px-0 md:px-4 lg:px-6 py-0 md:py-4 lg:py-6 md:bg-white md:rounded-lg md:shadow-md">
+    <h3 class="hidden md:block text-lg text-xl font-semibold text-gray-800 mb-4">General Settings</h3>
+
+    <div id="general-settings-container" class="space-y-6">
+        <!-- Settings will be dynamically populated here -->
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        createSimpleConfigManager({
+            schema: generalSettingsSchema,
+            containerId: 'general-settings-container',
+            saveButtonId: 'save-button',
+            title: 'General Settings'
+        });
+    });
+</script>
+{{ end }}

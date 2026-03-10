@@ -1225,6 +1225,7 @@ func init() {
 		"templates/content/edit-config-json.html",
 		"templates/content/edit-config-cmd.html",
 		"templates/content/tcp-servers.html",
+		"templates/content/general-settings.html",
 		"templates/license.html",
 		"templates/webviewer.html",
 	)
@@ -2583,6 +2584,7 @@ func main() {
 	http.HandleFunc("/api/system-status", authMiddleware(systemStatusAPIHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
 	http.HandleFunc("/tcp-servers", authMiddleware(makeConfigHandler("TCP Servers", "tcp-servers")))
+	http.HandleFunc("/general", authMiddleware(makeConfigHandler("General Settings", "general-settings")))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if !getConfig().LicenseAccepted {

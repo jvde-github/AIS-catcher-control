@@ -284,6 +284,42 @@
                 return el('div', '', {}, selector, sliderContainer);
             }
 
+            if (type === 'off-number') {
+                const isOff = currentValue === false || currentValue === 'false';
+                const numVal = isOff ? (field.defaultNumber || field.min || 0) : parseFloat(currentValue);
+                const display = el('span', Styles.sliderDisplay, {}, isNaN(numVal) ? 0 : numVal);
+                const unit = field.unit ? el('span', 'text-xs sm:text-sm text-slate-600 ml-1', {}, field.unit) : null;
+
+                const slider = el('input', Styles.slider, {
+                    type: 'range',
+                    min: field.min, max: field.max, step: field.step || 1,
+                    value: isNaN(numVal) ? (field.defaultNumber || field.min || 0) : numVal,
+                    onInput: (e) => {
+                        display.textContent = e.target.value;
+                        if (selector.querySelector('select').value === 'custom') onUpdate(parseFloat(e.target.value));
+                    }
+                });
+
+                const sliderChildren = [slider, display];
+                if (unit) sliderChildren.push(unit);
+                const sliderContainer = el('div', `${Styles.sliderContainer} mt-2`, { style: isOff ? 'display: none' : 'display: flex' }, ...sliderChildren);
+
+                const selector = el('div', 'relative', {},
+                    el('select', `${Styles.input} ${Styles.select}`, {
+                        onChange: (e) => {
+                            const isNowOff = e.target.value === 'off';
+                            sliderContainer.style.display = isNowOff ? 'none' : 'flex';
+                            onUpdate(isNowOff ? false : parseFloat(slider.value));
+                        }
+                    },
+                        el('option', '', { value: 'off', selected: isOff }, 'Off'),
+                        el('option', '', { value: 'custom', selected: !isOff }, `Custom`)
+                    ),
+                    el('div', Styles.chevron, {}, Icons.chevronDown())
+                );
+                return el('div', '', {}, selector, sliderContainer);
+            }
+
             if (type === 'switch-integer') {
                 const isOff = currentValue === false || currentValue === 'false';
                 const numVal = isOff ? (field.defaultInteger || field.min || 0) : parseInt(currentValue, 10);
