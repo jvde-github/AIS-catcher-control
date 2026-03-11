@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	sdbus "github.com/coreos/go-systemd/v22/dbus"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/process"
 )
@@ -223,6 +224,16 @@ func getActionScript(action string) (string, bool) {
         echo "Step 3: Preparing for reboot..." && \
         reboot`
 		reload = true
+
+	case "watchdog-on":
+		script = `echo "Arming reboot on failure..." && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- --set-reboot-on-failure && \
+        echo "Reboot on failure armed"`
+
+	case "watchdog-off":
+		script = `echo "Disarming reboot on failure..." && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- --unset-reboot-on-failure && \
+        echo "Reboot on failure disarmed"`
 	}
 
 	return script, reload
@@ -1720,7 +1731,17 @@ func formatDuration(d time.Duration) string {
 
 func controlService(action string) error {
 	cmd := exec.Command("systemctl", action, "ais-catcher.service")
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	// After manual start/stop/restart, reset the failed counter so that
+	// user-initiated actions don't count toward the start-limit burst
+	// which could accidentally trigger a reboot-on-failure.
+	if action == "start" || action == "stop" || action == "restart" {
+		_ = exec.Command("systemctl", "reset-failed", "ais-catcher.service").Run()
+	}
+	return nil
 }
 
 func getServiceEnabled() (bool, error) {
@@ -2464,6 +2485,75 @@ func systemStatusAPIHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(sysInfo)
 }
 
+// ---------------------------------------------------------------------------
+// Watchdog — monitors ais-catcher restarts via D-Bus and reboots on failure
+// ---------------------------------------------------------------------------
+
+type WatchdogInfo struct {
+	Enabled               bool   `json:"enabled"`
+	NRestarts             uint32 `json:"n_restarts"`
+	ActiveState           string `json:"active_state"`
+	SubState              string `json:"sub_state"`
+	StartLimitBurst       uint32 `json:"start_limit_burst"`
+	StartLimitIntervalSec uint64 `json:"start_limit_interval_sec"`
+	StartLimitHit         bool   `json:"start_limit_hit"`
+}
+
+func getWatchdogInfo() WatchdogInfo {
+	info := WatchdogInfo{}
+
+	if getConfig().Docker {
+		return info
+	}
+
+	conn, err := sdbus.NewWithContext(context.Background())
+	if err != nil {
+		log.Printf("Watchdog: failed to connect to D-Bus: %v", err)
+		return info
+	}
+	defer conn.Close()
+
+	// Service-type properties (NRestarts)
+	svcProps, err := conn.GetUnitTypePropertiesContext(context.Background(), "ais-catcher.service", "Service")
+	if err == nil {
+		if val, ok := svcProps["NRestarts"].(uint32); ok {
+			info.NRestarts = val
+		}
+	}
+
+	// Unit properties
+	unitProps, err := conn.GetUnitPropertiesContext(context.Background(), "ais-catcher.service")
+	if err == nil {
+		if val, ok := unitProps["ActiveState"].(string); ok {
+			info.ActiveState = val
+		}
+		if val, ok := unitProps["SubState"].(string); ok {
+			info.SubState = val
+		}
+		if val, ok := unitProps["StartLimitBurst"].(uint32); ok {
+			info.StartLimitBurst = val
+		}
+		if val, ok := unitProps["StartLimitIntervalUSec"].(uint64); ok {
+			info.StartLimitIntervalSec = val / 1_000_000 // µs → s
+		}
+	}
+
+	// Armed when StartLimitBurst > 0 (script sets burst=0 to disable)
+	info.Enabled = info.StartLimitBurst > 0
+	info.StartLimitHit = info.SubState == "start-limit-hit"
+	return info
+}
+
+func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	info := getWatchdogInfo()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(info)
+}
+
 func main() {
 
 	resetHashes := flag.Bool("overwrite-hashes", false, "Reset configuration file hashes")
@@ -2585,6 +2675,7 @@ func main() {
 	http.HandleFunc("/system-action-status", authMiddleware(systemActionStatusHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
 	http.HandleFunc("/api/system-status", authMiddleware(systemStatusAPIHandler))
+	http.HandleFunc("/api/watchdog-status", authMiddleware(watchdogStatusHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
 	http.HandleFunc("/tcp-servers", authMiddleware(makeConfigHandler("TCP Servers", "tcp-servers")))
 	http.HandleFunc("/general", authMiddleware(makeConfigHandler("General Settings", "general-settings")))

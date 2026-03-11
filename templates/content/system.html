@@ -23,6 +23,8 @@
             <option value="system-reboot">system reboot</option>
             <option value="system-halt">system halt</option>
             <option value="ais-update-source">build AIS-catcher from source</option>
+            <option value="watchdog-on">arm reboot on failure</option>
+            <option value="watchdog-off">disarm reboot on failure</option>
 
           </select>
           <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
@@ -74,6 +76,41 @@
           </div>
           
           <div class="h-48 sm:h-64 overflow-auto p-3 sm:p-4 font-mono text-[11px] sm:text-xs leading-relaxed text-slate-300" id="progressOutput" style="white-space: pre;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Watchdog Monitor -->
+  <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 overflow-hidden">
+    <div class="px-4 sm:px-5 py-3 sm:py-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+        <h2 class="text-sm sm:text-base font-semibold text-slate-700">Reboot on Failure</h2>
+      </div>
+      <span id="watchdogBadge" class="hidden items-center px-2 py-1 rounded-full text-xs font-semibold"></span>
+    </div>
+
+    <div class="p-4 sm:p-6">
+      <p class="text-xs text-slate-500 mb-4">When armed, systemd will automatically reboot the system if AIS-catcher fails to start more than the configured number of times within the time window. Use System Actions above to arm or disarm.</p>
+
+      <!-- Status Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restarts</p>
+          <p class="text-sm font-medium text-slate-700 font-mono" id="wdNRestarts">-</p>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Limit</p>
+          <p class="text-sm font-medium text-slate-700 font-mono" id="wdStartLimitBurst">-</p>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Window</p>
+          <p class="text-sm font-medium text-slate-700 font-mono" id="wdStartLimitInterval">-</p>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">State</p>
+          <p class="text-sm font-medium text-slate-700" id="wdSubState">-</p>
         </div>
       </div>
     </div>
@@ -535,7 +572,9 @@
           'update-all': 'Full Upgrade (AIS-catcher + Control)',
           'update-all-reboot': 'Full Upgrade & Reboot',
           'system-reboot': 'System Reboot',
-          'system-halt': 'System Shutdown'
+          'system-halt': 'System Shutdown',
+          'watchdog-on': 'Arm Reboot on Failure',
+          'watchdog-off': 'Disarm Reboot on Failure'
       };
       return titles[action] || 'System Operation';
   }
@@ -567,6 +606,7 @@
       setInterval(() => {
           if (!currentOperation) {
               updateSystemInfo();
+              loadWatchdogStatus();
               startRefreshAnimation(6000);
           }
       }, 6000);
@@ -574,6 +614,7 @@
       // Initial system info update after page load
       setTimeout(() => {
           updateSystemInfo();
+          loadWatchdogStatus();
           startRefreshAnimation(6000);
       }, 1000);
   });
@@ -636,5 +677,68 @@
           }
       };
   }
+
+  // -----------------------------------------------------------------------
+  // Watchdog
+  // -----------------------------------------------------------------------
+
+  async function loadWatchdogStatus() {
+      try {
+          const response = await fetch('/api/watchdog-status');
+          if (!response.ok) return;
+          const data = await response.json();
+          updateWatchdogUI(data);
+      } catch (error) {
+          console.error('Failed to load watchdog status:', error);
+      }
+  }
+
+  function updateWatchdogUI(data) {
+      const badge = document.getElementById('watchdogBadge');
+      if (!badge) return;
+
+      // Badge
+      badge.className = 'items-center px-2 py-1 rounded-full text-xs font-semibold border inline-flex';
+      if (data.start_limit_hit) {
+          badge.classList.add('bg-rose-100', 'text-rose-800', 'border-rose-200');
+          badge.textContent = 'Start Limit Hit';
+      } else if (data.enabled) {
+          badge.classList.add('bg-emerald-100', 'text-emerald-800', 'border-emerald-200');
+          badge.textContent = 'Armed';
+      } else {
+          badge.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200');
+          badge.textContent = 'Disarmed';
+      }
+
+      // Stats
+      const nEl = document.getElementById('wdNRestarts');
+      if (nEl) nEl.textContent = data.n_restarts !== undefined ? data.n_restarts : '-';
+
+      const burstEl = document.getElementById('wdStartLimitBurst');
+      if (burstEl) burstEl.textContent = data.start_limit_burst ? data.start_limit_burst + ' restarts' : '-';
+
+      const intEl = document.getElementById('wdStartLimitInterval');
+      if (intEl) intEl.textContent = data.start_limit_interval_sec ? formatWatchdogInterval(data.start_limit_interval_sec) : '-';
+
+      const stateEl = document.getElementById('wdSubState');
+      if (stateEl) {
+          if (data.sub_state === 'start-limit-hit') {
+              stateEl.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-800">start-limit-hit</span>';
+          } else if (data.sub_state === 'running') {
+              stateEl.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">' + data.sub_state + '</span>';
+          } else if (data.sub_state) {
+              stateEl.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">' + data.sub_state + '</span>';
+          } else {
+              stateEl.textContent = '-';
+          }
+      }
+  }
+
+  function formatWatchdogInterval(seconds) {
+      if (seconds >= 3600) return Math.floor(seconds / 3600) + 'h';
+      if (seconds >= 60) return Math.floor(seconds / 60) + ' min';
+      return seconds + 's';
+  }
+
 </script>
 {{end}}
