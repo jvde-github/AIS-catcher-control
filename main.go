@@ -2475,7 +2475,7 @@ func systemStatusAPIHandler(w http.ResponseWriter, r *http.Request) {
 func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	props := []string{"NRestarts", "StartLimitBurst", "StartLimitIntervalUSec", "SubState", "OnFailure"}
+	props := []string{"NRestarts", "StartLimitBurst", "StartLimitIntervalUSec", "SubState", "OnFailure", "Result", "ExecMainStatus", "RestartUSec"}
 	cmd := exec.Command("systemctl", append([]string{"show", "ais-catcher.service"}, func() []string {
 		var args []string
 		for _, p := range props {
@@ -2498,21 +2498,36 @@ func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	nRestarts, _ := strconv.Atoi(values["NRestarts"])
 	burst, _ := strconv.Atoi(values["StartLimitBurst"])
-	intervalUSec, _ := strconv.ParseInt(values["StartLimitIntervalUSec"], 10, 64)
-	intervalSec := int(intervalUSec / 1_000_000)
+	interval := values["StartLimitIntervalUSec"]
+	if interval == "infinity" {
+		interval = ""
+	}
 	subState := values["SubState"]
 	onFailure := values["OnFailure"]
 
-	enabled := strings.Contains(onFailure, "reboot.target")
+	enabled := strings.Contains(onFailure, "reboot")
 	startLimitHit := subState == "start-limit-hit"
 
+	exitCode, _ := strconv.Atoi(values["ExecMainStatus"])
+	restartDelay := values["RestartUSec"]
+	if restartDelay == "infinity" {
+		restartDelay = ""
+	}
+	result := values["Result"]
+	if result == "success" {
+		result = ""
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"enabled":                  enabled,
-		"start_limit_hit":          startLimitHit,
-		"n_restarts":               nRestarts,
-		"start_limit_burst":        burst,
-		"start_limit_interval_sec": intervalSec,
-		"sub_state":                subState,
+		"enabled":               enabled,
+		"start_limit_hit":       startLimitHit,
+		"n_restarts":            nRestarts,
+		"start_limit_burst":     burst,
+		"start_limit_interval":  interval,
+		"sub_state":             subState,
+		"result":                result,
+		"exit_code":             exitCode,
+		"restart_delay":         restartDelay,
 	})
 }
 

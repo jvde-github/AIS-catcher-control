@@ -112,6 +112,18 @@
           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">State</p>
           <p class="text-sm font-medium text-slate-700" id="wdSubState">-</p>
         </div>
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Last Result</p>
+          <p class="text-sm font-medium text-slate-700 font-mono" id="wdResult">-</p>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Exit Code</p>
+          <p class="text-sm font-medium text-slate-700 font-mono" id="wdExitCode">-</p>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restart Delay</p>
+          <p class="text-sm font-medium text-slate-700 font-mono" id="wdRestartDelay">-</p>
+        </div>
       </div>
     </div>
   </div>
@@ -718,7 +730,7 @@
       if (burstEl) burstEl.textContent = data.start_limit_burst ? data.start_limit_burst + ' restarts' : '-';
 
       const intEl = document.getElementById('wdStartLimitInterval');
-      if (intEl) intEl.textContent = data.start_limit_interval_sec ? formatWatchdogInterval(data.start_limit_interval_sec) : '-';
+      if (intEl) intEl.textContent = data.start_limit_interval || '-';
 
       const stateEl = document.getElementById('wdSubState');
       if (stateEl) {
@@ -732,13 +744,25 @@
               stateEl.textContent = '-';
           }
       }
+
+      const resultEl = document.getElementById('wdResult');
+      if (resultEl) {
+          if (data.result === 'exit-code' || data.result === 'signal' || data.result === 'timeout') {
+              resultEl.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-800">' + data.result + '</span>';
+          } else if (data.result) {
+              resultEl.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">' + data.result + '</span>';
+          } else {
+              resultEl.textContent = '-';
+          }
+      }
+
+      const exitEl = document.getElementById('wdExitCode');
+      if (exitEl) exitEl.textContent = (data.result && data.exit_code !== undefined) ? data.exit_code : '-';
+
+      const delayEl = document.getElementById('wdRestartDelay');
+      if (delayEl) delayEl.textContent = data.restart_delay || '-';
   }
 
-  function formatWatchdogInterval(seconds) {
-      if (seconds >= 3600) return Math.floor(seconds / 3600) + 'h';
-      if (seconds >= 60) return Math.floor(seconds / 60) + ' min';
-      return seconds + 's';
-  }
 
 </script>
 {{end}}
