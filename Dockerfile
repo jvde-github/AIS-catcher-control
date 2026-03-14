@@ -56,7 +56,7 @@ RUN systemctl enable ais-catcher-control.service || true
 
 # Enable docker mode via systemd service override
 RUN mkdir -p /etc/systemd/system/ais-catcher-control.service.d && \
-    printf '[Service]\nExecStart=\nExecStart=/usr/local/bin/ais-catcher-control -docker\n' \
+    printf '[Service]\nExecStart=\nExecStart=/usr/bin/AIS-catcher-control -docker\n' \
     > /etc/systemd/system/ais-catcher-control.service.d/docker.conf
 
 # Store initial config files in a separate location (volume mount will hide /etc/AIS-catcher)
