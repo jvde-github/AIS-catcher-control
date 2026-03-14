@@ -2474,6 +2474,7 @@ func systemStatusAPIHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 
 	resetHashes := flag.Bool("overwrite-hashes", false, "Reset configuration file hashes")
+	dockerMode := flag.Bool("docker", false, "Run in Docker mode")
 	flag.Parse()
 
 	err := initPaths()
@@ -2520,6 +2521,10 @@ func main() {
 	err = loadControlSettings()
 	if err != nil {
 		log.Fatal("Failed to load configuration:", err)
+	}
+
+	if *dockerMode {
+		config.Docker = true
 	}
 
 	if err := migrateConfigAtStartup(); err != nil {
