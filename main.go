@@ -2471,6 +2471,51 @@ func systemStatusAPIHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(sysInfo)
 }
 
+// watchdogStatusHandler returns the reboot-on-failure watchdog status for ais-catcher.service
+func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	props := []string{"NRestarts", "StartLimitBurst", "StartLimitIntervalUSec", "SubState", "OnFailure"}
+	cmd := exec.Command("systemctl", append([]string{"show", "ais-catcher.service"}, func() []string {
+		var args []string
+		for _, p := range props {
+			args = append(args, "--property="+p)
+		}
+		return args
+	}()...)...)
+	out, err := cmd.Output()
+	if err != nil {
+		http.Error(w, "failed to query systemctl", http.StatusInternalServerError)
+		return
+	}
+
+	values := make(map[string]string)
+	for _, line := range strings.Split(string(out), "\n") {
+		if idx := strings.IndexByte(line, '='); idx > 0 {
+			values[line[:idx]] = line[idx+1:]
+		}
+	}
+
+	nRestarts, _ := strconv.Atoi(values["NRestarts"])
+	burst, _ := strconv.Atoi(values["StartLimitBurst"])
+	intervalUSec, _ := strconv.ParseInt(values["StartLimitIntervalUSec"], 10, 64)
+	intervalSec := int(intervalUSec / 1_000_000)
+	subState := values["SubState"]
+	onFailure := values["OnFailure"]
+
+	enabled := strings.Contains(onFailure, "reboot.target")
+	startLimitHit := subState == "start-limit-hit"
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"enabled":                  enabled,
+		"start_limit_hit":          startLimitHit,
+		"n_restarts":               nRestarts,
+		"start_limit_burst":        burst,
+		"start_limit_interval_sec": intervalSec,
+		"sub_state":                subState,
+	})
+}
+
 func main() {
 
 	resetHashes := flag.Bool("overwrite-hashes", false, "Reset configuration file hashes")
@@ -2597,6 +2642,7 @@ func main() {
 	http.HandleFunc("/system-action-status", authMiddleware(systemActionStatusHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
 	http.HandleFunc("/api/system-status", authMiddleware(systemStatusAPIHandler))
+	http.HandleFunc("/api/watchdog-status", authMiddleware(watchdogStatusHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
 	http.HandleFunc("/tcp-servers", authMiddleware(makeConfigHandler("TCP Servers", "tcp-servers")))
 
