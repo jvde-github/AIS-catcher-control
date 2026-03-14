@@ -223,6 +223,16 @@ func getActionScript(action string) (string, bool) {
         echo "Step 3: Preparing for reboot..." && \
         reboot`
 		reload = true
+
+	case "watchdog-on":
+		script = `echo "Arming reboot on failure..." && \
+        bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install) --set-reboot-on-failure" && \
+        echo "Reboot on failure armed successfully"`
+
+	case "watchdog-off":
+		script = `echo "Disarming reboot on failure..." && \
+        bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install) --unset-reboot-on-failure" && \
+        echo "Reboot on failure disarmed successfully"`
 	}
 
 	return script, reload
