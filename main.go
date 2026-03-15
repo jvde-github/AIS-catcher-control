@@ -363,6 +363,18 @@ func getActionScript(action string) (string, bool) {
 		script = `echo "Disarming reboot on failure..." && \
         bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install) --unset-reboot-on-failure" && \
         echo "Reboot on failure disarmed successfully"`
+
+	case "shutdown-cancel":
+		script = `echo "Cancelling pending shutdown/reboot..." && \
+        shutdown -c && \
+        echo "Scheduled shutdown/reboot has been cancelled"`
+
+	case "ais-reset-failed":
+		script = `echo "Resetting AIS-catcher failed state..." && \
+        systemctl reset-failed ais-catcher && \
+        echo "Failed state cleared" && \
+        systemctl start ais-catcher && \
+        echo "AIS-catcher service started"`
 	}
 
 	return script, reload

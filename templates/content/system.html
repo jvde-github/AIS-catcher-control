@@ -17,18 +17,29 @@
         <div class="relative flex-1">
           <select id="actionSelect" class="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 px-3 sm:px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent shadow-sm text-sm sm:text-base">
             <option value="" disabled selected>Select an operation...</option>
-            <option value="ais-update-prebuilt">update AIS-catcher (prebuilt binary)</option>
-            <option value="control-update">update control tool</option>
-            <option value="control-restart">restart control tool</option>
-            <option value="update-all">update all (AIS-catcher + control)</option>
-            <option value="update-all-reboot">update all & reboot</option>
-            <option value="system-update">upgrade system packages (apt)</option>
-            <option value="system-reboot">system reboot</option>
-            <option value="system-halt">system halt</option>
-            <option value="ais-update-source">build AIS-catcher from source</option>
-            <option value="watchdog-on">arm reboot on failure</option>
-            <option value="watchdog-off">disarm reboot on failure</option>
-
+            <optgroup label="── AIS-catcher ──">
+              <option value="ais-update-prebuilt">Update (prebuilt binary)</option>
+              <option value="ais-update-source">Build from source</option>
+              <option value="ais-reset-failed">Reset failed state &amp; start</option>
+            </optgroup>
+            <optgroup label="── Control Panel ──">
+              <option value="control-update">Update control panel</option>
+              <option value="control-restart">Restart control panel</option>
+            </optgroup>
+            <optgroup label="── Full Updates ──">
+              <option value="update-all">Update all (AIS-catcher + control)</option>
+              <option value="update-all-reboot">Update all &amp; reboot</option>
+            </optgroup>
+            <optgroup label="── System ──">
+              <option value="system-update">Upgrade system packages (apt)</option>
+              <option value="system-reboot">Reboot</option>
+              <option value="system-halt">Halt (shutdown)</option>
+              <option value="shutdown-cancel">Cancel pending shutdown</option>
+            </optgroup>
+            <optgroup label="── Watchdog ──">
+              <option value="watchdog-on">Arm reboot on failure</option>
+              <option value="watchdog-off">Disarm reboot on failure</option>
+            </optgroup>
           </select>
           <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -549,9 +560,19 @@
           return;
       }
 
-      // Handle reboot confirmations
+      // Handle confirmations for destructive actions
       if (action === 'system-reboot' || action === 'update-all-reboot') {
           if (!confirm('Are you sure you want to reboot the system? This will stop the AIS service temporarily.')) {
+              return;
+          }
+      }
+      if (action === 'system-halt') {
+          if (!confirm('Are you sure you want to shut down the system? AIS-catcher will stop until manually powered back on.')) {
+              return;
+          }
+      }
+      if (action === 'shutdown-cancel') {
+          if (!confirm('Cancel the currently scheduled shutdown/reboot?')) {
               return;
           }
       }
@@ -601,17 +622,19 @@
 
   function getActionTitle(action) {
       const titles = {
-          'system-update': 'System Update (APT)',
           'ais-update-prebuilt': 'AIS-catcher Update (Binary)',
-          'ais-update-source': 'AIS-catcher Update (Source)',
-          'control-update': 'Control Panel Update',
-          'control-restart': 'Control Panel Restart',
-          'update-all': 'Full Upgrade (AIS-catcher + Control)',
-          'update-all-reboot': 'Full Upgrade & Reboot',
-          'system-reboot': 'System Reboot',
-          'system-halt': 'System Shutdown',
-          'watchdog-on': 'Arm Reboot on Failure',
-          'watchdog-off': 'Disarm Reboot on Failure'
+          'ais-update-source':   'AIS-catcher Update (Source)',
+          'ais-reset-failed':    'AIS-catcher — Reset Failed State',
+          'control-update':      'Control Panel Update',
+          'control-restart':     'Control Panel Restart',
+          'update-all':          'Full Upgrade (AIS-catcher + Control)',
+          'update-all-reboot':   'Full Upgrade & Reboot',
+          'system-update':       'System Update (APT)',
+          'system-reboot':       'System Reboot',
+          'system-halt':         'System Shutdown',
+          'shutdown-cancel':     'Cancel Pending Shutdown',
+          'watchdog-on':         'Arm Reboot on Failure',
+          'watchdog-off':        'Disarm Reboot on Failure'
       };
       return titles[action] || 'System Operation';
   }
@@ -689,9 +712,9 @@
                   appendOutput('\n<span class="text-amber-400">⟳ Page will reload in 5 seconds to reflect changes...</span>');
                   setTimeout(() => window.location.reload(), 5000);
               } else {
-                  appendOutput('\n<span class="text-sky-400">→ Refreshing system diagnostics...</span>');
-                  // Refresh system diagnostics after 2 seconds
-                  setTimeout(() => window.location.reload(), 2000);
+                  // Keep the console open — just silently refresh the diagnostic cards
+                  appendOutput('\n<span class="text-slate-500">─── Select a new operation and press Execute to continue. ───</span>\n');
+                  setTimeout(() => updateSystemInfo(), 1500);
               }
               
               finishOperation('Completed', false);
