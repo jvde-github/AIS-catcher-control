@@ -366,11 +366,14 @@ func getActionScript(action string) (string, bool) {
 
 	case "shutdown-cancel":
 		script = `echo "Cancelling pending shutdown/reboot..." && \
-        shutdown -c && \
+        shutdown -c ; \
+        systemctl stop ais-catcher-reboot.service ; \
         echo "Scheduled shutdown/reboot has been cancelled"`
 
 	case "ais-reset-failed":
 		script = `echo "Resetting AIS-catcher failed state..." && \
+        shutdown -c ; \
+        systemctl stop ais-catcher-reboot.service ; \
         systemctl reset-failed ais-catcher && \
         echo "Failed state cleared" && \
         systemctl start ais-catcher && \
@@ -925,6 +928,8 @@ func systemActionCancelHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	cancelPendingShutdown()
 
 	// Find and stop all ais-update-* transient services
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1932,7 +1937,19 @@ func formatDuration(d time.Duration) string {
 	return strings.Join(parts, " ")
 }
 
+func cancelPendingShutdown() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	exec.CommandContext(ctx, "shutdown", "-c").Run()
+	exec.CommandContext(ctx, "systemctl", "stop", "ais-catcher-reboot.service").Run()
+}
+
 func controlService(action string) error {
+	cancelPendingShutdown()
+	// Reset failed state and NRestarts counter before any action
+	rfCtx, rfCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	exec.CommandContext(rfCtx, "systemctl", "reset-failed", "ais-catcher.service").Run()
+	rfCancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "systemctl", action, "ais-catcher.service")
