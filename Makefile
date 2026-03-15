@@ -1,5 +1,6 @@
-COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS := -ldflags "-X main.buildVersion=$(COMMIT)"
+VERSION := $(shell git describe --tags --always 2>/dev/null || echo "dev")
+COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+LDFLAGS := -ldflags "-X main.buildVersion=$(VERSION) -X main.buildCommit=$(COMMIT)"
 
 .PHONY: build run
 

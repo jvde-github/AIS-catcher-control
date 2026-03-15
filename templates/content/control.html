@@ -47,34 +47,45 @@
     </style>
 
     <!-- Update Notifications -->
-    <div id="update-notifications" class="bg-white rounded-xl border-2 border-orange-400 p-4 space-y-3" style="display: none;">
+    <div id="update-notifications" class="bg-white rounded-xl border-2 border-orange-400 p-4 space-y-3"
+        style="display: none;">
         <!-- AIS-catcher Update -->
-        <a id="ais-catcher-update-card" href="/system" class="hidden block bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 rounded-lg p-3 transition-all duration-200 group">
+        <a id="ais-catcher-update-card" href="/system"
+            class="hidden block bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 rounded-lg p-3 transition-all duration-200 group">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                    <div class="w-9 h-9 bg-orange-200 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div
+                        class="w-9 h-9 bg-orange-200 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                         <svg class="w-5 h-5 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                            </path>
                         </svg>
                     </div>
                     <div>
-                        <p class="text-sm font-semibold text-slate-900"><span id="ais-catcher-update-title">AIS-catcher Update Available</span></p>
+                        <p class="text-sm font-semibold text-slate-900"><span id="ais-catcher-update-title">AIS-catcher
+                                Update Available</span></p>
                         <p class="text-xs text-slate-600 mt-0.5"><span id="ais-catcher-version-info"></span></p>
                     </div>
                 </div>
-                <svg class="w-5 h-5 text-orange-500 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-orange-500 group-hover:translate-x-1 transition-transform" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
             </div>
         </a>
 
         <!-- Control Panel Update -->
-        <a id="control-update-card" href="/system" class="hidden block bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 rounded-lg p-3 transition-all duration-200 group">
+        <a id="control-update-card" href="/system"
+            class="hidden block bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 rounded-lg p-3 transition-all duration-200 group">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                    <div class="w-9 h-9 bg-blue-200 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div
+                        class="w-9 h-9 bg-blue-200 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                         <svg class="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                            </path>
                         </svg>
                     </div>
                     <div>
@@ -82,104 +93,123 @@
                         <p class="text-xs text-slate-600 mt-0.5"><span id="control-version-info"></span></p>
                     </div>
                 </div>
-                <svg class="w-5 h-5 text-blue-500 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-blue-500 group-hover:translate-x-1 transition-transform" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
             </div>
         </a>
     </div>
 
-    <!-- Unified Service Control Card -->
+    <!-- System Daemon Card -->
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <!-- Header with Status -->
-        <div class="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        <!-- Header -->
+        <div
+            class="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7">
+                    </path>
                 </svg>
-                <h2 class="font-semibold text-slate-800 text-lg">Service Control</h2>
+                <h2 class="text-sm sm:text-base font-semibold text-slate-700">System Daemon</h2>
             </div>
-            <div id="service-status-indicator" class="flex items-center space-x-2">
-                <span id="service-status" class="text-sm font-medium text-slate-600">Checking...</span>
-                <span class="relative flex h-2.5 w-2.5">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-500"></span>
-                </span>
+            <div class="flex items-center gap-2">
+                <span id="svc-limit-badge"
+                    class="hidden items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">Start
+                    Limit Hit</span>
+                <span id="svc-uptime-badge" class="hidden text-xs text-slate-400 font-mono"></span>
+                <span id="service-status-indicator"
+                    class="hidden items-center px-2 py-1 rounded-full text-xs font-semibold border"></span>
             </div>
         </div>
 
-        <!-- Body with Status Info and Controls -->
-        <div class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <!-- Uptime -->
-                <div class="flex items-center space-x-3">
-                    <div class="flex-shrink-0 w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
-                        <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="text-xs text-slate-500 font-medium">Uptime</p>
-                        <p id="service-uptime" class="text-sm font-semibold text-slate-800 font-mono">--:--:--</p>
-                    </div>
-                </div>
-
-                <!-- Auto-Start Status -->
-                <div class="flex items-center space-x-3">
-                    <div class="flex-shrink-0 w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
-                        <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="text-xs text-slate-500 font-medium">Start at Boot</p>
-                        <p id="enabled-status" class="text-sm font-semibold text-slate-800">
-                            <span class="inline-block h-4 w-16 bg-slate-100 rounded animate-pulse"></span>
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Control Buttons -->
-                <div class="flex items-center justify-end space-x-2">
-                    <div id="action-buttons" class="flex space-x-2 w-full md:w-auto">
-                        <div class="h-9 flex-1 bg-slate-100 rounded animate-pulse"></div>
-                    </div>
-                </div>
+        <!-- Process stats row (hidden when stopped) -->
+        <div id="svc-process-row"
+            class="px-4 sm:px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-4 border-b border-slate-100 hidden">
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Since</p>
+                <p id="service-uptime" class="text-sm font-medium text-slate-700 font-mono">—</p>
             </div>
-
-            <!-- Auto-Start Toggle -->
-            <div class="flex items-center justify-between pt-4 border-t border-slate-100">
-                <span class="text-sm text-slate-600">Auto-start configuration</span>
-                <div id="enable-disable-buttons" class="flex space-x-2">
-                    <button id="enable-button" data-action="enable"
-                        class="hidden px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors action-button">
-                        Enable
-                    </button>
-                    <button id="disable-button" data-action="disable"
-                        class="hidden px-4 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-colors action-button">
-                        Disable
-                    </button>
-                </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">PID</p>
+                <p id="stat-pid" class="text-sm font-medium text-slate-700 font-mono">—</p>
             </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">CPU</p>
+                <p id="stat-cpu" class="text-sm font-medium text-slate-700 font-mono">—</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Memory</p>
+                <p id="stat-memory" class="text-sm font-medium text-slate-700 font-mono">—</p>
+            </div>
+        </div>
+
+        <!-- Systemd health grid -->
+        <div class="px-4 sm:px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restarts</p>
+                <p id="svc-restarts" class="text-sm font-medium text-slate-700 font-mono">—</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Limit</p>
+                <p id="svc-limit" class="text-sm font-medium text-slate-700 font-mono">—</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Window</p>
+                <p id="svc-window" class="text-sm font-medium text-slate-700 font-mono">—</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">State</p>
+                <p id="svc-substate" class="text-sm font-medium text-slate-700">—</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Last Result</p>
+                <p id="svc-result" class="text-sm font-medium text-slate-700 font-mono">—</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Exit Code</p>
+                <p id="svc-exitcode" class="text-sm font-medium text-slate-700 font-mono">—</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restart Delay</p>
+                <p id="svc-restartdelay" class="text-sm font-medium text-slate-700 font-mono">—</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Start at Boot</p>
+                <p id="enabled-status" class="text-sm font-medium text-slate-700">—</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Action Card (separate, no header) -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div id="action-bar" class="px-4 sm:px-5 py-3 flex items-center justify-between gap-2 transition-opacity">
+            <!-- LEFT: primary contextual action -->
+            <div id="action-primary">
+                <div class="h-8 w-20 bg-slate-100 rounded animate-pulse"></div>
+            </div>
+            <!-- RIGHT: secondary actions -->
+            <div id="action-secondary" class="flex items-center gap-1.5"></div>
         </div>
     </div>
 
     <!-- Unified Logs Section -->
-    <div class="bg-slate-900 rounded-none sm:rounded-xl shadow-lg overflow-hidden border-x-0 sm:border-x border border-slate-700 flex flex-col">
+    <div
+        class="bg-slate-900 rounded-none sm:rounded-xl shadow-lg overflow-hidden border-x-0 sm:border-x border border-slate-700 flex flex-col">
         <div class="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
             <div class="flex items-center space-x-3 flex-1">
                 <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3"></path>
                 </svg>
-                <select id="log-source-select" onchange="switchLogSource()" class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select id="log-source-select" onchange="switchLogSource()"
+                    class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="ais-catcher">ais-catcher</option>
                     <option value="control">control panel</option>
                     <option value="system">system</option>
                 </select>
-                <select id="log-priority-select" onchange="switchLogSource()" class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select id="log-priority-select" onchange="switchLogSource()"
+                    class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="debug">debug</option>
                     <option value="info" selected>info</option>
                     <option value="notice">notice</option>
@@ -205,83 +235,132 @@
     <script>
         let operationInProgress = false;
 
-        function getStatusIndicatorHTML(color) {
-            return `
-                <span class="relative flex h-2.5 w-2.5 ml-2">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-${color}-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-${color}-500"></span>
-                </span>`;
+        function svcSubstateHTML(sub) {
+            if (!sub) return '—';
+            if (sub === 'start-limit-hit') return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-800">start-limit-hit</span>';
+            if (sub === 'running') return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">running</span>';
+            return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">${sub}</span>`;
         }
 
-        function getStaticIndicatorHTML(color) {
-            return `<span class="relative inline-flex rounded-full h-2.5 w-2.5 ml-2 bg-${color}-500"></span>`;
+        function svcResultHTML(result) {
+            if (!result) return '—';
+            if (result === 'exit-code' || result === 'signal' || result === 'timeout')
+                return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-800">${result}</span>`;
+            return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">${result}</span>`;
         }
 
         function updateStatus() {
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    // --- Update Auto-Start (UPDATED: Plain text styling) ---
-                    const enabledStatusDiv = document.getElementById('enabled-status');
-                    const enableBtn = document.getElementById('enable-button');
-                    const disableBtn = document.getElementById('disable-button');
+            Promise.all([
+                fetch('/status').then(r => r.json()),
+                fetch('/api/watchdog-status').then(r => r.json())
+            ]).then(([svc, wd]) => {
+                const running = svc.status === 'active (running)';
 
-                    if (data.enabled === true) {
-                        // Matches "Active" style (Green text)
-                        enabledStatusDiv.innerHTML = '<span class="text-emerald-600">Enabled</span>';
-                        enableBtn.classList.add('hidden');
-                        enableBtn.disabled = true;
-                        disableBtn.classList.remove('hidden');
-                        disableBtn.disabled = operationInProgress;
-                        disableBtn.textContent = 'Disable';
-                    } else if (data.enabled === false) {
-                        // Matches "Stopped" style (Grey text)
-                        enabledStatusDiv.innerHTML = '<span class="text-slate-500">Disabled</span>';
-                        enableBtn.classList.remove('hidden');
-                        enableBtn.disabled = operationInProgress;
-                        enableBtn.textContent = 'Enable';
-                        disableBtn.classList.add('hidden');
-                        disableBtn.disabled = true;
-                    } else {
-                        enabledStatusDiv.innerHTML = '<span class="text-amber-600">Unknown</span>';
-                    }
+                // --- Header status badge ---
+                const indicator = document.getElementById('service-status-indicator');
+                indicator.classList.remove('hidden');
+                indicator.className = 'items-center px-2 py-1 rounded-full text-xs font-semibold border inline-flex';
+                if (running) {
+                    indicator.classList.add('bg-emerald-100', 'text-emerald-800', 'border-emerald-200');
+                    indicator.textContent = 'Running';
+                } else if (svc.status === 'failed') {
+                    indicator.classList.add('bg-rose-100', 'text-rose-800', 'border-rose-200');
+                    indicator.textContent = 'Failed';
+                } else if (svc.status === 'inactive (stopped)') {
+                    indicator.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200');
+                    indicator.textContent = 'Stopped';
+                } else {
+                    indicator.classList.add('bg-amber-100', 'text-amber-800', 'border-amber-200');
+                    indicator.textContent = svc.status || 'Unknown';
+                }
 
-                    // --- Update Service Status ---
-                    const indicatorContainer = document.getElementById('service-status-indicator');
+                // Start-limit-hit warning badge
+                const limitBadge = document.getElementById('svc-limit-badge');
+                if (wd.start_limit_hit) limitBadge.classList.remove('hidden');
+                else limitBadge.classList.add('hidden');
 
-                    if (data.status === 'active (running)') {
-                        indicatorContainer.innerHTML = '<span class="text-sm font-medium text-emerald-600">Active</span>' + getStatusIndicatorHTML('emerald');
-                    } else if (data.status === 'inactive (stopped)') {
-                        indicatorContainer.innerHTML = '<span class="text-sm font-medium text-slate-600">Stopped</span>' + getStaticIndicatorHTML('slate');
-                    } else if (data.status === 'failed') {
-                        indicatorContainer.innerHTML = '<span class="text-sm font-medium text-rose-600">Failed</span>' + getStaticIndicatorHTML('rose');
-                    } else {
-                        indicatorContainer.innerHTML = `<span class="text-sm font-medium text-amber-600 capitalize">${data.status}</span>` + getStaticIndicatorHTML('amber');
-                    }
+                // Uptime in header
+                const uptimeBadge = document.getElementById('svc-uptime-badge');
+                if (running && svc.uptime) {
+                    uptimeBadge.textContent = svc.uptime;
+                    uptimeBadge.classList.remove('hidden');
+                } else {
+                    uptimeBadge.classList.add('hidden');
+                }
 
-                    // --- Update Uptime ---
-                    document.getElementById('service-uptime').textContent = data.uptime;
+                // --- Process stats row (only when running) ---
+                const processRow = document.getElementById('svc-process-row');
+                if (running) {
+                    processRow.classList.remove('hidden');
+                    document.getElementById('service-uptime').textContent = svc.uptime_since || '—';
+                    document.getElementById('stat-pid').textContent = svc.pid || '—';
+                    document.getElementById('stat-cpu').textContent = (svc.cpu != null) ? svc.cpu.toFixed(1) + '%' : '—';
+                    document.getElementById('stat-memory').textContent = (svc.memory != null && svc.memory > 0) ? svc.memory.toFixed(1) + ' MB' : '—';
+                } else {
+                    processRow.classList.add('hidden');
+                }
 
-                    // --- Update Action Buttons ---
-                    const actionButtonsDiv = document.getElementById('action-buttons');
-                    let buttonsHTML = '';
+                // --- Systemd health grid ---
+                const nr = wd.n_restarts;
+                document.getElementById('svc-restarts').innerHTML = (nr != null)
+                    ? (nr > 0 ? `<span class="text-amber-600">${nr}</span>` : nr)
+                    : '—';
+                document.getElementById('svc-limit').textContent = wd.start_limit_burst ? wd.start_limit_burst + ' restarts' : '—';
+                document.getElementById('svc-window').textContent = wd.start_limit_interval || '—';
+                document.getElementById('svc-substate').innerHTML = svcSubstateHTML(wd.sub_state);
+                document.getElementById('svc-result').innerHTML = svcResultHTML(wd.result);
+                document.getElementById('svc-exitcode').textContent = (wd.result && wd.exit_code != null) ? wd.exit_code : '—';
+                document.getElementById('svc-restartdelay').textContent = wd.restart_delay || '—';
 
-                    const btnBase = "px-4 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1";
-                    const disabledClass = operationInProgress ? "opacity-50 cursor-not-allowed" : "";
-                    const disabledAttr = operationInProgress ? "disabled" : "";
-                    const primaryBtn = `${btnBase} ${disabledClass} text-white bg-slate-800 hover:bg-slate-700 focus:ring-slate-500`;
-                    const dangerBtn = `${btnBase} ${disabledClass} text-white bg-rose-600 hover:bg-rose-700 focus:ring-rose-500`;
-                    const secondaryBtn = `${btnBase} ${disabledClass} border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 focus:ring-slate-500`;
+                // --- Auto-start label in grid ---
+                const enabledEl = document.getElementById('enabled-status');
+                if (svc.enabled === true) enabledEl.innerHTML = '<span class="text-emerald-600">Enabled</span>';
+                else if (svc.enabled === false) enabledEl.innerHTML = '<span class="text-slate-500">Disabled</span>';
+                else enabledEl.innerHTML = '<span class="text-amber-600">Unknown</span>';
 
-                    if (data.status === 'active (running)') {
-                        buttonsHTML += `<button class="${secondaryBtn} action-button" data-action="restart" ${disabledAttr}>Restart</button>`;
-                        buttonsHTML += `<button class="${dangerBtn} action-button" data-action="stop" ${disabledAttr}>Stop</button>`;
-                    } else {
-                        buttonsHTML += `<button class="${primaryBtn} action-button" data-action="start" ${disabledAttr}>Start Service</button>`;
-                    }
-                    actionButtonsDiv.innerHTML = buttonsHTML;
-                })
-                .catch(error => console.error('Error fetching status:', error));
+                // --- Action bar: grey out while operation in progress ---
+                const actionBar = document.getElementById('action-bar');
+                if (operationInProgress) {
+                    actionBar.classList.add('opacity-50', 'pointer-events-none');
+                } else {
+                    actionBar.classList.remove('opacity-50', 'pointer-events-none');
+                }
+
+                // Icon library
+                const ico = {
+                    stop: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" stroke-width="2"></rect></svg>',
+                    start: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"/></svg>',
+                    restart: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>',
+                    resetFailed: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>',
+                    enable: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>',
+                    disable: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>',
+                };
+
+                // Primary button (left): Stop when running, Start otherwise
+                const primBase = 'action-button inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1';
+                let primaryHTML;
+                if (running) {
+                    primaryHTML = `<button class="${primBase} bg-rose-600 hover:bg-rose-700 text-white focus:ring-rose-500" data-action="stop" title="Stop">${ico.stop}<span class="hidden sm:inline">Stop</span></button>`;
+                } else {
+                    primaryHTML = `<button class="${primBase} bg-slate-800 hover:bg-slate-700 text-white focus:ring-slate-500" data-action="start" title="Start">${ico.start}<span class="hidden sm:inline">Start</span></button>`;
+                }
+                document.getElementById('action-primary').innerHTML = primaryHTML;
+
+                // Secondary buttons (right): Restart | Clear Failed | Enable/Disable
+                const secBase = 'action-button inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1';
+                const ghost = `${secBase} border-slate-300 text-slate-700 bg-white hover:bg-slate-50 focus:ring-slate-400`;
+                const amber = `${secBase} border-amber-400 text-amber-800 bg-amber-50 hover:bg-amber-100 focus:ring-amber-400`;
+                const secBtn = (action, cls, icon, label) =>
+                    `<button class="${cls}" data-action="${action}" title="${label}">${icon}<span class="hidden sm:inline">${label}</span></button>`;
+
+                const failed = svc.status === 'failed';
+                let secondaryHTML = '';
+                if (running) secondaryHTML += secBtn('restart', ghost, ico.restart, 'Restart');
+                if (failed) secondaryHTML += secBtn('reset-failed', amber, ico.resetFailed, 'Clear Failed');
+                if (svc.enabled === false) secondaryHTML += secBtn('enable', ghost, ico.enable, 'Enable');
+                if (svc.enabled === true) secondaryHTML += secBtn('disable', ghost, ico.disable, 'Disable');
+                document.getElementById('action-secondary').innerHTML = secondaryHTML;
+            }).catch(error => console.error('Error fetching status:', error));
         }
 
         document.addEventListener('DOMContentLoaded', function () {
@@ -307,7 +386,7 @@
                         const aisCatcherInfo = document.getElementById('ais-catcher-version-info');
                         const aisCatcherTitle = document.getElementById('ais-catcher-update-title');
                         const controlInfo = document.getElementById('control-version-info');
-                        
+
                         let hasUpdates = false;
 
                         // Show AIS-catcher card if not installed or update available
@@ -324,7 +403,7 @@
                             const latestVersion = data.ais_catcher_latest || 'Latest';
                             const currentCommit = data.ais_catcher_current_commit;
                             const latestCommit = data.ais_catcher_latest_commit;
-                            
+
                             if (currentCommit && latestCommit && currentCommit !== latestCommit) {
                                 aisCatcherInfo.textContent = `${currentVersion} (${currentCommit}) → ${latestVersion} (${latestCommit})`;
                             } else {
@@ -353,13 +432,13 @@
             // Load initial logs with priority filter
             const logsContentDiv = document.getElementById('logs-content');
             logsContentDiv.innerHTML = '<div class="text-slate-500 italic text-sm" id="loading-message">Loading logs...</div>';
-            
+
             fetch(`/api/recent-logs?source=${currentLogSource}&lines=10&priority=${currentPriority}`)
                 .then(response => response.json())
                 .then(data => {
                     const loadingMsg = document.getElementById('loading-message');
                     if (loadingMsg) loadingMsg.remove();
-                    
+
                     if (data.logs && data.logs.length > 0) {
                         data.logs.forEach(log => {
                             logsContentDiv.appendChild(formatLogLine(log.message));
@@ -375,21 +454,21 @@
                 });
 
             // Switch log source
-            window.switchLogSource = function() {
+            window.switchLogSource = function () {
                 const sourceSelect = document.getElementById('log-source-select');
                 const prioritySelect = document.getElementById('log-priority-select');
                 currentLogSource = sourceSelect.value;
                 currentPriority = prioritySelect.value;
                 const logsContentDiv = document.getElementById('logs-content');
                 logsContentDiv.innerHTML = '<div class="text-slate-500 italic text-sm" id="loading-message">Loading logs...</div>';
-                
+
                 // Fetch initial logs
                 fetch(`/api/recent-logs?source=${currentLogSource}&lines=10&priority=${currentPriority}`)
                     .then(response => response.json())
                     .then(data => {
                         const loadingMsg = document.getElementById('loading-message');
                         if (loadingMsg) loadingMsg.remove();
-                        
+
                         if (data.logs && data.logs.length > 0) {
                             data.logs.forEach(log => {
                                 logsContentDiv.appendChild(formatLogLine(log.message));
@@ -403,7 +482,7 @@
                         const loadingMsg = document.getElementById('loading-message');
                         if (loadingMsg) loadingMsg.remove();
                     });
-                
+
                 initializeSSE();
             };
 
@@ -451,7 +530,7 @@
                         // Remove loading message if it still exists
                         const loadingMsg = document.getElementById('loading-message');
                         if (loadingMsg) loadingMsg.remove();
-                        
+
                         const logMsg = JSON.parse(event.data);
                         const newLog = formatLogLine(logMsg.message);
                         logsContentDiv.appendChild(newLog);
@@ -479,35 +558,22 @@
 
             const handleAction = (e) => {
                 const button = e.target.closest('.action-button');
-                if (!button || operationInProgress) {
-                    console.log('Button click ignored:', {button: !!button, operationInProgress});
-                    return;
-                }
+                if (!button || operationInProgress) return;
 
                 e.preventDefault();
                 const action = button.getAttribute('data-action');
-                console.log('Action triggered:', action);
 
-                // Set operation in progress
+                // Grey out entire action bar immediately
                 operationInProgress = true;
-
-                const originalText = button.textContent;
-                button.textContent = '...';
-                button.disabled = true;
-
-                // Disable all action buttons
-                document.querySelectorAll('.action-button').forEach(btn => btn.disabled = true);
+                const actionBar = document.getElementById('action-bar');
+                actionBar.classList.add('opacity-50', 'pointer-events-none');
 
                 fetch(`/api/${action}`, { method: 'POST' })
-                    .then(response => {
-                        console.log('Response status:', response.status);
-                        return response.json();
-                    })
+                    .then(response => response.json())
                     .then(data => {
-                        console.log('Response data:', data);
                         if (data.status) {
                             // For enable/disable and restart, add delay for systemd state to update
-                            if (action === 'restart' || action === 'enable' || action === 'disable') {
+                            if (action === 'restart' || action === 'enable' || action === 'disable' || action === 'reset-failed') {
                                 setTimeout(() => {
                                     operationInProgress = false;
                                     updateStatus();
@@ -531,8 +597,7 @@
                     });
             };
 
-            document.getElementById('action-buttons').addEventListener('click', handleAction);
-            document.getElementById('enable-disable-buttons').addEventListener('click', handleAction);
+            document.getElementById('action-bar').addEventListener('click', handleAction);
 
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) { if (eventSource) eventSource.close(); }

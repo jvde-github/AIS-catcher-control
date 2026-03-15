@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -31,7 +32,8 @@ import (
 )
 
 var (
-	buildVersion = "dev" // This will be set during build
+	buildVersion = "dev"     // Human-readable version: git describe --tags --always
+	buildCommit  = "unknown" // Raw short commit hash: git rev-parse --short HEAD
 	ansiEscape   = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 )
 
@@ -70,6 +72,7 @@ type SystemInfo struct {
 	TotalMemory            uint64    `json:"total_memory"`             // Total system memory
 	KernelVersion          string    `json:"kernel_version"`           // Linux kernel version
 	ServiceStatus          string    `json:"service_status"`           // systemd service status
+	ServiceNRestarts       int       `json:"service_n_restarts"`       // number of times systemd restarted the service
 	BuildVersion           string    `json:"build_version"`            // Git version/build info
 	ProcessID              int32     `json:"process_id"`
 	ProcessMemoryUsage     float64   `json:"process_memory_usage"` // in MB
@@ -148,6 +151,133 @@ type SSEMessage struct {
 
 var globalActionState = SystemActionState{
 	Subscribers: make(map[chan SSEMessage]bool),
+}
+
+// ---------------------------------------------------------------------------
+// Wall-message broadcast hub
+// ---------------------------------------------------------------------------
+
+type WallHub struct {
+	sync.Mutex
+	subscribers map[chan string]struct{}
+}
+
+var wallHub = &WallHub{
+	subscribers: make(map[chan string]struct{}),
+}
+
+func (h *WallHub) subscribe() chan string {
+	ch := make(chan string, 8)
+	h.Lock()
+	h.subscribers[ch] = struct{}{}
+	h.Unlock()
+	return ch
+}
+
+func (h *WallHub) unsubscribe(ch chan string) {
+	h.Lock()
+	delete(h.subscribers, ch)
+	h.Unlock()
+	close(ch)
+}
+
+func (h *WallHub) broadcast(msg string) {
+	h.Lock()
+	defer h.Unlock()
+	for ch := range h.subscribers {
+		select {
+		case ch <- msg:
+		default: // drop if subscriber is slow
+		}
+	}
+}
+
+// startWallHub polls /run/systemd/shutdown/scheduled and fans any pending
+// shutdown/reboot notice out to all SSE subscribers. It also broadcasts a
+// cancellation notice when the file disappears.
+func startWallHub() {
+	go func() {
+		const scheduledFile = "/run/systemd/shutdown/scheduled"
+		wasScheduled := false
+		for {
+			data, err := os.ReadFile(scheduledFile)
+			if err == nil {
+				// File exists — parse fields
+				fields := map[string]string{}
+				for _, line := range strings.Split(string(data), "\n") {
+					if idx := strings.IndexByte(line, '='); idx > 0 {
+						fields[line[:idx]] = strings.Trim(line[idx+1:], "\"")
+					}
+				}
+				msg := fields["WALL_MESSAGE"]
+				// Unescape systemd hex encoding e.g. \x20 -> space
+				if unescaped, err := strconv.Unquote(`"` + msg + `"`); err == nil {
+					msg = unescaped
+				}
+				mode := fields["MODE"]
+				usecStr := fields["USEC"]
+
+				// Build human-readable banner
+				action := "Shutdown"
+				if mode == "reboot" {
+					action = "Reboot"
+				} else if mode == "halt" || mode == "poweroff" {
+					action = "Halt"
+				}
+				banner := action + " scheduled"
+				if usecStr != "" {
+					if usec, err := strconv.ParseInt(usecStr, 10, 64); err == nil {
+						t := time.Unix(usec/1_000_000, 0)
+						remaining := time.Until(t).Round(time.Second)
+						banner += " in " + remaining.String() + " (" + t.Format("15:04:05") + ")"
+					}
+				}
+				if msg != "" {
+					banner += " — " + msg
+				}
+				banner += ". Run 'shutdown -c' to cancel."
+
+				if !wasScheduled {
+					wallHub.broadcast(banner)
+					wasScheduled = true
+				}
+			} else {
+				if wasScheduled {
+					wallHub.broadcast("Scheduled shutdown/reboot has been cancelled.")
+					wasScheduled = false
+				}
+			}
+			time.Sleep(15 * time.Second)
+		}
+	}()
+}
+
+func wallStreamHandler(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch := wallHub.subscribe()
+	defer wallHub.unsubscribe(ch)
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			data, _ := json.Marshal(msg)
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+	}
 }
 
 func systemActionStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -280,8 +410,20 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 			// Run in background
 			go runSystemAction(requestedAction, script, reload)
 		} else {
-			// Not running, no action requested -> nothing to do
-			globalActionState.Unlock()
+			// Not running, no action requested.
+			// If there is a recent result (action just finished), send it to late-connecting clients.
+			if globalActionState.Result != nil {
+				result := *globalActionState.Result
+				history := make([]string, len(globalActionState.Logs))
+				copy(history, globalActionState.Logs)
+				globalActionState.Unlock()
+				for _, line := range history {
+					sendSSEMessage(w, flusher, "output", line)
+				}
+				sendSSEMessage(w, flusher, result.Type, result.Content)
+			} else {
+				globalActionState.Unlock()
+			}
 			return
 		}
 	}
@@ -294,26 +436,11 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	history := make([]string, len(globalActionState.Logs))
 	copy(history, globalActionState.Logs)
 
-	// If we have a result (finished just now or previously), send it
-	var result *SSEMessage
-	if globalActionState.Result != nil {
-		result = globalActionState.Result
-	}
-
 	globalActionState.Unlock()
 
 	// Send history
 	for _, log := range history {
 		sendSSEMessage(w, flusher, "output", log)
-	}
-
-	// If finished, send result and exit
-	if result != nil {
-		sendSSEMessage(w, flusher, result.Type, result.Content)
-		// We don't return here immediately because we might want to keep the connection open?
-		// No, if it's done, we are done.
-		// But wait, if we just attached to a finished action, we send result and close.
-		return
 	}
 
 	// Listen for new messages
@@ -787,15 +914,19 @@ func systemActionCancelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find and stop all update-script services
-	cmd := exec.Command("systemctl", "list-units", "--type=service", "update-script-*", "--no-pager", "--no-legend")
+	// Find and stop all ais-update-* transient services
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", "list-units", "--type=service", "ais-update-*", "--no-pager", "--no-legend")
 	output, err := cmd.Output()
 	if err == nil {
 		units := strings.Split(string(output), "\n")
 		for _, unit := range units {
 			if strings.TrimSpace(unit) != "" {
 				unitName := strings.Fields(unit)[0]
-				exec.Command("sudo", "systemctl", "stop", unitName).Run()
+				stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				exec.CommandContext(stopCtx, "systemctl", "stop", unitName).Run()
+				stopCancel()
 			}
 		}
 	}
@@ -815,8 +946,8 @@ func updateScriptLogsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	// Tail the logs from update-script.service indefinitely.
-	cmd := exec.Command("journalctl", "-f", "-u", "update-script.service", "--no-pager", "--output=json")
+	// Tail the logs from all ais-update-* transient units.
+	cmd := exec.Command("journalctl", "-f", "-u", "ais-update-*", "--no-pager", "--output=json")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		http.Error(w, "Failed to create stdout pipe: "+err.Error(), http.StatusInternalServerError)
@@ -847,6 +978,7 @@ func updateScriptLogsHandler(w http.ResponseWriter, r *http.Request) {
 	if err := scanner.Err(); err != nil {
 		log.Printf("Error reading update-script logs: %v", err)
 	}
+	cmd.Wait() // reap the process to avoid zombies
 }
 
 func sendSSEMessage(w http.ResponseWriter, flusher http.Flusher, messageType string, content string) {
@@ -960,6 +1092,20 @@ func collectSystemInfo() {
 
 	serviceStatus := getServiceStatus()
 	systemInfo.ServiceStatus = serviceStatus
+
+	// Collect NRestarts from systemd
+	{
+		nrCtx, nrCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer nrCancel()
+		cmd := exec.CommandContext(nrCtx, "systemctl", "show", "ais-catcher.service", "--property=NRestarts")
+		if out, err := cmd.Output(); err == nil {
+			for _, line := range strings.Split(string(out), "\n") {
+				if idx := strings.IndexByte(line, '='); idx > 0 && line[:idx] == "NRestarts" {
+					systemInfo.ServiceNRestarts, _ = strconv.Atoi(strings.TrimSpace(line[idx+1:]))
+				}
+			}
+		}
+	}
 
 	// Only check version if no action is running or if service is running
 	skipVersionCheck := isActionRunning && serviceStatus != "active (running)"
@@ -1078,9 +1224,11 @@ func collectSystemInfo() {
 	// Always use async to avoid blocking page load (especially on slow/unreachable GitHub API)
 	// JavaScript on system page will fetch this data via AJAX after page loads
 	if time.Since(systemInfo.LastChecked) > 10*time.Minute {
+		systemInfo.LastChecked = time.Now() // pre-stamp to prevent thundering herd
 		go checkLatestVersion()
 	}
 	if time.Since(systemInfo.ControlLastChecked) > 10*time.Minute {
+		systemInfo.ControlLastChecked = time.Now() // pre-stamp to prevent thundering herd
 		go checkControlLatestVersion()
 	}
 }
@@ -1192,14 +1340,13 @@ func checkControlLatestVersion() {
 	systemInfo.ControlLatestCommit = commit.SHA[:7] // First 7 chars
 	systemInfo.ControlLastChecked = time.Now()
 
-	// Check if update is available - compare current build version with latest commit
-	if systemInfo.BuildVersion != "" {
-		currentCommit := systemInfo.BuildVersion
-		// BuildVersion might be full commit or just short hash
-		if len(currentCommit) > 7 {
-			currentCommit = currentCommit[:7]
+	// Compare raw short commit hash against latest commit on main
+	if buildCommit != "unknown" && buildCommit != "" {
+		current := buildCommit
+		if len(current) > 7 {
+			current = current[:7]
 		}
-		systemInfo.ControlUpdateAvailable = currentCommit != systemInfo.ControlLatestCommit
+		systemInfo.ControlUpdateAvailable = current != systemInfo.ControlLatestCommit
 	}
 
 	cachedSysInfo.info = systemInfo
@@ -1235,6 +1382,7 @@ func init() {
 		"templates/content/edit-config-json.html",
 		"templates/content/edit-config-cmd.html",
 		"templates/content/tcp-servers.html",
+		"templates/content/general-settings.html",
 		"templates/license.html",
 		"templates/webviewer.html",
 	)
@@ -1243,14 +1391,38 @@ func init() {
 	}
 }
 
+const sessionTTL = 24 * time.Hour
+
+type sessionEntry struct {
+	username  string
+	createdAt time.Time
+}
+
 type SessionManager struct {
 	mu       sync.RWMutex
-	sessions map[string]string // sessionID -> username
+	sessions map[string]sessionEntry
 }
 
 func NewSessionManager() *SessionManager {
-	return &SessionManager{
-		sessions: make(map[string]string),
+	sm := &SessionManager{
+		sessions: make(map[string]sessionEntry),
+	}
+	go sm.cleanupLoop()
+	return sm
+}
+
+func (sm *SessionManager) cleanupLoop() {
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+		sm.mu.Lock()
+		for id, e := range sm.sessions {
+			if now.Sub(e.createdAt) > sessionTTL {
+				delete(sm.sessions, id)
+			}
+		}
+		sm.mu.Unlock()
 	}
 }
 
@@ -1261,20 +1433,24 @@ func (sm *SessionManager) Create(username string) string {
 	// Generate a secure random session ID
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback to less secure if rand fails (unlikely)
-		return hashPassword(username + time.Now().String())
+		// crypto/rand failure means the OS entropy pool is broken — do not
+		// proceed with a predictable session token on an admin panel.
+		log.Fatalf("crypto/rand failure, cannot generate secure session ID: %v", err)
 	}
 	sessionID := hex.EncodeToString(b)
 
-	sm.sessions[sessionID] = username
+	sm.sessions[sessionID] = sessionEntry{username: username, createdAt: time.Now()}
 	return sessionID
 }
 
 func (sm *SessionManager) Get(sessionID string) (string, bool) {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
-	user, ok := sm.sessions[sessionID]
-	return user, ok
+	e, ok := sm.sessions[sessionID]
+	if !ok || time.Since(e.createdAt) > sessionTTL {
+		return "", false
+	}
+	return e.username, true
 }
 
 func (sm *SessionManager) Delete(sessionID string) {
@@ -1397,7 +1573,7 @@ func licenseHandler(w http.ResponseWriter, r *http.Request) {
 		"CssVersion": cssVersion,
 		"Accepted":   getConfig().LicenseAccepted,
 	}
-	templates.ExecuteTemplate(w, "license.html", data)
+	renderTemplate(w, "license.html", data)
 }
 
 func acceptLicenseHandler(w http.ResponseWriter, r *http.Request) {
@@ -1437,7 +1613,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			"JsVersion":  jsVersion,
 			"message":    "",
 		}
-		templates.ExecuteTemplate(w, "login.html", data)
+		renderTemplate(w, "login.html", data)
 		return
 	}
 
@@ -1447,9 +1623,12 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if authenticate(username, password) {
 		sessionID := sessionManager.Create(username)
 		http.SetCookie(w, &http.Cookie{
-			Name:  sessionCookieName,
-			Value: sessionID,
-			Path:  "/",
+			Name:     sessionCookieName,
+			Value:    sessionID,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   r.TLS != nil,
+			SameSite: http.SameSiteLaxMode,
 		})
 
 		if password == defaultPassword && hashPassword(password) == getConfig().PasswordHash {
@@ -1463,7 +1642,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			"JsVersion":  jsVersion,
 			"message":    "Invalid credentials",
 		}
-		templates.ExecuteTemplate(w, "login.html", data)
+		renderTemplate(w, "login.html", data)
 	}
 }
 
@@ -1472,10 +1651,13 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		sessionManager.Delete(cookie.Value)
 		http.SetCookie(w, &http.Cookie{
-			Name:   sessionCookieName,
-			Value:  "",
-			Path:   "/",
-			MaxAge: -1,
+			Name:     sessionCookieName,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   r.TLS != nil,
+			SameSite: http.SameSiteLaxMode,
 		})
 	}
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -1508,7 +1690,7 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 			"message":         "",
 		}
 
-		templates.ExecuteTemplate(w, "layout.html", data)
+		renderTemplate(w, "layout.html", data)
 		return
 	}
 
@@ -1524,7 +1706,7 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 			"message":         "Passwords do not match",
 		}
 
-		templates.ExecuteTemplate(w, "layout.html", data)
+		renderTemplate(w, "layout.html", data)
 
 		return
 	}
@@ -1541,7 +1723,7 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 			"message":         "Failed to save new password",
 		}
 
-		templates.ExecuteTemplate(w, "layout.html", data)
+		renderTemplate(w, "layout.html", data)
 		return
 	}
 
@@ -1630,16 +1812,14 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 		ContentTemplate: "control",
 	}
 
-	err := templates.ExecuteTemplate(w, "layout.html", controlData)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		log.Printf("Template execution error: %v", err)
-	}
+	renderTemplate(w, "layout.html", controlData)
 }
 
 func getServiceStatus() string {
 	if getConfig().Docker {
-		cmd := exec.Command("/usr/bin/is-running.sh")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "/usr/bin/is-running.sh")
 		_ = cmd.Run() // We only care about the exit code
 
 		exitCode := cmd.ProcessState.ExitCode()
@@ -1653,10 +1833,21 @@ func getServiceStatus() string {
 		}
 	}
 
-	cmd := exec.Command("systemctl", "is-active", "ais-catcher.service")
+	saCtx, saCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer saCancel()
+	cmd := exec.CommandContext(saCtx, "systemctl", "is-active", "ais-catcher.service")
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
+			// exit 3 is used for both inactive and failed; read actual output text
+			text := strings.TrimSpace(string(exitErr.Stderr))
+			if text == "" {
+				// is-active writes to stdout, not stderr
+				text = strings.TrimSpace(string(output))
+			}
+			if text == "failed" {
+				return "failed"
+			}
 			if exitErr.ExitCode() == 3 {
 				return "inactive (stopped)"
 			}
@@ -1673,7 +1864,9 @@ func getServiceStatus() string {
 
 func getServiceUptime() string {
 	if getConfig().Docker {
-		cmd := exec.Command("/usr/bin/uptime.sh")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "/usr/bin/uptime.sh")
 		output, err := cmd.Output()
 		if err != nil {
 			return "Unknown"
@@ -1681,7 +1874,9 @@ func getServiceUptime() string {
 		return strings.TrimSpace(string(output))
 	}
 
-	cmd := exec.Command("systemctl", "show", "ais-catcher.service", "--property=ActiveEnterTimestamp")
+	aeCtx, aeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer aeCancel()
+	cmd := exec.CommandContext(aeCtx, "systemctl", "show", "ais-catcher.service", "--property=ActiveEnterTimestamp")
 	output, err := cmd.Output()
 	if err != nil {
 		return "Unknown"
@@ -1726,12 +1921,16 @@ func formatDuration(d time.Duration) string {
 }
 
 func controlService(action string) error {
-	cmd := exec.Command("systemctl", action, "ais-catcher.service")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", action, "ais-catcher.service")
 	return cmd.Run()
 }
 
 func getServiceEnabled() (bool, error) {
-	cmd := exec.Command("systemctl", "is-enabled", "ais-catcher.service")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "systemctl", "is-enabled", "ais-catcher.service")
 	output, err := cmd.Output()
 	status := strings.TrimSpace(string(output))
 
@@ -1800,6 +1999,8 @@ func readConfigJSON() ([]byte, error) {
 	if uint32(calculatedHash) != getConfig().ConfigJSONHash {
 		fmt.Printf("hash mismatch: config.json content does not match the stored hash (%d != %d)\n", calculatedHash, getConfig().ConfigJSONHash)
 		setIntegrityError(true)
+	} else {
+		setIntegrityError(false)
 	}
 
 	return jsonContent, nil
@@ -1817,6 +2018,8 @@ func readConfigCmd() ([]byte, error) {
 	if uint32(calculatedHash) != getConfig().ConfigCmdHash {
 		fmt.Printf("hash mismatch: config.cmd content does not match the stored hash (%d != %d)\n", calculatedHash, getConfig().ConfigCmdHash)
 		setIntegrityError(true)
+	} else {
+		setIntegrityError(false)
 	}
 
 	return cmdContent, nil
@@ -1850,10 +2053,6 @@ func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	hashValue := calculate32BitHash(string(body))
-	err = loadControlSettings()
-	if err != nil {
-		return fmt.Errorf("failed to load control settings: %v", err)
-	}
 
 	err = updateConfig(func(c *Config) {
 		c.ConfigJSONHash = uint32(hashValue)
@@ -1990,9 +2189,11 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		priority = "info"
 	}
 
-	// Create dedicated channel for log streaming using journalctl
+	// Create dedicated channel for log streaming using journalctl.
+	// Do NOT close this channel here — the background goroutine writes to it
+	// and closing a channel from the reader side causes a panic on write.
+	// The channel is garbage-collected once both sides exit.
 	clientChan := make(chan LogMessage, 100)
-	defer close(clientChan)
 
 	// Verify journalctl is available
 	if _, err := exec.LookPath("journalctl"); err != nil {
@@ -2137,31 +2338,19 @@ func makeConfigHandler(title, contentTemplate string) http.HandlerFunc {
 }
 
 func renderTemplateWithConfig(w http.ResponseWriter, title string, contentTemplate string) {
-	if true && getIntegrityError() {
-		data := map[string]interface{}{
+	if getIntegrityError() {
+		renderTemplate(w, "layout.html", map[string]interface{}{
 			"Title":           "Configuration Integrity Error",
 			"ContentTemplate": "integrity-error",
-		}
-		err := templates.ExecuteTemplate(w, "layout.html", data)
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			log.Printf("Template execution error for integrity-error: %v", err)
-		}
+		})
 		return
 	}
-
-	data := map[string]interface{}{
+	renderTemplate(w, "layout.html", map[string]interface{}{
 		"CssVersion":      cssVersion,
 		"JsVersion":       jsVersion,
 		"Title":           title,
 		"ContentTemplate": contentTemplate,
-	}
-
-	err := templates.ExecuteTemplate(w, "layout.html", data)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		log.Printf("Template execution error: %v", err)
-	}
+	})
 }
 
 func webviewerHandler(w http.ResponseWriter, r *http.Request) {
@@ -2194,11 +2383,7 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 		"port":       port,
 	}
 
-	err = templates.ExecuteTemplate(w, "webviewer.html", data)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		log.Printf("Template execution error: %v", err)
-	}
+	renderTemplate(w, "webviewer.html", data)
 }
 
 // makeReadOnlyConfigHandler creates a handler for GET-only config pages
@@ -2210,6 +2395,19 @@ func makeReadOnlyConfigHandler(title, contentTemplate string) http.HandlerFunc {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	}
+}
+
+// renderTemplate executes a named template into a buffer first. If rendering
+// succeeds the buffer is written to w; if it fails a clean 500 is returned
+// without sending partial HTML.
+func renderTemplate(w http.ResponseWriter, name string, data interface{}) {
+	var buf bytes.Buffer
+	if err := templates.ExecuteTemplate(&buf, name, data); err != nil {
+		log.Printf("Template execution error (%s): %v", name, err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	buf.WriteTo(w)
 }
 
 // renderEditorTemplate renders the file editor template with the given data
@@ -2228,11 +2426,7 @@ func renderEditorTemplate(w http.ResponseWriter, title, contentTemplate, content
 		data["SuccessMessage"] = successMsg
 	}
 
-	err := templates.ExecuteTemplate(w, "layout.html", data)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		log.Printf("Template execution error: %v", err)
-	}
+	renderTemplate(w, "layout.html", data)
 }
 
 // sendJSONResponse sends a JSON response with status and optional error
@@ -2292,12 +2486,28 @@ func apiConfigHandler(w http.ResponseWriter, r *http.Request) {
 func statusHandler(w http.ResponseWriter, r *http.Request) {
 	enabled, _ := getServiceEnabled()
 	status := getServiceStatus()
+	sysInfo := getCachedSystemInfo()
+
+	// Split "2h 15m (since Mar 15, 2026 10:00:00)" into two parts
+	full := getServiceUptime()
+	uptimeDuration := full
+	uptimeSince := ""
+	if idx := strings.Index(full, " (since "); idx >= 0 {
+		uptimeDuration = full[:idx]
+		uptimeSince = full[idx+8 : len(full)-1] // strip " (since " prefix and ")" suffix
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  status,
-		"running": status == "active (running)",
-		"uptime":  getServiceUptime(),
-		"enabled": enabled,
+		"status":       status,
+		"running":      status == "active (running)",
+		"uptime":       uptimeDuration,
+		"uptime_since": uptimeSince,
+		"enabled":      enabled,
+		"pid":          sysInfo.ProcessID,
+		"cpu":          sysInfo.ProcessCPUUsage,
+		"memory":       sysInfo.ProcessMemoryUsage,
+		"n_restarts":   sysInfo.ServiceNRestarts,
 	})
 }
 
@@ -2415,7 +2625,7 @@ func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	memoryGB := float64(sysInfo.TotalMemory) / 1073741824.0
 
-	err := templates.ExecuteTemplate(w, "layout.html", map[string]interface{}{
+	renderTemplate(w, "layout.html", map[string]interface{}{
 		"CssVersion":      cssVersion,
 		"JsVersion":       jsVersion,
 		"Title":           "System Information",
@@ -2423,21 +2633,23 @@ func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 		"SystemInfo":      sysInfo,
 		"MemoryGB":        memoryGB,
 	})
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		log.Printf("Template execution error: %v", err)
-	}
 }
 
 // updateCheckHandler provides update status with 15-minute caching
 func updateCheckHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Check if we need to refresh version info (15 minute cache)
-	cachedSysInfo.RLock()
+	// Pre-stamp timestamps before launching goroutines to prevent thundering herd
+	cachedSysInfo.Lock()
 	needAISCatcherCheck := time.Since(systemInfo.LastChecked) > 15*time.Minute
 	needControlCheck := time.Since(systemInfo.ControlLastChecked) > 15*time.Minute
-	cachedSysInfo.RUnlock()
+	if needAISCatcherCheck {
+		systemInfo.LastChecked = time.Now()
+	}
+	if needControlCheck {
+		systemInfo.ControlLastChecked = time.Now()
+	}
+	cachedSysInfo.Unlock()
 
 	if needAISCatcherCheck {
 		go checkLatestVersion()
@@ -2476,7 +2688,9 @@ func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	props := []string{"NRestarts", "StartLimitBurst", "StartLimitIntervalUSec", "SubState", "OnFailure", "Result", "ExecMainStatus", "RestartUSec"}
-	cmd := exec.Command("systemctl", append([]string{"show", "ais-catcher.service"}, func() []string {
+	wdCtx, wdCancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer wdCancel()
+	cmd := exec.CommandContext(wdCtx, "systemctl", append([]string{"show", "ais-catcher.service"}, func() []string {
 		var args []string
 		for _, p := range props {
 			args = append(args, "--property="+p)
@@ -2519,15 +2733,15 @@ func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"enabled":               enabled,
-		"start_limit_hit":       startLimitHit,
-		"n_restarts":            nRestarts,
-		"start_limit_burst":     burst,
-		"start_limit_interval":  interval,
-		"sub_state":             subState,
-		"result":                result,
-		"exit_code":             exitCode,
-		"restart_delay":         restartDelay,
+		"enabled":              enabled,
+		"start_limit_hit":      startLimitHit,
+		"n_restarts":           nRestarts,
+		"start_limit_burst":    burst,
+		"start_limit_interval": interval,
+		"sub_state":            subState,
+		"result":               result,
+		"exit_code":            exitCode,
+		"restart_delay":        restartDelay,
 	})
 }
 
@@ -2640,6 +2854,7 @@ func main() {
 	http.HandleFunc("/api/restart", authMiddleware(serviceActionHandler("restart")))
 	http.HandleFunc("/api/enable", authMiddleware(serviceActionHandler("enable")))
 	http.HandleFunc("/api/disable", authMiddleware(serviceActionHandler("disable")))
+	http.HandleFunc("/api/reset-failed", authMiddleware(serviceActionHandler("reset-failed")))
 	http.HandleFunc("/api/recent-logs", authMiddleware(recentLogsHandler))
 	http.HandleFunc("/logs-stream", authMiddleware(logsStreamHandler))
 	http.HandleFunc("/status", authMiddleware(statusHandler))
@@ -2660,6 +2875,8 @@ func main() {
 	http.HandleFunc("/api/watchdog-status", authMiddleware(watchdogStatusHandler))
 	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
 	http.HandleFunc("/tcp-servers", authMiddleware(makeConfigHandler("TCP Servers", "tcp-servers")))
+	http.HandleFunc("/general", authMiddleware(makeConfigHandler("General Settings", "general-settings")))
+	http.HandleFunc("/api/wall-stream", authMiddleware(wallStreamHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if !getConfig().LicenseAccepted {
@@ -2675,6 +2892,8 @@ func main() {
 		}
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	})
+
+	startWallHub()
 
 	addr := ":" + getConfig().Port
 	log.Printf("Server started at %s\n", addr)

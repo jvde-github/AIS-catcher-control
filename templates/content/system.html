@@ -3,9 +3,12 @@
 
   <!-- System Actions Box -->
   <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 overflow-hidden">
-    <div class="px-4 sm:px-5 py-3 sm:py-5 border-b border-slate-100 bg-slate-50/50 flex items-center space-x-2">
-      <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-      <h2 class="text-sm sm:text-base font-semibold text-slate-700">System Actions</h2>
+    <div class="px-4 sm:px-5 py-3 sm:py-5 border-b border-slate-100 bg-slate-50/50 flex items-start space-x-2">
+      <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+      <div>
+        <h2 class="text-sm sm:text-base font-semibold text-slate-700">System Actions</h2>
+        <p class="text-xs sm:text-sm text-slate-600 mt-0.5">Run system operations such as updates, restarts, reboots, and watchdog configuration. Output is streamed live below.</p>
+      </div>
     </div>
     
     <div class="p-4 sm:p-6">
@@ -81,67 +84,88 @@
     </div>
   </div>
 
-  <!-- Watchdog Monitor -->
-  <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 overflow-hidden">
-    <div class="px-4 sm:px-5 py-3 sm:py-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-      <div class="flex items-center space-x-2">
-        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-        <h2 class="text-sm sm:text-base font-semibold text-slate-700">Reboot on Failure</h2>
-      </div>
-      <span id="watchdogBadge" class="hidden items-center px-2 py-1 rounded-full text-xs font-semibold"></span>
+  <!-- Support Card -->
+  <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4">
+    <div class="p-2 sm:p-3 bg-slate-50 rounded-full border border-slate-100 shrink-0">
+      <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
     </div>
-
-    <div class="p-4 sm:p-6">
-      <p class="text-xs text-slate-500 mb-4">When armed, systemd will automatically reboot the system if AIS-catcher fails to start more than the configured number of times within the time window. Use System Actions above to arm or disarm.</p>
-
-      <!-- Status Grid -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restarts</p>
-          <p class="text-sm font-medium text-slate-700 font-mono" id="wdNRestarts">-</p>
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Limit</p>
-          <p class="text-sm font-medium text-slate-700 font-mono" id="wdStartLimitBurst">-</p>
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Window</p>
-          <p class="text-sm font-medium text-slate-700 font-mono" id="wdStartLimitInterval">-</p>
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">State</p>
-          <p class="text-sm font-medium text-slate-700" id="wdSubState">-</p>
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Last Result</p>
-          <p class="text-sm font-medium text-slate-700 font-mono" id="wdResult">-</p>
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Exit Code</p>
-          <p class="text-sm font-medium text-slate-700 font-mono" id="wdExitCode">-</p>
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restart Delay</p>
-          <p class="text-sm font-medium text-slate-700 font-mono" id="wdRestartDelay">-</p>
-        </div>
-      </div>
+    <div class="flex-1 text-center sm:text-left text-slate-600 text-xs sm:text-sm">
+      <p class="font-semibold text-slate-800 mb-0.5">Need Assistance?</p>
+      <p>Check the <a href="https://docs.aiscatcher.org/usage/gui/" target="_blank" class="text-slate-900 font-medium underline decoration-slate-300 underline-offset-2 hover:decoration-slate-800 transition-all">documentation</a> to learn more about configuration. Visit our <a href="https://github.com/jvde-github/AIS-catcher/discussions" target="_blank" class="text-slate-900 font-medium underline decoration-slate-300 underline-offset-2 hover:decoration-slate-800 transition-all">community forum</a> for support.</p>
     </div>
   </div>
 
-  <!-- Support Card -->
-  <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 p-4 sm:p-6 flex flex-col md:flex-row items-center gap-4 sm:gap-5">
-    <div class="p-2 sm:p-3 bg-slate-50 rounded-full border border-slate-100">
-      <svg class="w-6 h-6 sm:w-8 sm:h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+  <!-- System Daemon Card -->
+  <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 overflow-hidden">
+    <!-- Header -->
+    <div class="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"></path>
+        </svg>
+        <h2 class="text-sm sm:text-base font-semibold text-slate-700">System Daemon</h2>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="svc-limit-badge" class="hidden items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">Start Limit Hit</span>
+        <span id="svc-uptime-badge" class="hidden text-xs text-slate-400 font-mono"></span>
+        <span id="service-status-indicator" class="hidden items-center px-2 py-1 rounded-full text-xs font-semibold border"></span>
+      </div>
     </div>
-    <div class="flex-1 text-center md:text-left text-slate-600 text-xs sm:text-sm">
-      <h3 class="font-semibold text-slate-800 text-base sm:text-lg mb-1">Need Assistance?</h3>
-      <p>
-        Check the 
-        <a href="https://docs.aiscatcher.org/usage/gui/" target="_blank" class="text-slate-900 font-medium underline decoration-slate-300 underline-offset-2 hover:decoration-slate-800 transition-all">documentation</a>
-        to learn more about configuration. Visit our
-        <a href="https://github.com/jvde-github/AIS-catcher/discussions" target="_blank" class="text-slate-900 font-medium underline decoration-slate-300 underline-offset-2 hover:decoration-slate-800 transition-all">community forum</a>
-        for support.
-      </p>
+
+    <!-- Process stats row (hidden when stopped) -->
+    <div id="svc-process-row" class="px-4 sm:px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-4 border-b border-slate-100 hidden">
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Since</p>
+        <p id="service-uptime" class="text-sm font-medium text-slate-700 font-mono">—</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">PID</p>
+        <p id="stat-pid" class="text-sm font-medium text-slate-700 font-mono">—</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">CPU</p>
+        <p id="stat-cpu" class="text-sm font-medium text-slate-700 font-mono">—</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Memory</p>
+        <p id="stat-memory" class="text-sm font-medium text-slate-700 font-mono">—</p>
+      </div>
+    </div>
+
+    <!-- Systemd health grid -->
+    <div class="px-4 sm:px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restarts</p>
+        <p id="svc-restarts" class="text-sm font-medium text-slate-700 font-mono">—</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Limit</p>
+        <p id="svc-limit" class="text-sm font-medium text-slate-700 font-mono">—</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Window</p>
+        <p id="svc-window" class="text-sm font-medium text-slate-700 font-mono">—</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">State</p>
+        <p id="svc-substate" class="text-sm font-medium text-slate-700">—</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Last Result</p>
+        <p id="svc-result" class="text-sm font-medium text-slate-700 font-mono">—</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Exit Code</p>
+        <p id="svc-exitcode" class="text-sm font-medium text-slate-700 font-mono">—</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restart Delay</p>
+        <p id="svc-restartdelay" class="text-sm font-medium text-slate-700 font-mono">—</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Start at Boot</p>
+        <p id="enabled-status" class="text-sm font-medium text-slate-700">—</p>
+      </div>
     </div>
   </div>
 
@@ -149,9 +173,6 @@
   <div class="space-y-4 sm:space-y-6">
     <div class="relative px-1">
       <h2 class="text-lg sm:text-xl font-semibold text-slate-800">System Diagnostics</h2>
-      <div class="mt-2 h-1 bg-slate-100 rounded-full overflow-hidden">
-        <div id="refreshProgress" class="h-full bg-slate-400 rounded-full" style="width: 0%; transition: none;"></div>
-      </div>
     </div>
 
     <!-- AIS-catcher Information -->
@@ -167,19 +188,6 @@
         <div>
           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Installed</p>
           <p class="text-sm font-medium text-slate-700" id="installedStatus">{{if .SystemInfo.AISCatcherAvailable}}<span class="text-emerald-600">Yes</span>{{else}}<span class="text-rose-600">No</span>{{end}}</p>
-        </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Service State</p>
-          <div class="text-sm font-medium text-slate-700" id="serviceStateDisplay">
-            {{if eq .SystemInfo.ServiceStatus "active (running)"}}
-              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
-                <svg class="w-2 h-2 mr-1 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"></circle></svg>
-                Running
-              </span>
-            {{else}}
-              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 capitalize">{{.SystemInfo.ServiceStatus}}</span>
-            {{end}}
-          </div>
         </div>
         <div>
           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Version</p>
@@ -222,84 +230,43 @@
       </div>
     </div>
 
-    <!-- Process Statistics -->
-    {{if ne .SystemInfo.ProcessID 0}}
-    <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 overflow-hidden">
-        <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50">
-          <h3 class="text-sm sm:text-base font-medium text-slate-700">AIS-catcher Process (PID {{.SystemInfo.ProcessID}})</h3>
-        </div>
-        <div class="p-4 sm:p-6 grid grid-cols-2 md:grid-cols-3 gap-y-4 sm:gap-y-6 gap-x-3 sm:gap-x-4">
-          <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Memory (RSS)</p>
-            <p class="text-sm font-medium text-slate-700 font-mono">{{if lt .SystemInfo.ProcessMemoryUsage 0.01}}-{{else}}{{printf "%.2f MB" .SystemInfo.ProcessMemoryUsage}}{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">App CPU</p>
-            <p class="text-sm font-medium text-slate-700 font-mono">{{if lt .SystemInfo.ProcessCPUUsage 0.01}}-{{else}}{{printf "%.1f%%" .SystemInfo.ProcessCPUUsage}}{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total CPU</p>
-            <p class="text-sm font-medium text-slate-700 font-mono">{{if lt .SystemInfo.SystemCPUUsage 0.01}}-{{else}}{{printf "%.1f%%" .SystemInfo.SystemCPUUsage}}{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Threads</p>
-            <p class="text-sm font-medium text-slate-700 font-mono">{{if eq .SystemInfo.ProcessThreadCount 0}}-{{else}}{{.SystemInfo.ProcessThreadCount}}{{end}}</p>
-          </div>
-          <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Uptime</p>
-            <p class="text-sm font-medium text-slate-700 font-mono truncate">{{if .SystemInfo.ProcessStartTime.IsZero}}-{{else}}{{.SystemInfo.ProcessStartTime.Format "2006-01-02 15:04"}}{{end}}</p>
-          </div>
-        </div>
-    </div>
-    {{end}}
-
     <!-- Host Information -->
     <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border-slate-200 overflow-hidden">
         <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50">
           <h3 class="text-sm sm:text-base font-medium text-slate-700">Host Environment</h3>
         </div>
-        <div class="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <div class="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Control Panel Version</p>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Control Panel</p>
             <div>
               <p class="text-sm font-medium text-slate-700 font-mono">{{.SystemInfo.BuildVersion}}</p>
               {{if .SystemInfo.ControlLatestCommit}}
-                <div class="mt-2">
-                  <p class="text-xs text-slate-500">Latest: 
-                    {{if .SystemInfo.ControlUpdateAvailable}}
-                      <span class="font-mono text-amber-600">{{.SystemInfo.ControlLatestCommit}}</span>
-                      <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">update</span>
-                    {{else}}
-                      <span class="font-mono text-emerald-600">{{.SystemInfo.ControlLatestCommit}}</span>
-                      <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700">✓</span>
-                    {{end}}
-                  </p>
-                </div>
+                <p class="text-[10px] text-slate-400 font-mono mt-0.5">
+                  {{if .SystemInfo.ControlUpdateAvailable}}
+                    <span class="text-amber-600">{{.SystemInfo.ControlLatestCommit}}</span>
+                    <span class="ml-1 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">update</span>
+                  {{else}}
+                    <span class="text-emerald-600">{{.SystemInfo.ControlLatestCommit}}</span>
+                  {{end}}
+                </p>
               {{end}}
             </div>
           </div>
-          <div class="pt-2 border-t border-slate-50 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">OS / Arch</p>
-                <p class="text-sm font-medium text-slate-700">{{.SystemInfo.OS}} <span class="text-slate-400 mx-1">/</span> {{.SystemInfo.Architecture}}</p>
-             </div>
-             <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Kernel</p>
-                <p class="text-sm font-medium text-slate-700 font-mono text-xs">{{.SystemInfo.KernelVersion}}</p>
-             </div>
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">OS / Arch</p>
+            <p class="text-sm font-medium text-slate-700">{{.SystemInfo.OS}} / {{.SystemInfo.Architecture}}</p>
           </div>
-          <div class="md:col-span-2">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Hardware</p>
-            <div class="bg-slate-50 rounded border border-slate-100 p-3">
-                 <div class="flex justify-between items-center mb-1">
-                    <span class="text-xs text-slate-500">CPU Model</span>
-                    <span class="text-xs font-medium text-slate-700 text-right">{{.SystemInfo.CPUInfo}}</span>
-                 </div>
-                 <div class="flex justify-between items-center">
-                    <span class="text-xs text-slate-500">Total Memory</span>
-                    <span class="text-xs font-medium text-slate-700">{{printf "%.2f GB" .MemoryGB}}</span>
-                 </div>
-            </div>
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Kernel</p>
+            <p class="text-sm font-medium text-slate-700 font-mono">{{.SystemInfo.KernelVersion}}</p>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">CPU</p>
+            <p class="text-sm font-medium text-slate-700">{{.SystemInfo.CPUInfo}}</p>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Memory</p>
+            <p class="text-sm font-medium text-slate-700 font-mono">{{printf "%.2f GB" .MemoryGB}}</p>
           </div>
         </div>
     </div>
@@ -310,6 +277,90 @@
   let currentOperation = null;
   let currentAction = null;
   let statusPoller = null;
+
+  // -----------------------------------------------------------------------
+  // System Daemon card helpers (shared with control page)
+  // -----------------------------------------------------------------------
+
+  function svcSubstateHTML(sub) {
+      if (!sub) return '—';
+      if (sub === 'start-limit-hit') return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-800">start-limit-hit</span>';
+      if (sub === 'running')         return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">running</span>';
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">${sub}</span>`;
+  }
+
+  function svcResultHTML(result) {
+      if (!result) return '—';
+      if (result === 'exit-code' || result === 'signal' || result === 'timeout')
+          return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-800">${result}</span>`;
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">${result}</span>`;
+  }
+
+  function updateDaemonCard(svc, wd) {
+      const running = svc.status === 'active (running)';
+
+      // Header status badge
+      const indicator = document.getElementById('service-status-indicator');
+      indicator.classList.remove('hidden');
+      indicator.className = 'items-center px-2 py-1 rounded-full text-xs font-semibold border inline-flex';
+      if (running) {
+          indicator.classList.add('bg-emerald-100', 'text-emerald-800', 'border-emerald-200');
+          indicator.textContent = 'Running';
+      } else if (svc.status === 'failed') {
+          indicator.classList.add('bg-rose-100', 'text-rose-800', 'border-rose-200');
+          indicator.textContent = 'Failed';
+      } else if (svc.status === 'inactive (stopped)') {
+          indicator.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200');
+          indicator.textContent = 'Stopped';
+      } else {
+          indicator.classList.add('bg-amber-100', 'text-amber-800', 'border-amber-200');
+          indicator.textContent = svc.status || 'Unknown';
+      }
+
+      // Start-limit-hit warning badge
+      const limitBadge = document.getElementById('svc-limit-badge');
+      if (wd.start_limit_hit) limitBadge.classList.remove('hidden');
+      else limitBadge.classList.add('hidden');
+
+      // Uptime in header
+      const uptimeBadge = document.getElementById('svc-uptime-badge');
+      if (running && svc.uptime) {
+          uptimeBadge.textContent = svc.uptime;
+          uptimeBadge.classList.remove('hidden');
+      } else {
+          uptimeBadge.classList.add('hidden');
+      }
+
+      // Process stats row (only when running)
+      const processRow = document.getElementById('svc-process-row');
+      if (running) {
+          processRow.classList.remove('hidden');
+          document.getElementById('service-uptime').textContent = svc.uptime_since || '—';
+          document.getElementById('stat-pid').textContent    = svc.pid    || '—';
+          document.getElementById('stat-cpu').textContent    = (svc.cpu    != null) ? svc.cpu.toFixed(1)    + '%' : '—';
+          document.getElementById('stat-memory').textContent = (svc.memory != null && svc.memory > 0) ? svc.memory.toFixed(1) + ' MB' : '—';
+      } else {
+          processRow.classList.add('hidden');
+      }
+
+      // Systemd health grid
+      const nr = wd.n_restarts;
+      document.getElementById('svc-restarts').innerHTML = (nr != null)
+          ? (nr > 0 ? `<span class="text-amber-600">${nr}</span>` : nr)
+          : '—';
+      document.getElementById('svc-limit').textContent        = wd.start_limit_burst ? wd.start_limit_burst + ' restarts' : '—';
+      document.getElementById('svc-window').textContent       = wd.start_limit_interval || '—';
+      document.getElementById('svc-substate').innerHTML       = svcSubstateHTML(wd.sub_state);
+      document.getElementById('svc-result').innerHTML         = svcResultHTML(wd.result);
+      document.getElementById('svc-exitcode').textContent     = (wd.result && wd.exit_code != null) ? wd.exit_code : '—';
+      document.getElementById('svc-restartdelay').textContent = wd.restart_delay || '—';
+
+      // Auto-start label
+      const enabledEl = document.getElementById('enabled-status');
+      if (svc.enabled === true)       enabledEl.innerHTML = '<span class="text-emerald-600">Enabled</span>';
+      else if (svc.enabled === false) enabledEl.innerHTML = '<span class="text-slate-500">Disabled</span>';
+      else                            enabledEl.innerHTML = '<span class="text-amber-600">Unknown</span>';
+  }
 
   function showProgress(show = true) {
       const display = document.getElementById('progressDisplay');
@@ -360,10 +411,8 @@
       
       // Poll every 4 seconds for live system status (balanced for performance)
       updateLiveStatus(); // Initial update
-      startRefreshAnimation(4000);
       statusPoller = setInterval(() => {
           updateLiveStatus();
-          startRefreshAnimation(4000);
       }, 4000);
   }
 
@@ -374,22 +423,6 @@
       }
   }
   
-  function startRefreshAnimation(duration) {
-      const progressBar = document.getElementById('refreshProgress');
-      if (!progressBar) return;
-      
-      // Reset animation
-      progressBar.style.transition = 'none';
-      progressBar.style.width = '0%';
-      
-      // Trigger reflow to restart animation
-      progressBar.offsetHeight;
-      
-      // Start animation
-      progressBar.style.transition = `width ${duration}ms linear`;
-      progressBar.style.width = '100%';
-  }
-
   async function updateLiveStatus() {
       try {
           const response = await fetch('/api/system-status');
@@ -435,15 +468,6 @@
   }
   
   function updateMainDiagnosticCards(data) {
-      // Update main service state display
-      const serviceStateEl = document.getElementById('serviceStateDisplay');
-      if (serviceStateEl && data.service_status) {
-          const isRunning = data.service_status === 'active (running)';
-          serviceStateEl.innerHTML = isRunning 
-              ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800"><svg class="w-2 h-2 mr-1 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"></circle></svg>Running</span>'
-              : `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 capitalize">${data.service_status}</span>`;
-      }
-      
       // Update current version display
       const currentVersionEl = document.getElementById('currentVersionDisplay');
       if (currentVersionEl && data.ais_catcher_version) {
@@ -488,6 +512,7 @@
               updateBadge.classList.remove('inline-flex');
           }
       }
+
   }
 
   function appendOutput(text) {
@@ -614,30 +639,24 @@
           })
           .catch(console.error);
       
-      // Start polling for system info updates every 6 seconds when idle (resource-efficient)
+      // Poll system diagnostics and daemon card every 4 seconds when idle
       setInterval(() => {
-          if (!currentOperation) {
-              updateSystemInfo();
-              loadWatchdogStatus();
-              startRefreshAnimation(6000);
-          }
-      }, 6000);
-      
-      // Initial system info update after page load
-      setTimeout(() => {
-          updateSystemInfo();
-          loadWatchdogStatus();
-          startRefreshAnimation(6000);
-      }, 1000);
+          if (!currentOperation) updateSystemInfo();
+      }, 4000);
+
+      // Initial update after page load
+      setTimeout(updateSystemInfo, 1000);
   });
 
   async function updateSystemInfo() {
       try {
-          const response = await fetch('/api/system-status');
-          if (!response.ok) return;
-          
-          const data = await response.json();
-          updateMainDiagnosticCards(data);
+          const [sysResp, svcResp, wdResp] = await Promise.all([
+              fetch('/api/system-status'),
+              fetch('/status'),
+              fetch('/api/watchdog-status')
+          ]);
+          if (sysResp.ok) updateMainDiagnosticCards(await sysResp.json());
+          if (svcResp.ok && wdResp.ok) updateDaemonCard(await svcResp.json(), await wdResp.json());
       } catch (error) {
           console.error('Failed to update system info:', error);
       }
@@ -689,80 +708,6 @@
           }
       };
   }
-
-  // -----------------------------------------------------------------------
-  // Watchdog
-  // -----------------------------------------------------------------------
-
-  async function loadWatchdogStatus() {
-      try {
-          const response = await fetch('/api/watchdog-status');
-          if (!response.ok) return;
-          const data = await response.json();
-          updateWatchdogUI(data);
-      } catch (error) {
-          console.error('Failed to load watchdog status:', error);
-      }
-  }
-
-  function updateWatchdogUI(data) {
-      const badge = document.getElementById('watchdogBadge');
-      if (!badge) return;
-
-      // Badge
-      badge.className = 'items-center px-2 py-1 rounded-full text-xs font-semibold border inline-flex';
-      if (data.start_limit_hit) {
-          badge.classList.add('bg-rose-100', 'text-rose-800', 'border-rose-200');
-          badge.textContent = 'Start Limit Hit';
-      } else if (data.enabled) {
-          badge.classList.add('bg-emerald-100', 'text-emerald-800', 'border-emerald-200');
-          badge.textContent = 'Armed';
-      } else {
-          badge.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200');
-          badge.textContent = 'Disarmed';
-      }
-
-      // Stats
-      const nEl = document.getElementById('wdNRestarts');
-      if (nEl) nEl.textContent = data.n_restarts !== undefined ? data.n_restarts : '-';
-
-      const burstEl = document.getElementById('wdStartLimitBurst');
-      if (burstEl) burstEl.textContent = data.start_limit_burst ? data.start_limit_burst + ' restarts' : '-';
-
-      const intEl = document.getElementById('wdStartLimitInterval');
-      if (intEl) intEl.textContent = data.start_limit_interval || '-';
-
-      const stateEl = document.getElementById('wdSubState');
-      if (stateEl) {
-          if (data.sub_state === 'start-limit-hit') {
-              stateEl.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-800">start-limit-hit</span>';
-          } else if (data.sub_state === 'running') {
-              stateEl.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">' + data.sub_state + '</span>';
-          } else if (data.sub_state) {
-              stateEl.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">' + data.sub_state + '</span>';
-          } else {
-              stateEl.textContent = '-';
-          }
-      }
-
-      const resultEl = document.getElementById('wdResult');
-      if (resultEl) {
-          if (data.result === 'exit-code' || data.result === 'signal' || data.result === 'timeout') {
-              resultEl.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-800">' + data.result + '</span>';
-          } else if (data.result) {
-              resultEl.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">' + data.result + '</span>';
-          } else {
-              resultEl.textContent = '-';
-          }
-      }
-
-      const exitEl = document.getElementById('wdExitCode');
-      if (exitEl) exitEl.textContent = (data.result && data.exit_code !== undefined) ? data.exit_code : '-';
-
-      const delayEl = document.getElementById('wdRestartDelay');
-      if (delayEl) delayEl.textContent = data.restart_delay || '-';
-  }
-
 
 </script>
 {{end}}
