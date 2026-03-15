@@ -280,6 +280,22 @@ func wallStreamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func rebootPendingHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	cmd := exec.CommandContext(ctx, "systemctl", "is-active", "ais-catcher-reboot.service")
+	out, _ := cmd.Output() // ignore exit code — non-zero for activating/inactive
+	cancel()
+
+	state := strings.TrimSpace(string(out))
+	pending := state == "active" || state == "activating"
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"pending": pending,
+		"message": "Reboot-on-failure watchdog triggered",
+	})
+}
+
 func systemActionStatusHandler(w http.ResponseWriter, r *http.Request) {
 	globalActionState.Lock()
 	defer globalActionState.Unlock()
@@ -363,6 +379,16 @@ func getActionScript(action string) (string, bool) {
 		script = `echo "Disarming reboot on failure..." && \
         bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install) --unset-reboot-on-failure" && \
         echo "Reboot on failure disarmed successfully"`
+
+	case "auto-restart-on":
+		script = `echo "Enabling auto-restart on crash..." && \
+        bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install) --set-auto-restart" && \
+        echo "Auto-restart on crash enabled successfully"`
+
+	case "auto-restart-off":
+		script = `echo "Disabling auto-restart on crash..." && \
+        bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install) --unset-auto-restart" && \
+        echo "Auto-restart on crash disabled successfully"`
 
 	case "shutdown-cancel":
 		script = `echo "Cancelling pending shutdown/reboot..." && \
@@ -2716,7 +2742,7 @@ func systemStatusAPIHandler(w http.ResponseWriter, r *http.Request) {
 func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	props := []string{"NRestarts", "StartLimitBurst", "StartLimitIntervalUSec", "SubState", "OnFailure", "Result", "ExecMainStatus", "RestartUSec"}
+	props := []string{"NRestarts", "StartLimitBurst", "StartLimitIntervalUSec", "SubState", "OnFailure", "Result", "ExecMainStatus", "RestartUSec", "Restart"}
 	wdCtx, wdCancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer wdCancel()
 	cmd := exec.CommandContext(wdCtx, "systemctl", append([]string{"show", "ais-catcher.service"}, func() []string {
@@ -2752,9 +2778,13 @@ func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
 	startLimitHit := subState == "start-limit-hit"
 
 	exitCode, _ := strconv.Atoi(values["ExecMainStatus"])
-	restartDelay := values["RestartUSec"]
-	if restartDelay == "infinity" {
-		restartDelay = ""
+	restart := values["Restart"]
+	restartDelay := ""
+	if restart != "" && restart != "no" {
+		restartDelay = values["RestartUSec"]
+		if restartDelay == "infinity" {
+			restartDelay = ""
+		}
 	}
 	result := values["Result"]
 	if result == "success" {
@@ -2770,6 +2800,7 @@ func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
 		"sub_state":            subState,
 		"result":               result,
 		"exit_code":            exitCode,
+		"restart":              restart,
 		"restart_delay":        restartDelay,
 	})
 }
@@ -2906,6 +2937,7 @@ func main() {
 	http.HandleFunc("/tcp-servers", authMiddleware(makeConfigHandler("TCP Servers", "tcp-servers")))
 	http.HandleFunc("/general", authMiddleware(makeConfigHandler("General Settings", "general-settings")))
 	http.HandleFunc("/api/wall-stream", authMiddleware(wallStreamHandler))
+	http.HandleFunc("/api/reboot-pending", authMiddleware(rebootPendingHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if !getConfig().LicenseAccepted {

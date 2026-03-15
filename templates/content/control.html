@@ -171,8 +171,9 @@
                 <p id="svc-exitcode" class="text-sm font-medium text-slate-700 font-mono">—</p>
             </div>
             <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restart Delay</p>
-                <p id="svc-restartdelay" class="text-sm font-medium text-slate-700 font-mono">—</p>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Auto-Restart</p>
+                <p id="svc-restartpolicy" class="text-sm font-medium text-slate-700">—</p>
+                <p id="svc-restartdelay" class="text-xs text-slate-400 font-mono mt-0.5"></p>
             </div>
             <div>
                 <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Start at Boot</p>
@@ -305,12 +306,19 @@
                 document.getElementById('svc-restarts').innerHTML = (nr != null)
                     ? (nr > 0 ? `<span class="text-amber-600">${nr}</span>` : nr)
                     : '—';
-                document.getElementById('svc-limit').textContent = wd.start_limit_burst ? wd.start_limit_burst + ' restarts' : '—';
-                document.getElementById('svc-window').textContent = wd.start_limit_interval || '—';
+                document.getElementById('svc-limit').textContent = (wd.start_limit_burst && wd.start_limit_burst > 0) ? wd.start_limit_burst + ' restarts' : '—';
+                document.getElementById('svc-window').textContent = (wd.start_limit_interval && wd.start_limit_interval !== '0') ? wd.start_limit_interval : '—';
                 document.getElementById('svc-substate').innerHTML = svcSubstateHTML(wd.sub_state);
                 document.getElementById('svc-result').innerHTML = svcResultHTML(wd.result);
                 document.getElementById('svc-exitcode').textContent = (wd.result && wd.exit_code != null) ? wd.exit_code : '—';
-                document.getElementById('svc-restartdelay').textContent = wd.restart_delay || '—';
+                document.getElementById('svc-restartdelay').textContent = wd.restart_delay || '';
+
+                // Auto-restart policy
+                const restartEl = document.getElementById('svc-restartpolicy');
+                if (restartEl) {
+                    if (!wd.restart || wd.restart === 'no') restartEl.innerHTML = '<span class="text-slate-500">Disabled</span>';
+                    else restartEl.innerHTML = `<span class="text-emerald-600">${wd.restart}</span>`;
+                }
 
                 // --- Auto-start label in grid ---
                 const enabledEl = document.getElementById('enabled-status');
@@ -331,7 +339,6 @@
                     stop: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" stroke-width="2"></rect></svg>',
                     start: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"/></svg>',
                     restart: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>',
-                    resetFailed: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>',
                     enable: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>',
                     disable: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>',
                 };
@@ -346,17 +353,14 @@
                 }
                 document.getElementById('action-primary').innerHTML = primaryHTML;
 
-                // Secondary buttons (right): Restart | Clear Failed | Enable/Disable
+                // Secondary buttons (right): Restart | Enable/Disable
                 const secBase = 'action-button inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1';
                 const ghost = `${secBase} border-slate-300 text-slate-700 bg-white hover:bg-slate-50 focus:ring-slate-400`;
-                const amber = `${secBase} border-amber-400 text-amber-800 bg-amber-50 hover:bg-amber-100 focus:ring-amber-400`;
                 const secBtn = (action, cls, icon, label) =>
                     `<button class="${cls}" data-action="${action}" title="${label}">${icon}<span class="hidden sm:inline">${label}</span></button>`;
 
-                const failed = svc.status === 'failed';
                 let secondaryHTML = '';
                 if (running) secondaryHTML += secBtn('restart', ghost, ico.restart, 'Restart');
-                if (failed) secondaryHTML += secBtn('reset-failed', amber, ico.resetFailed, 'Clear Failed');
                 if (svc.enabled === false) secondaryHTML += secBtn('enable', ghost, ico.enable, 'Enable');
                 if (svc.enabled === true) secondaryHTML += secBtn('disable', ghost, ico.disable, 'Disable');
                 document.getElementById('action-secondary').innerHTML = secondaryHTML;
@@ -573,7 +577,7 @@
                     .then(data => {
                         if (data.status) {
                             // For enable/disable and restart, add delay for systemd state to update
-                            if (action === 'restart' || action === 'enable' || action === 'disable' || action === 'reset-failed') {
+                            if (action === 'restart' || action === 'enable' || action === 'disable') {
                                 setTimeout(() => {
                                     operationInProgress = false;
                                     updateStatus();

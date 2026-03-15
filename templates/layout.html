@@ -286,33 +286,37 @@
   <!-- Overlay -->
   <div id="overlay" class="fixed inset-0 bg-slate-900/50 hidden z-40 transition-opacity backdrop-blur-sm"></div>
 
-  <!-- Wall message banner -->
-  <div id="wall-banner" class="fixed top-0 left-0 right-0 z-50 hidden" role="alert">
-    <div class="bg-amber-500 text-white px-4 py-3 flex items-start gap-3 shadow-lg">
-      <svg class="w-5 h-5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <!-- Reboot / shutdown pending banner (poll-based, auto-shows/hides) -->
+  <div id="reboot-banner" class="fixed top-0 left-0 right-0 z-50 hidden" role="alert">
+    <div class="bg-amber-500 text-white px-4 py-2.5 flex items-center gap-3 shadow-lg">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
       </svg>
-      <div class="flex-1 text-sm font-medium leading-snug" id="wall-banner-text"></div>
-      <button onclick="document.getElementById('wall-banner').classList.add('hidden')" class="shrink-0 text-white/80 hover:text-white transition-colors" aria-label="Dismiss">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
+      <span class="flex-1 text-sm font-medium" id="reboot-banner-text"></span>
+      <a href="/system" class="shrink-0 text-white text-xs font-semibold underline underline-offset-2 hover:text-white/80 transition-colors">Cancel via System Actions</a>
     </div>
   </div>
   <script>
     (function() {
-      const es = new EventSource('/api/wall-stream');
-      es.onmessage = function(e) {
-        const msg = JSON.parse(e.data);
-        const banner = document.getElementById('wall-banner');
-        const text   = document.getElementById('wall-banner-text');
-        if (banner && text && msg) {
-          text.textContent = msg;
-          banner.classList.remove('hidden');
-        }
-      };
-      es.onerror = function() { es.close(); };
+      function pollRebootStatus() {
+        fetch('/api/reboot-pending')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var bar = document.getElementById('reboot-banner');
+            var txt = document.getElementById('reboot-banner-text');
+            if (bar && txt) {
+              if (data.pending && data.message) {
+                txt.textContent = data.message;
+                bar.classList.remove('hidden');
+              } else {
+                bar.classList.add('hidden');
+              }
+            }
+          })
+          .catch(function() {});
+      }
+      pollRebootStatus();
+      setInterval(pollRebootStatus, 5000);
     })();
   </script>
 

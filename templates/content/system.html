@@ -40,6 +40,10 @@
               <option value="watchdog-on">Arm reboot on failure</option>
               <option value="watchdog-off">Disarm reboot on failure</option>
             </optgroup>
+            <optgroup label="── Auto-restart ──">
+              <option value="auto-restart-on">Enable auto-restart on crash</option>
+              <option value="auto-restart-off">Disable auto-restart on crash</option>
+            </optgroup>
           </select>
           <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -170,8 +174,9 @@
         <p id="svc-exitcode" class="text-sm font-medium text-slate-700 font-mono">—</p>
       </div>
       <div>
-        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restart Delay</p>
-        <p id="svc-restartdelay" class="text-sm font-medium text-slate-700 font-mono">—</p>
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Auto-Restart</p>
+        <p id="svc-restartpolicy" class="text-sm font-medium text-slate-700">—</p>
+        <p id="svc-restartdelay" class="text-xs text-slate-400 font-mono mt-0.5"></p>
       </div>
       <div>
         <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Start at Boot</p>
@@ -359,12 +364,19 @@
       document.getElementById('svc-restarts').innerHTML = (nr != null)
           ? (nr > 0 ? `<span class="text-amber-600">${nr}</span>` : nr)
           : '—';
-      document.getElementById('svc-limit').textContent        = wd.start_limit_burst ? wd.start_limit_burst + ' restarts' : '—';
-      document.getElementById('svc-window').textContent       = wd.start_limit_interval || '—';
+      document.getElementById('svc-limit').textContent        = (wd.start_limit_burst && wd.start_limit_burst > 0) ? wd.start_limit_burst + ' restarts' : '—';
+      document.getElementById('svc-window').textContent       = (wd.start_limit_interval && wd.start_limit_interval !== '0') ? wd.start_limit_interval : '—';
       document.getElementById('svc-substate').innerHTML       = svcSubstateHTML(wd.sub_state);
       document.getElementById('svc-result').innerHTML         = svcResultHTML(wd.result);
       document.getElementById('svc-exitcode').textContent     = (wd.result && wd.exit_code != null) ? wd.exit_code : '—';
-      document.getElementById('svc-restartdelay').textContent = wd.restart_delay || '—';
+      document.getElementById('svc-restartdelay').textContent = wd.restart_delay || '';
+
+      // Auto-restart label
+      const restartEl = document.getElementById('svc-restartpolicy');
+      if (restartEl) {
+        if (!wd.restart || wd.restart === 'no') restartEl.innerHTML = '<span class="text-slate-500">Disabled</span>';
+        else restartEl.innerHTML = `<span class="text-emerald-600">${wd.restart}</span>`;
+      }
 
       // Auto-start label
       const enabledEl = document.getElementById('enabled-status');
@@ -634,7 +646,9 @@
           'system-halt':         'System Shutdown',
           'shutdown-cancel':     'Cancel Pending Shutdown',
           'watchdog-on':         'Arm Reboot on Failure',
-          'watchdog-off':        'Disarm Reboot on Failure'
+          'watchdog-off':        'Disarm Reboot on Failure',
+          'auto-restart-on':     'Enable Auto-Restart on Crash',
+          'auto-restart-off':    'Disable Auto-Restart on Crash'
       };
       return titles[action] || 'System Operation';
   }
