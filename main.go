@@ -2783,8 +2783,10 @@ func updateCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Pre-stamp timestamps before launching goroutines to prevent thundering herd
 	cachedSysInfo.Lock()
-	needAISCatcherCheck := time.Since(systemInfo.LastChecked) > 15*time.Minute
-	needControlCheck := time.Since(systemInfo.ControlLastChecked) > 15*time.Minute
+	aisWasReset := systemInfo.LastChecked.IsZero()
+	controlWasReset := systemInfo.ControlLastChecked.IsZero()
+	needAISCatcherCheck := aisWasReset || time.Since(systemInfo.LastChecked) > 15*time.Minute
+	needControlCheck := controlWasReset || time.Since(systemInfo.ControlLastChecked) > 15*time.Minute
 	if needAISCatcherCheck {
 		systemInfo.LastChecked = time.Now()
 	}
@@ -2794,10 +2796,20 @@ func updateCheckHandler(w http.ResponseWriter, r *http.Request) {
 	cachedSysInfo.Unlock()
 
 	if needAISCatcherCheck {
-		go checkLatestVersion()
+		// Run synchronously when explicitly reset (after an update action) so the
+		// response reflects the actual installed version, not the stale cached flag.
+		if aisWasReset {
+			checkLatestVersion()
+		} else {
+			go checkLatestVersion()
+		}
 	}
 	if needControlCheck {
-		go checkControlLatestVersion()
+		if controlWasReset {
+			checkControlLatestVersion()
+		} else {
+			go checkControlLatestVersion()
+		}
 	}
 
 	// Return current update status
@@ -2809,6 +2821,7 @@ func updateCheckHandler(w http.ResponseWriter, r *http.Request) {
 		"ais_catcher_latest":           info.LatestVersionTag,
 		"ais_catcher_current_commit":   info.AISCatcherCommit,
 		"ais_catcher_latest_commit":    info.LatestCommit,
+		"ais_catcher_build_type":       info.AISCatcherBuildType,
 		"control_update_available":     info.ControlUpdateAvailable,
 		"control_current":              info.BuildVersion,
 		"control_latest":               info.ControlLatestCommit,

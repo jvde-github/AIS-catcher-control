@@ -653,6 +653,21 @@
       return titles[action] || 'System Operation';
   }
 
+  function blinkExecuteButton() {
+      const btn = document.getElementById('executeButton');
+      if (!btn) return;
+      let count = 0;
+      const interval = setInterval(() => {
+          btn.classList.toggle('ring-4');
+          btn.classList.toggle('ring-orange-400');
+          btn.classList.toggle('ring-offset-2');
+          if (++count >= 8) {
+              clearInterval(interval);
+              btn.classList.remove('ring-4', 'ring-orange-400', 'ring-offset-2');
+          }
+      }, 400);
+  }
+
   // Check status on load
   document.addEventListener('DOMContentLoaded', () => {
       // Check if any operation is running
@@ -663,19 +678,30 @@
                   // Restore UI state
                   const select = document.getElementById('actionSelect');
                   if (select) select.value = data.action;
-                  
+
                   currentAction = data.action;
                   document.getElementById('progressTitle').textContent = getActionTitle(data.action);
                   document.getElementById('progressOutput').innerHTML = ''; // Will be filled by history
                   updateStatus('Running');
                   showProgress(true);
-                  
+
                   // Reconnect SSE
                   connectSSE(data.action);
+              } else {
+                  // Pre-select action from URL param (e.g. from update notification link)
+                  const urlParams = new URLSearchParams(window.location.search);
+                  const preAction = urlParams.get('action');
+                  if (preAction) {
+                      const select = document.getElementById('actionSelect');
+                      if (select && select.querySelector(`option[value="${preAction}"]`)) {
+                          select.value = preAction;
+                          setTimeout(blinkExecuteButton, 400);
+                      }
+                  }
               }
           })
           .catch(console.error);
-      
+
       // Poll system diagnostics and daemon card every 4 seconds when idle
       setInterval(() => {
           if (!currentOperation) updateSystemInfo();
@@ -729,6 +755,9 @@
                   // Keep the console open — just silently refresh the diagnostic cards
                   appendOutput('\n<span class="text-slate-500">─── Select a new operation and press Execute to continue. ───</span>\n');
                   setTimeout(() => updateSystemInfo(), 1500);
+                  // Extra refreshes to ensure new version number is picked up after binary install
+                  setTimeout(() => updateSystemInfo(), 4000);
+                  setTimeout(() => updateSystemInfo(), 8000);
               }
               
               finishOperation('Completed', false);
