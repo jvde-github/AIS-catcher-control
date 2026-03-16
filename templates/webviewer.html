@@ -220,8 +220,10 @@
             e.preventDefault();
         }, { passive: false });
 
-        const hasServer = {{.HasServer}};
-        const port = "{{.port}}";
+        const allServers = {{.ServersJSON}};
+        let hasServer = {{.HasServer}};
+        let port = "{{.port}}";
+        let webviewerActive = {{.WebviewerActive}};
         const iframe = document.getElementById('webviewer-frame');
         const loadingDiv = document.getElementById('loading');
         const configPanel = document.getElementById('config-panel');
@@ -231,7 +233,7 @@
         let currentView = 'main';
         let configData = {};
 
-        function showError(title, message) {
+        function showError(title, message, showRestart = false) {
             const hubContainer = document.getElementById('hub-container');
             const errorDiv = document.createElement('div');
             errorDiv.className = 'flex items-center justify-center h-full bg-slate-50 absolute inset-0';
@@ -242,13 +244,23 @@
                     </svg>
                     <h3 class="text-xl font-semibold text-slate-800 mb-2">${title}</h3>
                     <p class="text-slate-600 mb-4">${message}</p>
-                    <a href="/server" class="inline-block bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg transition">
-                        Configure Webviewer
-                    </a>
+                    <div class="flex flex-col items-center gap-3">
+                        ${showRestart ? `<button id="error-restart-btn" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg transition font-medium">Restart Service</button>` : ''}
+                        <a href="/server" class="text-sm text-slate-500 hover:text-slate-700 underline">Configure Webviewer</a>
+                    </div>
                 </div>
             `;
             loadingDiv.classList.add('hidden');
             hubContainer.insertBefore(errorDiv, hubContainer.firstChild);
+            if (showRestart) {
+                document.getElementById('error-restart-btn').addEventListener('click', function() {
+                    this.textContent = 'Restarting...';
+                    this.disabled = true;
+                    fetch('/api/restart', { method: 'POST' })
+                        .then(() => setTimeout(() => window.location.reload(), 3000))
+                        .catch(() => { this.textContent = 'Restart Service'; this.disabled = false; });
+                });
+            }
         }
 
         function checkServiceStatus() {
@@ -281,12 +293,74 @@
                         hubContainer.insertBefore(errorDiv, hubContainer.firstChild);
                         return;
                     }
+                    // Service is running — load the webviewer iframe
                     loadWebviewer();
                 })
                 .catch(error => {
                     clearTimeout(timeoutId);
                     console.error('Error checking service status:', error);
                     loadWebviewer();
+                });
+        }
+
+        function showWebviewerDisabled() {
+            const hubContainer = document.getElementById('hub-container');
+            const errorDiv = document.createElement('div');
+            errorDiv.id = 'webviewer-disabled-msg';
+            errorDiv.className = 'flex items-center justify-center h-full bg-slate-50 absolute inset-0';
+            errorDiv.innerHTML = `
+                <div class="max-w-md p-8 text-center">
+                    <svg class="h-16 w-16 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                    <h3 class="text-xl font-semibold text-slate-800 mb-2">Webviewer Output Disabled</h3>
+                    <p class="text-slate-600 mb-1">The webviewer output is configured on port <strong>${port}</strong> but is currently <strong>inactive</strong>.</p>
+                    <p class="text-slate-500 text-sm mb-6">Enable it in the output settings and restart the service.</p>
+                    <div class="flex flex-col gap-3">
+                        <button id="enable-webviewer-btn" onclick="enableAndRestart()" class="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg transition font-medium">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            Enable &amp; Restart
+                        </button>
+                        <a href="/server" class="inline-block text-slate-600 hover:text-slate-800 text-sm underline">Edit webviewer settings</a>
+                    </div>
+                </div>
+            `;
+            loadingDiv.classList.add('hidden');
+            hubContainer.insertBefore(errorDiv, hubContainer.firstChild);
+        }
+
+        function enableAndRestart() {
+            const btn = document.getElementById('enable-webviewer-btn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+            fetch('/api/config', { credentials: 'include' })
+                .then(r => r.json())
+                .then(cfg => {
+                    // Enable the first server entry
+                    if (!cfg.server) cfg.server = [];
+                    if (cfg.server.length === 0) cfg.server.push({ port: parseInt(port) || 8100 });
+                    cfg.server[0].active = true;
+
+                    return fetch('/api/config', {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(cfg)
+                    });
+                })
+                .then(r => {
+                    if (!r.ok) throw new Error('Save failed');
+                    if (btn) btn.textContent = 'Restarting...';
+                    return fetch('/api/restart', { method: 'POST', credentials: 'include' });
+                })
+                .then(() => {
+                    // Wait for service to restart then reload
+                    setTimeout(() => window.location.reload(), 3000);
+                })
+                .catch(err => {
+                    console.error('Enable failed:', err);
+                    if (btn) { btn.disabled = false; btn.textContent = 'Enable & Restart'; }
+                    alert('Failed to enable webviewer: ' + err.message);
                 });
         }
 
@@ -318,8 +392,9 @@
                 
                 let loadTimeout = setTimeout(() => {
                     showError(
-                        'Webviewer Not Accessible',
-                        'The webviewer could not be loaded on port ' + port + '. Please ensure AIS-catcher is running with webviewer enabled.'
+                        'Webviewer Not Responding',
+                        'Port ' + port + ' is not responding. If this server was recently added, a service restart is required to activate it.',
+                        true
                     );
                 }, 8000);
 
@@ -457,46 +532,18 @@
             configContent.textContent = '';
             const wrapper = document.createElement('div');
             wrapper.className = 'space-y-4';
-            const desc = document.createElement('div');
-            desc.className = 'text-sm text-slate-600 mb-4';
-            desc.textContent = 'Configure your AIS receiver source';
             const container = document.createElement('div');
             container.id = 'hub-receivers-container';
             container.className = 'space-y-4';
-            wrapper.appendChild(desc);
             wrapper.appendChild(container);
             configContent.appendChild(wrapper);
 
-            // Use createChannelManager to render device configurations
-            if (typeof createChannelManager !== 'undefined' && typeof receiverSchema !== 'undefined') {
-                const receiverManager = createChannelManager({
-                    channelType: 'receiver',
-                    schema: receiverSchema,
-                    containerId: 'hub-receivers-container',
-                    addButtonId: null,
-                    saveButtonId: null,
-                    title: 'Receiver'
-                });
-                // Clear unsaved state after rendering with longer delay and repeated attempts
-                setTimeout(() => {
-                    if (typeof App !== 'undefined' && App.setUnsaved) {
-                        App.setUnsaved(false);
-                        const statusEl = document.getElementById('status-message');
-                        if (statusEl) {
-                            statusEl.className = 'hidden';
-                            statusEl.innerHTML = '';
-                        }
-                    }
-                }, 500);
-                setTimeout(() => {
-                    if (typeof App !== 'undefined' && App.setUnsaved) {
-                        App.setUnsaved(false);
-                    }
-                }, 1000);
-            } else {
-                console.error('createChannelManager or receiverSchema not available');
-                configContent.innerHTML += '<div class="text-center p-4 text-red-600">Configuration manager not loaded</div>';
-            }
+            createChannelManager({
+                channelType: 'receiver',
+                schema: receiverSchema,
+                containerId: 'hub-receivers-container',
+                title: 'Receiver'
+            });
         }
 
         function loadOutputConfig() {
@@ -510,22 +557,6 @@
                 .then(data => {
                     configData = data;
                     renderOutputConfig(data);
-                    // Clear unsaved state after loading with longer delay and repeated attempts
-                    setTimeout(() => {
-                        if (typeof App !== 'undefined' && App.setUnsaved) {
-                            App.setUnsaved(false);
-                            const statusEl = document.getElementById('status-message');
-                            if (statusEl) {
-                                statusEl.className = 'hidden';
-                                statusEl.innerHTML = '';
-                            }
-                        }
-                    }, 500);
-                    setTimeout(() => {
-                        if (typeof App !== 'undefined' && App.setUnsaved) {
-                            App.setUnsaved(false);
-                        }
-                    }, 1000);
                 })
                 .catch(err => {
                     console.error('Config load error:', err);
@@ -548,43 +579,54 @@
         let currentOutputManager = null;
         let currentOutputType = 'sharing';
 
+        const outputTypes = [
+            { value: 'sharing', label: 'Community' },
+            { value: 'udp',     label: 'UDP' },
+            { value: 'http',    label: 'HTTP' },
+            { value: 'mqtt',    label: 'MQTT' },
+            { value: 'tcp',     label: 'TCP Client' },
+            { value: 'tcp-server', label: 'TCP Server' },
+            { value: 'server',  label: 'Viewer' },
+        ];
+
         function renderOutputConfig(data) {
+            currentOutputType = 'sharing';
             configContent.textContent = '';
             const wrapper = document.createElement('div');
             wrapper.className = 'space-y-4';
-            const select = document.createElement('select');
-            select.id = 'hub-output-type-selector';
-            select.className = 'w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white mb-4';
-            ['sharing', 'udp', 'http', 'mqtt', 'tcp', 'tcp-server', 'server'].forEach(type => {
-                const opt = document.createElement('option');
-                opt.value = type;
-                if (type === 'sharing') {
-                    opt.textContent = 'Community Sharing';
-                } else if (type === 'tcp') {
-                    opt.textContent = 'TCP Client';
-                } else if (type === 'tcp-server') {
-                    opt.textContent = 'TCP Server';
-                } else if (type === 'server') {
-                    opt.textContent = 'Webviewer';
-                } else {
-                    opt.textContent = type.toUpperCase();
-                }
-                select.appendChild(opt);
+
+            // Pill-style tab bar
+            const tabBar = document.createElement('div');
+            tabBar.className = 'flex flex-wrap gap-1.5 p-1.5 bg-slate-100 rounded-xl mb-2';
+
+            outputTypes.forEach(({ value, label }) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.dataset.outputType = value;
+                btn.textContent = label;
+                btn.className = value === currentOutputType
+                    ? 'flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-800 shadow-sm transition-all'
+                    : 'flex-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-700 transition-all';
+                btn.addEventListener('click', () => {
+                    currentOutputType = value;
+                    tabBar.querySelectorAll('button').forEach(b => {
+                        const active = b.dataset.outputType === value;
+                        b.className = active
+                            ? 'flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-800 shadow-sm transition-all'
+                            : 'flex-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-700 transition-all';
+                    });
+                    updateOutputView();
+                });
+                tabBar.appendChild(btn);
             });
+
             const container = document.createElement('div');
             container.id = 'hub-output-container';
-            container.className = 'space-y-4';
-            wrapper.appendChild(select);
+            wrapper.appendChild(tabBar);
             wrapper.appendChild(container);
             configContent.appendChild(wrapper);
 
-            const selector = document.getElementById('hub-output-type-selector');
             updateOutputView();
-
-            selector.addEventListener('change', () => {
-                currentOutputType = selector.value;
-                updateOutputView();
-            });
         }
 
         function updateOutputView() {
@@ -610,8 +652,7 @@
             if (type === 'sharing' && typeof createSimpleConfigManager !== 'undefined') {
                 currentOutputManager = createSimpleConfigManager({
                     schema: schema,
-                    containerId: 'hub-output-container',
-                    saveButtonId: null
+                    containerId: 'hub-output-container'
                 });
             } else if (typeof createChannelManager !== 'undefined') {
                 // Map display type to actual config field name
@@ -629,8 +670,6 @@
                     channelType: actualChannelType,
                     schema: schema,
                     containerId: 'hub-output-container',
-                    addButtonId: null,
-                    saveButtonId: null,
                     title: type.charAt(0).toUpperCase() + type.slice(1)
                 });
             }
@@ -690,18 +729,6 @@
             configContent.appendChild(wrapper);
 
             updateControlStatus();
-            
-            // Clear unsaved state after rendering control panel
-            setTimeout(() => {
-                if (typeof App !== 'undefined' && App.setUnsaved) {
-                    App.setUnsaved(false);
-                    const statusEl = document.getElementById('status-message');
-                    if (statusEl) {
-                        statusEl.className = 'hidden';
-                        statusEl.innerHTML = '';
-                    }
-                }
-            }, 500);
         }
 
         function updateControlStatus() {
@@ -734,14 +761,62 @@
                 .catch(err => console.error('Service control failed:', err));
         }
 
+        function proceedWithServer(selectedPort, selectedActive) {
+            port = selectedPort;
+            webviewerActive = selectedActive;
+            if (!webviewerActive) {
+                loadingDiv.classList.add('hidden');
+                showWebviewerDisabled();
+            } else {
+                checkServiceStatus();
+            }
+        }
+
+        function showServerPicker() {
+            loadingDiv.classList.add('hidden');
+            const hubContainer = document.getElementById('hub-container');
+            const pickerDiv = document.createElement('div');
+            pickerDiv.className = 'flex items-center justify-center h-full bg-slate-50 absolute inset-0 p-6';
+            const inner = document.createElement('div');
+            inner.className = 'max-w-sm w-full';
+            inner.innerHTML = `
+                <h3 class="text-lg font-semibold text-slate-800 mb-1">Multiple Webviewers</h3>
+                <p class="text-sm text-slate-500 mb-4">Select which webviewer to open:</p>
+                <div class="space-y-2" id="server-picker-list"></div>
+            `;
+            pickerDiv.appendChild(inner);
+            hubContainer.insertBefore(pickerDiv, hubContainer.firstChild);
+
+            const list = document.getElementById('server-picker-list');
+            allServers.forEach((srv) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-xl hover:border-slate-400 hover:shadow-sm transition text-left';
+                btn.innerHTML = `
+                    <span class="font-medium text-slate-800">Port ${srv.port}</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full ${srv.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
+                        ${srv.active ? 'Enabled' : 'Disabled'}
+                    </span>
+                `;
+                btn.addEventListener('click', () => {
+                    pickerDiv.remove();
+                    loadingDiv.classList.remove('hidden');
+                    proceedWithServer(srv.port, srv.active);
+                });
+                list.appendChild(btn);
+            });
+        }
+
         // Initialize
         if (!hasServer || !port) {
             showError(
                 'Webviewer Not Configured',
                 'No webviewer server has been configured. Please add a server configuration in the Webviewer settings.'
             );
+        } else if (allServers.length > 1) {
+            showServerPicker();
         } else {
-            checkServiceStatus();
+            proceedWithServer(port, webviewerActive);
         }
     </script>
 </body>

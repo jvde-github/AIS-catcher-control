@@ -72,16 +72,13 @@
         // Community sharing is not an array, use simple config manager
         createSimpleConfigManager({
             schema: sharingSchema,
-            containerId: 'sharing-configurations',
-            saveButtonId: 'save-sharing-btn'
+            containerId: 'sharing-configurations'
         });
 
         createChannelManager({
             channelType: 'http',
             schema: httpSchema,
             containerId: 'http-configurations',
-            addButtonId: 'add-http-btn',
-            saveButtonId: 'save-http-btn',
             title: 'HTTP'
         });
 
@@ -89,8 +86,6 @@
             channelType: 'mqtt',
             schema: mqttSchema,
             containerId: 'mqtt-configurations',
-            addButtonId: 'add-mqtt-btn',
-            saveButtonId: 'save-mqtt-btn',
             title: 'MQTT'
         });
 
@@ -98,8 +93,6 @@
             channelType: 'tcp',
             schema: tcpSchema,
             containerId: 'tcp-configurations',
-            addButtonId: 'add-tcp-btn',
-            saveButtonId: 'save-tcp-btn',
             title: 'TCP'
         });
 
@@ -107,8 +100,6 @@
             channelType: 'udp',
             schema: udpSchema,
             containerId: 'udp-configurations',
-            addButtonId: 'add-udp-btn',
-            saveButtonId: 'save-udp-btn',
             title: 'UDP'
         });
 
@@ -116,8 +107,6 @@
             channelType: 'tcp_server',
             schema: tcpServerSchema,
             containerId: 'tcp-server-configurations',
-            addButtonId: 'add-tcp-server-btn',
-            saveButtonId: 'save-tcp-server-btn',
             title: 'TCP Server'
         });
 
@@ -125,8 +114,6 @@
             channelType: 'server',
             schema: webviewerSchema,
             containerId: 'webviewer-configurations',
-            addButtonId: 'add-webviewer-btn',
-            saveButtonId: 'save-webviewer-btn',
             title: 'Webviewer'
         });
 

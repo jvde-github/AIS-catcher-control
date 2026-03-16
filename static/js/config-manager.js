@@ -3,6 +3,61 @@
 (function (global) {
     'use strict';
 
+    // Registry of all active ConfigManager instances keyed by containerId
+    const ManagerRegistry = new Map();
+
+    // Tracks which manager+index opened a device/serial selection modal
+    let activeDeviceSelection = { index: 0, containerId: '' };
+    let activeSerialSelection = { index: 0, containerId: '' };
+
+    function ensureDeviceModal() {
+        if (document.getElementById('cm-device-modal')) return;
+        const modal = el('div', 'fixed inset-0 flex items-center justify-center hidden z-[100] p-4',
+            { id: 'cm-device-modal', style: 'background-color: rgba(0,0,0,0.3)' },
+            el('div', 'bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col relative', {},
+                el('div', 'flex justify-between items-center p-3 md:p-4 border-b flex-shrink-0', {},
+                    el('h3', 'text-base md:text-lg font-medium text-gray-800', {}, 'Select Device'),
+                    el('button', 'text-gray-600 hover:text-gray-800', { type: 'button', onClick: () => modal.classList.add('hidden') },
+                        el('svg', 'h-6 w-6', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
+                            el('path', '', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M6 18L18 6M6 6l12 12' })
+                        )
+                    )
+                ),
+                el('div', 'p-3 md:p-4 overflow-y-auto flex-1', { id: 'cm-device-list' }),
+                el('div', 'flex justify-end p-3 md:p-4 border-t flex-shrink-0', {},
+                    el('button', 'bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200 text-sm', {
+                        type: 'button', onClick: () => modal.classList.add('hidden')
+                    }, 'Close')
+                )
+            )
+        );
+        document.body.appendChild(modal);
+    }
+
+    function ensureSerialModal() {
+        if (document.getElementById('cm-serial-modal')) return;
+        const modal = el('div', 'fixed inset-0 flex items-center justify-center hidden z-[100] p-4',
+            { id: 'cm-serial-modal', style: 'background-color: rgba(0,0,0,0.3)' },
+            el('div', 'bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col relative', {},
+                el('div', 'flex justify-between items-center p-3 md:p-4 border-b flex-shrink-0', {},
+                    el('h3', 'text-base md:text-lg font-medium text-gray-800', {}, 'Select Serial Device'),
+                    el('button', 'text-gray-600 hover:text-gray-800', { type: 'button', onClick: () => modal.classList.add('hidden') },
+                        el('svg', 'h-6 w-6', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
+                            el('path', '', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M6 18L18 6M6 6l12 12' })
+                        )
+                    )
+                ),
+                el('div', 'p-3 md:p-4 overflow-y-auto flex-1', { id: 'cm-serial-list' }),
+                el('div', 'flex justify-end p-3 md:p-4 border-t flex-shrink-0', {},
+                    el('button', 'bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition duration-200 text-sm', {
+                        type: 'button', onClick: () => modal.classList.add('hidden')
+                    }, 'Close')
+                )
+            )
+        );
+        document.body.appendChild(modal);
+    }
+
     // ============================================================================
     // 1. Core Utilities & DOM Builder
     // ============================================================================
@@ -40,7 +95,7 @@
         getNested: (obj, path) => path?.split('.').reduce((a, p) => a?.[p], obj),
         setNested: (obj, path, val) => {
             const keys = path.split('.'), last = keys.pop();
-            keys.reduce((a, k) => a[k] ||= {}, obj)[last] = val;
+            keys.reduce((a, k) => a[k] = a[k] || {}, obj)[last] = val;
         },
         parseInteger: value => {
             if (typeof value === 'number') return Math.floor(value);
@@ -53,28 +108,104 @@
     };
 
     const ActionRegistry = {
-        openSerialDeviceModal: () => {
-            if (typeof window.openSerialDeviceModal === 'function') window.openSerialDeviceModal();
+        openSerialDeviceModal: (index, containerId) => {
+            activeSerialSelection = { index, containerId };
+            ensureSerialModal();
+            const modal = document.getElementById('cm-serial-modal');
+            const list = document.getElementById('cm-serial-list');
+            list.innerHTML = '<div class="text-center p-4 text-slate-500">Loading...</div>';
+            modal.classList.remove('hidden');
+            fetch('/serial-list')
+                .then(r => r.json())
+                .then(data => {
+                    list.innerHTML = '';
+                    const devices = Array.isArray(data) ? data : [];
+                    if (devices.length === 0) {
+                        list.innerHTML = '<li class="text-gray-500 p-2">No devices found</li>';
+                        return;
+                    }
+                    devices.forEach(device => {
+                        list.appendChild(el('li', 'p-2 hover:bg-gray-100 cursor-pointer rounded', {
+                            onClick: () => {
+                                const mgr = ManagerRegistry.get(activeSerialSelection.containerId);
+                                if (mgr) {
+                                    const target = mgr.config.isList ? mgr.data[activeSerialSelection.index] : mgr.data;
+                                    if (target) {
+                                        if (!target.serialport) target.serialport = {};
+                                        target.serialport.port = device;
+                                        App.setUnsaved(true);
+                                        mgr.updateJsonDebug();
+                                        mgr.render();
+                                    }
+                                }
+                                modal.classList.add('hidden');
+                            }
+                        }, device));
+                    });
+                })
+                .catch(() => { list.innerHTML = '<li class="text-red-500 p-2">Error loading devices</li>'; });
         },
-        openDeviceSelectionModal: () => {
-            if (typeof window.openDeviceSelectionModal === 'function') window.openDeviceSelectionModal();
+
+        openDeviceSelectionModal: (index, containerId) => {
+            activeDeviceSelection = { index, containerId };
+            ensureDeviceModal();
+            const modal = document.getElementById('cm-device-modal');
+            const list = document.getElementById('cm-device-list');
+            list.innerHTML = '<div class="text-center p-4 text-slate-500">Loading...</div>';
+            modal.classList.remove('hidden');
+            fetch('/device-list')
+                .then(r => r.json())
+                .then(data => {
+                    list.innerHTML = '';
+                    const devices = Array.isArray(data.devices) ? data.devices : [];
+                    if (devices.length === 0) {
+                        list.innerHTML = '<li class="text-gray-500 p-2">No devices found</li>';
+                        return;
+                    }
+                    devices.forEach(device => {
+                        list.appendChild(el('li', 'flex items-center justify-between p-2 border rounded-md hover:bg-gray-100 mb-2', {},
+                            el('span', '', {}, device.name),
+                            el('button', 'bg-gray-600 text-white px-2 py-1 rounded-md hover:bg-gray-700 text-sm', {
+                                type: 'button',
+                                onClick: () => {
+                                    const mgr = ManagerRegistry.get(activeDeviceSelection.containerId);
+                                    if (mgr) {
+                                        const target = mgr.config.isList ? mgr.data[activeDeviceSelection.index] : mgr.data;
+                                        if (target) {
+                                            target.input = device.input ? device.input.toUpperCase() : '';
+                                            target.serial = device.serial || '';
+                                            App.setUnsaved(true);
+                                            mgr.updateJsonDebug();
+                                            mgr.render();
+                                        }
+                                    }
+                                    modal.classList.add('hidden');
+                                }
+                            }, 'Select')
+                        ));
+                    });
+                })
+                .catch(() => { list.innerHTML = '<li class="text-red-500 p-2">Error loading devices</li>'; });
         },
+
         openRegistration: () => window.open('https://aiscatcher.org/register', '_blank'),
-        openSharingManagement: () => {
-            // Get the current value of the sharing_key field
-            const sharingKeyInput = document.querySelector('[data-field="sharing_key"] input');
+
+        openSharingManagement: (index, containerId) => {
+            const scope = containerId ? document.getElementById(containerId) : document;
+            const card = scope?.querySelector(`[data-receiver-card="${index}"]`);
+            const sharingKeyInput = (card || scope || document).querySelector('[data-field="sharing_key"] input');
             const sharingKey = sharingKeyInput ? sharingKeyInput.value.trim() : '';
-            
-            // If empty, open registration page; otherwise, open edit station page
             if (sharingKey === '') {
                 window.open('https://aiscatcher.org/register', '_blank');
             } else {
                 window.open(`https://www.aiscatcher.org/editstation/${sharingKey}`, '_blank');
             }
         },
-        clearSerial: () => {
-            // Clear the serial field when device type changes
-            const serialField = document.querySelector('[data-field="serial"] input');
+
+        clearSerial: (index, containerId) => {
+            const scope = containerId ? document.getElementById(containerId) : document;
+            const card = scope?.querySelector(`[data-receiver-card="${index}"]`);
+            const serialField = (card || scope || document).querySelector('[data-field="serial"] input');
             if (serialField) {
                 serialField.value = '';
                 serialField.dispatchEvent(new Event('input', { bubbles: true }));
@@ -168,10 +299,8 @@
             }
 
             // Update Save Button Visuals
-            document.querySelectorAll('button').forEach(btn => {
-                if (btn.textContent.trim() === 'Save') {
-                    btn.className = bool ? Styles.saveActive : Styles.saveInactive;
-                }
+            document.querySelectorAll('[data-save-btn]').forEach(btn => {
+                btn.className = bool ? Styles.saveActive : Styles.saveInactive;
             });
             window.onbeforeunload = bool ? () => true : null;
         }
@@ -182,7 +311,7 @@
     // ============================================================================
 
     const Renderer = {
-        createInput(field, currentValue, onUpdate) {
+        createInput(field, currentValue, onUpdate, index = 0, containerId = '') {
             const type = field.type;
 
             if (type === 'select') {
@@ -195,7 +324,7 @@
                                 const action = typeof field.onChange === 'function'
                                     ? field.onChange
                                     : ActionRegistry[field.onChange];
-                                if (action) action();
+                                if (action) action(index, containerId);
                             }
                         }
                     },
@@ -381,17 +510,17 @@
             });
         },
 
-        renderField(field, index, dataContext, onUpdateCallback, onDepencyCheck) {
+        renderField(field, index, dataContext, onUpdateCallback, onDepencyCheck, containerId = '') {
             let val = field.jsonpath ? Utils.getNested(dataContext, field.jsonpath) : dataContext[field.name];
             if (val === undefined) val = field.defaultValue;
 
             let inputEl = field.type === 'button'
                 ? el('button', Styles.button, {
                     type: 'button',
-                    onClick: () => (typeof field.onClick === 'function' ? field.onClick : ActionRegistry[field.onClick])?.()
-                }, field.buttonIcon && el('span', '', { innerHTML: field.buttonIcon }), 
+                    onClick: () => (typeof field.onClick === 'function' ? field.onClick : ActionRegistry[field.onClick])?.(index, containerId)
+                }, field.buttonIcon && el('span', '', { innerHTML: field.buttonIcon }),
                 typeof field.buttonLabel === 'function' ? field.buttonLabel(dataContext) : (field.buttonLabel || 'Action'))
-                : this.createInput(field, val, newValue => { onUpdateCallback(field, newValue); onDepencyCheck(); });
+                : this.createInput(field, val, newValue => { onUpdateCallback(field, newValue); onDepencyCheck(); }, index, containerId);
 
             if (field.withButton && field.type !== 'button') {
                 const action = typeof field.withButton.onClick === 'function'
@@ -399,7 +528,7 @@
                     : ActionRegistry[field.withButton.onClick] || (() => { });
                 inputEl = el('div', 'flex items-center gap-2', {},
                     el('div', 'flex-1', {}, inputEl),
-                    el('button', Styles.buttonPrimary, { type: 'button', onClick: action },
+                    el('button', Styles.buttonPrimary, { type: 'button', onClick: () => action(index, containerId) },
                         el('span', '', { innerHTML: field.withButton.icon || 'Action' }))
                 );
             }
@@ -466,6 +595,8 @@
 
             if (!this.container) return;
 
+            ManagerRegistry.set(config.containerId, this);
+
             this.loadData().then(() => {
                 this.render();
                 this.updateJsonDebug();
@@ -501,7 +632,7 @@
             const items = this.config.isList ? this.data : [this.data];
 
             items.forEach((item, index) => {
-                const wrapper = el('div', Styles.card, {},
+                const wrapper = el('div', Styles.card, { dataset: { receiverCard: index } },
                     this.config.isList ? el('div', Styles.cardHeader, {},
                         el('h4', 'text-base sm:text-lg font-semibold text-slate-800', {}, `${this.config.title} ${index + 1}`),
                         el('button', Styles.deleteBtn, {
@@ -516,7 +647,8 @@
                 this.fields.forEach(field => {
                     const fieldEl = Renderer.renderField(field, index, item,
                         (fld, val) => this.updateValue(index, fld, val),
-                        () => Renderer.updateVisibility(fieldsDiv, item)
+                        () => Renderer.updateVisibility(fieldsDiv, item),
+                        this.config.containerId
                     );
                     fieldsDiv.appendChild(fieldEl);
                 });
@@ -549,7 +681,7 @@
             }
 
             btnGroup.appendChild(el('button', 'w-full sm:w-32 bg-white border border-slate-300 text-slate-400 px-6 py-2 rounded-lg hover:bg-slate-50 shadow-sm transition-all duration-200 text-sm font-medium cursor-default', {
-                type: 'button', onClick: () => this.save()
+                type: 'button', dataset: { saveBtn: 'true' }, onClick: () => this.save()
             }, 'Save'));
 
             // Insert buttons before the JSON section
@@ -636,12 +768,9 @@
         }
 
         updateDynamicButtons(index) {
-            // Find all dynamic buttons in the current context and update their labels
-            const containers = this.config.isList 
-                ? this.container.querySelectorAll('.bg-white.rounded-lg.border.border-slate-200')
-                : [this.container];
-            
-            const targetContainer = this.config.isList ? containers[index] : containers[0];
+            const targetContainer = this.config.isList
+                ? this.container.querySelector(`[data-receiver-card="${index}"]`)
+                : this.container;
             if (!targetContainer) return;
             
             const dataContext = this.config.isList ? this.data[index] : this.data;
@@ -669,14 +798,9 @@
         }
 
         async save() {
-            const btn = document.querySelector('button[type="button"]:not([data-action])');
-            const saveButtons = Array.from(document.querySelectorAll('button[type="button"]')).filter(b =>
-                b.textContent.trim() === 'Save' && !b.querySelector('svg')
-            );
-            const saveBtn = saveButtons[0];
+            const saveBtn = document.querySelector('[data-save-btn]');
 
             if (saveBtn) {
-                const originalText = saveBtn.textContent;
                 saveBtn.textContent = 'Saving...';
                 saveBtn.disabled = true;
             }

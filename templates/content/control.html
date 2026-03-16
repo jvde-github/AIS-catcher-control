@@ -44,6 +44,22 @@
         .log-line.default {
             color: #cbd5e1;
         }
+
+        .log-line.notice {
+            color: #34d399;
+        }
+
+        .log-line.debug {
+            color: #94a3b8;
+            opacity: 0.75;
+        }
+
+        .log-ts {
+            color: #475569;
+            margin-right: 0.5em;
+            user-select: none;
+            flex-shrink: 0;
+        }
     </style>
 
     <!-- Update Notifications -->
@@ -226,10 +242,20 @@
             </div>
         </div>
 
-        <div id="logs-container" class="h-64 sm:h-80 overflow-auto custom-scrollbar p-4 bg-slate-900">
-            <div id="logs-content" class="flex flex-col justify-end min-h-full">
-                <div class="text-slate-500 italic text-sm">Loading logs...</div>
+        <div class="relative">
+            <div id="logs-container" class="overflow-auto custom-scrollbar p-4 bg-slate-900" style="min-height:20rem;max-height:60vh">
+                <div id="logs-content" class="flex flex-col">
+                    <div class="text-slate-500 italic text-sm">Loading logs...</div>
+                </div>
             </div>
+            <button id="scroll-bottom-btn"
+                onclick="const c=document.getElementById('logs-container');c.scrollTop=c.scrollHeight;userScrolledUp=false;document.getElementById('scroll-bottom-btn').classList.add('hidden');"
+                class="hidden absolute bottom-3 right-5 flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-full shadow-lg transition-opacity">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+                new messages
+            </button>
         </div>
     </div>
 
@@ -445,7 +471,7 @@
 
                     if (data.logs && data.logs.length > 0) {
                         data.logs.forEach(log => {
-                            logsContentDiv.appendChild(formatLogLine(log.message));
+                            logsContentDiv.appendChild(formatLogLine(log.message, log.priority, log.time));
                         });
                         const logsContainer = document.getElementById('logs-container');
                         logsContainer.scrollTop = logsContainer.scrollHeight;
@@ -475,7 +501,7 @@
 
                         if (data.logs && data.logs.length > 0) {
                             data.logs.forEach(log => {
-                                logsContentDiv.appendChild(formatLogLine(log.message));
+                                logsContentDiv.appendChild(formatLogLine(log.message, log.priority, log.time));
                             });
                             const logsContainer = document.getElementById('logs-container');
                             logsContainer.scrollTop = logsContainer.scrollHeight;
@@ -491,35 +517,49 @@
             };
 
             // Log Processing
-            function formatLogLine(message) {
+            // priority: 0=emerg,1=alert,2=crit,3=err,4=warning,5=notice,6=info,7=debug
+            function formatLogLine(message, priority, time) {
                 const div = document.createElement('div');
                 div.classList.add('log-line');
 
-                if (message.includes('[ERROR]') || message.toLowerCase().includes('error:')) {
-                    div.classList.add('error');
-                    div.textContent = message.replace('[ERROR]', '').trim();
-                } else if (message.includes('[WARNING]') || message.toLowerCase().includes('warn:')) {
-                    div.classList.add('warning');
-                    div.textContent = message.replace('[WARNING]', '').trim();
-                } else if (message.includes('[INFO]')) {
-                    div.classList.add('info');
-                    div.textContent = message.replace('[INFO]', '').trim();
+                let level;
+                if (priority !== undefined && priority !== null) {
+                    if (priority <= 3)      level = 'error';
+                    else if (priority === 4) level = 'warning';
+                    else if (priority === 5) level = 'notice';
+                    else if (priority === 6) level = 'info';
+                    else                    level = 'debug';
                 } else {
-                    div.classList.add('default');
-                    div.textContent = message;
+                    // Fallback: text-based detection
+                    const lower = message.toLowerCase();
+                    if (message.includes('[ERROR]') || lower.includes('error:') || lower.includes('err:'))
+                        level = 'error';
+                    else if (message.includes('[WARNING]') || lower.includes('warning:') || lower.includes('warn:'))
+                        level = 'warning';
+                    else if (message.includes('[INFO]'))
+                        level = 'info';
+                    else
+                        level = 'default';
                 }
+
+                div.classList.add(level);
+                div.style.display = 'flex';
+
+                if (time) {
+                    const ts = document.createElement('span');
+                    ts.className = 'log-ts';
+                    ts.textContent = time;
+                    div.appendChild(ts);
+                }
+
+                const text = document.createElement('span');
+                text.textContent = message.replace(/^\[(?:ERROR|WARNING|INFO)\]\s*/i, '');
+                div.appendChild(text);
+
                 return div;
             }
 
-            document.querySelectorAll('#logs-content .log-line').forEach(line => {
-                const text = line.textContent;
-                line.className = 'log-line';
-                if (text.includes('[ERROR]')) line.classList.add('error');
-                else if (text.includes('[WARNING]')) line.classList.add('warning');
-                else if (text.includes('[INFO]')) line.classList.add('info');
-                else line.classList.add('default');
-                if (text.includes(']')) line.textContent = text.substring(text.indexOf(']') + 1).trim();
-            });
+            let userScrolledUp = false;
 
             function initializeSSE() {
                 if (eventSource) eventSource.close();
@@ -536,7 +576,7 @@
                         if (loadingMsg) loadingMsg.remove();
 
                         const logMsg = JSON.parse(event.data);
-                        const newLog = formatLogLine(logMsg.message);
+                        const newLog = formatLogLine(logMsg.message, logMsg.priority, logMsg.time);
                         logsContentDiv.appendChild(newLog);
 
                         // Limit the number of log lines to prevent memory issues
@@ -545,8 +585,11 @@
                             logsContentDiv.removeChild(logsContentDiv.firstChild);
                         }
 
-                        const isAtBottom = logsContainer.scrollHeight - logsContainer.scrollTop <= logsContainer.clientHeight + 100;
-                        if (isAtBottom) logsContainer.scrollTop = logsContainer.scrollHeight;
+                        if (!userScrolledUp) {
+                            logsContainer.scrollTop = logsContainer.scrollHeight;
+                        } else {
+                            document.getElementById('scroll-bottom-btn').classList.remove('hidden');
+                        }
                     } catch (e) {
                         console.error('Error processing log:', e);
                     }
@@ -608,8 +651,20 @@
                 else { initializeSSE(); updateStatus(); }
             });
 
+            // Track whether the user has manually scrolled up
             const logsContainer = document.getElementById('logs-container');
-            if (logsContainer) logsContainer.scrollTop = logsContainer.scrollHeight;
+            if (logsContainer) {
+                logsContainer.addEventListener('scroll', () => {
+                    const atBottom = logsContainer.scrollHeight - logsContainer.scrollTop <= logsContainer.clientHeight + 4;
+                    if (atBottom) {
+                        userScrolledUp = false;
+                        document.getElementById('scroll-bottom-btn').classList.add('hidden');
+                    } else {
+                        userScrolledUp = true;
+                    }
+                });
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+            }
         });
     </script>
 </div>

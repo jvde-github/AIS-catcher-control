@@ -110,8 +110,57 @@ var cachedSysInfo = &CachedSystemInfo{
 }
 
 type LogMessage struct {
-	Source  string `json:"source"`
-	Message string `json:"message"`
+	Source   string `json:"source"`
+	Message  string `json:"message"`
+	Priority int    `json:"priority"`
+	Time     string `json:"time"`
+}
+
+// journalEntry is used to unmarshal a single line from journalctl -o json
+type journalEntry struct {
+	Message           json.RawMessage `json:"MESSAGE"`
+	Priority          string          `json:"PRIORITY"`
+	RealtimeTimestamp string          `json:"__REALTIME_TIMESTAMP"`
+}
+
+// parseJournalJSON parses one JSON line from journalctl -o json.
+// MESSAGE may be a plain string or an array of byte values (binary syslog).
+// PRIORITY is a syslog level string "0"–"7" (0=emerg … 7=debug).
+// __REALTIME_TIMESTAMP is microseconds since Unix epoch as a string.
+func parseJournalJSON(line string) (msg string, priority int, ts string, ok bool) {
+	priority = 6 // default: info
+	var entry journalEntry
+	if err := json.Unmarshal([]byte(line), &entry); err != nil {
+		return "", 0, "", false
+	}
+	if p, err := strconv.Atoi(entry.Priority); err == nil && p >= 0 && p <= 7 {
+		priority = p
+	}
+	if entry.RealtimeTimestamp != "" {
+		if usec, err := strconv.ParseInt(entry.RealtimeTimestamp, 10, 64); err == nil {
+			t := time.Unix(usec/1_000_000, (usec%1_000_000)*1000)
+			ts = t.Local().Format("15:04:05")
+		}
+	}
+	if len(entry.Message) > 0 {
+		switch entry.Message[0] {
+		case '"':
+			var s string
+			if err := json.Unmarshal(entry.Message, &s); err == nil {
+				msg = s
+			}
+		case '[':
+			var nums []int
+			if err := json.Unmarshal(entry.Message, &nums); err == nil {
+				b := make([]byte, len(nums))
+				for i, n := range nums {
+					b[i] = byte(n)
+				}
+				msg = string(b)
+			}
+		}
+	}
+	return msg, priority, ts, true
 }
 
 type Control struct {
@@ -2176,11 +2225,11 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	var cmd *exec.Cmd
 	switch logSource {
 	case "ais-catcher":
-		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher.service", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager")
+		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher.service", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
 	case "control":
-		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher-control", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager")
+		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher-control", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
 	case "system":
-		cmd = exec.CommandContext(ctx, "journalctl", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager")
+		cmd = exec.CommandContext(ctx, "journalctl", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -2208,8 +2257,13 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	lines_output := strings.Split(strings.TrimSpace(string(output)), "\n")
 	logs := make([]LogMessage, 0, len(lines_output))
 	for _, line := range lines_output {
-		if line != "" {
-			logs = append(logs, LogMessage{Message: line})
+		if line == "" {
+			continue
+		}
+		if msg, prio, ts, ok := parseJournalJSON(line); ok {
+			logs = append(logs, LogMessage{Message: msg, Priority: prio, Time: ts})
+		} else {
+			logs = append(logs, LogMessage{Message: line, Priority: 6})
 		}
 	}
 
@@ -2269,11 +2323,11 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		var cmd *exec.Cmd
 		switch logSource {
 		case "ais-catcher":
-			cmd = exec.Command("journalctl", "-u", "ais-catcher.service", "-p", priority, "-f", "-n", "0", "--no-pager")
+			cmd = exec.Command("journalctl", "-u", "ais-catcher.service", "-p", priority, "-f", "-n", "0", "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
 		case "control":
-			cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-p", priority, "-f", "-n", "0", "--no-pager")
+			cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-p", priority, "-f", "-n", "0", "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
 		case "system":
-			cmd = exec.Command("journalctl", "-p", priority, "-f", "-n", "0", "--no-pager")
+			cmd = exec.Command("journalctl", "-p", priority, "-f", "-n", "0", "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
 		default:
 			log.Printf("Invalid log source: %s", logSource)
 			return
@@ -2310,10 +2364,17 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
+			jsonLine := scanner.Text()
+			var logMsg LogMessage
+			if msg, prio, ts, ok := parseJournalJSON(jsonLine); ok {
+				logMsg = LogMessage{Message: msg, Priority: prio, Time: ts}
+			} else {
+				logMsg = LogMessage{Message: jsonLine, Priority: 6}
+			}
 			select {
 			case <-ctx.Done():
 				return
-			case clientChan <- LogMessage{Message: scanner.Text()}:
+			case clientChan <- logMsg:
 			default:
 				// Channel full, skip message to prevent blocking
 			}
@@ -2408,24 +2469,48 @@ func renderTemplateWithConfig(w http.ResponseWriter, title string, contentTempla
 	})
 }
 
+type webviewerServer struct {
+	Port   string `json:"port"`
+	Active bool   `json:"active"`
+}
+
 func webviewerHandler(w http.ResponseWriter, r *http.Request) {
-	port := ""
 	hasServer := false
+	port := ""
+	webviewerActive := false
+	serversJSON := template.JS("[]")
 
 	jsonContent, err := readConfigJSON()
 	if err == nil && len(jsonContent) > 0 {
-		// Parse as generic map to access server array
 		var cfg map[string]interface{}
 		if err := json.Unmarshal(jsonContent, &cfg); err == nil {
-			// Check if server array exists and has at least one entry
-			if servers, ok := cfg["server"].([]interface{}); ok && len(servers) > 0 {
-				if firstServer, ok := servers[0].(map[string]interface{}); ok {
-					if portVal, ok := firstServer["port"].(float64); ok {
-						port = fmt.Sprintf("%.0f", portVal)
-						hasServer = true
-					} else if portStr, ok := firstServer["port"].(string); ok {
-						port = portStr
-						hasServer = true
+			if servers, ok := cfg["server"].([]interface{}); ok {
+				var entries []webviewerServer
+				for _, s := range servers {
+					sv, ok := s.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					entry := webviewerServer{Active: true}
+					if portVal, ok := sv["port"].(float64); ok {
+						entry.Port = fmt.Sprintf("%.0f", portVal)
+					} else if portStr, ok := sv["port"].(string); ok {
+						entry.Port = portStr
+					}
+					if entry.Port == "" {
+						continue
+					}
+					if active, ok := sv["active"].(bool); ok {
+						entry.Active = active
+					}
+					entries = append(entries, entry)
+				}
+				if len(entries) > 0 {
+					hasServer = true
+					port = entries[0].Port
+					webviewerActive = entries[0].Active
+					if b, err := json.Marshal(entries); err == nil {
+						serversJSON = template.JS(b)
 					}
 				}
 			}
@@ -2433,9 +2518,11 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"CssVersion": cssVersion,
-		"HasServer":  hasServer,
-		"port":       port,
+		"CssVersion":      cssVersion,
+		"HasServer":       hasServer,
+		"port":            port,
+		"WebviewerActive": webviewerActive,
+		"ServersJSON":     serversJSON,
 	}
 
 	renderTemplate(w, "webviewer.html", data)
