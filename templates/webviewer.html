@@ -336,10 +336,12 @@
             fetch('/api/config', { credentials: 'include' })
                 .then(r => r.json())
                 .then(cfg => {
-                    // Enable the first server entry
+                    // Enable the server entry matching the selected port
                     if (!cfg.server) cfg.server = [];
-                    if (cfg.server.length === 0) cfg.server.push({ port: parseInt(port) || 8100 });
-                    cfg.server[0].active = true;
+                    const targetPort = parseInt(port) || 8100;
+                    let entry = cfg.server.find(s => s.port === targetPort);
+                    if (!entry) { entry = { port: targetPort }; cfg.server.push(entry); }
+                    entry.active = true;
 
                     return fetch('/api/config', {
                         method: 'POST',
