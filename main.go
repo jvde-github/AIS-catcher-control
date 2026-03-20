@@ -1348,6 +1348,15 @@ func checkLatestVersion() {
 	cachedSysInfo.Lock()
 	defer cachedSysInfo.Unlock()
 
+	// Sync installed binary fields from cache — collectSystemInfo() may have refreshed
+	// them since the global systemInfo was last updated (only set at startup).
+	systemInfo.AISCatcherAvailable = cachedSysInfo.info.AISCatcherAvailable
+	systemInfo.AISCatcherVersion = cachedSysInfo.info.AISCatcherVersion
+	systemInfo.AISCatcherVersionCode = cachedSysInfo.info.AISCatcherVersionCode
+	systemInfo.AISCatcherDescribe = cachedSysInfo.info.AISCatcherDescribe
+	systemInfo.AISCatcherCommit = cachedSysInfo.info.AISCatcherCommit
+	systemInfo.AISCatcherBuildType = cachedSysInfo.info.AISCatcherBuildType
+
 	systemInfo.LatestVersion = release.Name
 	systemInfo.LatestVersionTag = release.TagName
 	systemInfo.LastChecked = time.Now()
