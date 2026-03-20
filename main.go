@@ -539,7 +539,10 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		select {
-		case msg := <-msgChan:
+		case msg, ok := <-msgChan:
+			if !ok {
+				return // channel closed by broadcastResult (terminal message may have been dropped)
+			}
 			sendSSEMessage(w, flusher, msg.Type, msg.Content)
 			if msg.Type == "complete" || msg.Type == "error" {
 				return
@@ -564,8 +567,8 @@ func runSystemAction(actionName, script string, reload bool) {
 	}
 
 	var runCmd *exec.Cmd
-	// We use a background context because this runs independently of the HTTP request
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
 
 	if useSystemd {
 		// Set proper unit properties for systemd-run
@@ -655,17 +658,8 @@ func broadcastResult(msgType, content string) {
 		case ch <- result:
 		default:
 		}
-		// We don't close channels here, the handler loop will see the "complete"/"error" type and return.
-		// But we should probably remove them from the map?
-		// The handler will remove itself when it returns and defer cleanup isn't there?
-		// The handler loop breaks on "complete"/"error", so it will exit.
-		// But we need to make sure we don't keep sending to them.
-		// Actually, the handler removes itself on ctx.Done(), but if we return from loop, we should also remove.
-		// But we can't remove from inside the loop easily without locking again.
-		// It's fine, the handler will return, the channel will be garbage collected eventually,
-		// but we should clean up the map.
-		// Let's just clear the map here since everyone is done.
 		delete(globalActionState.Subscribers, ch)
+		close(ch) // unblocks reader even if the message above was dropped
 	}
 
 	// Refresh system info after action completes to get updated version
@@ -1124,57 +1118,57 @@ func getCachedSystemInfo() SystemInfo {
 		return cachedSysInfo.info
 	}
 
-	collectSystemInfo()
-	cachedSysInfo.info = systemInfo
+	cachedSysInfo.info = collectSystemInfo(cachedSysInfo.info)
 	cachedSysInfo.lastFetch = time.Now()
-	return systemInfo
+	return cachedSysInfo.info
 }
 
-func collectSystemInfo() {
+func collectSystemInfo(prev SystemInfo) SystemInfo {
+	info := prev // seeds LastChecked, LatestVersion, etc. from cache
 
-	systemInfo.BuildVersion = buildVersion
+	info.BuildVersion = buildVersion
 
 	if pid, err := findAISCatcherPID(); err == nil {
-		systemInfo.ProcessID = pid
+		info.ProcessID = pid
 		if proc, err := process.NewProcess(pid); err == nil {
 			// Memory usage
 			if memInfo, err := proc.MemoryInfo(); err == nil {
-				systemInfo.ProcessMemoryUsage = float64(memInfo.RSS) / 1024 / 1024 // Convert to MB
+				info.ProcessMemoryUsage = float64(memInfo.RSS) / 1024 / 1024 // Convert to MB
 			}
 
 			// CPU usage
 			if cpuPercent, err := proc.CPUPercent(); err == nil {
-				systemInfo.ProcessCPUUsage = cpuPercent
+				info.ProcessCPUUsage = cpuPercent
 			}
 
 			// Start time
 			if createTime, err := proc.CreateTime(); err == nil {
-				systemInfo.ProcessStartTime = time.Unix(createTime/1000, 0)
+				info.ProcessStartTime = time.Unix(createTime/1000, 0)
 			}
 
 			// Thread count
 			if numThreads, err := proc.NumThreads(); err == nil {
-				systemInfo.ProcessThreadCount = numThreads
+				info.ProcessThreadCount = numThreads
 			}
 		}
 	} else {
 		// Process not found - reset all process-related fields
-		systemInfo.ProcessID = 0
-		systemInfo.ProcessMemoryUsage = 0
-		systemInfo.ProcessCPUUsage = 0
-		systemInfo.ProcessStartTime = time.Time{}
-		systemInfo.ProcessThreadCount = 0
+		info.ProcessID = 0
+		info.ProcessMemoryUsage = 0
+		info.ProcessCPUUsage = 0
+		info.ProcessStartTime = time.Time{}
+		info.ProcessThreadCount = 0
 	}
 
 	// System-wide CPU usage - use non-blocking measurement (0 duration)
 	// This returns the average since the last call instead of blocking
 	if cpuPercent, err := cpu.Percent(0, false); err == nil && len(cpuPercent) > 0 {
-		systemInfo.SystemCPUUsage = cpuPercent[0]
+		info.SystemCPUUsage = cpuPercent[0]
 	}
 
 	// Keep existing system info collection
-	systemInfo.OS = runtime.GOOS
-	systemInfo.Architecture = runtime.GOARCH
+	info.OS = runtime.GOOS
+	info.Architecture = runtime.GOARCH
 
 	// Skip version check if system action is running or service is down
 	// to avoid collision with binary file being updated
@@ -1183,7 +1177,7 @@ func collectSystemInfo() {
 	globalActionState.Unlock()
 
 	serviceStatus := getServiceStatus()
-	systemInfo.ServiceStatus = serviceStatus
+	info.ServiceStatus = serviceStatus
 
 	// Collect NRestarts from systemd
 	{
@@ -1193,7 +1187,7 @@ func collectSystemInfo() {
 		if out, err := cmd.Output(); err == nil {
 			for _, line := range strings.Split(string(out), "\n") {
 				if idx := strings.IndexByte(line, '='); idx > 0 && line[:idx] == "NRestarts" {
-					systemInfo.ServiceNRestarts, _ = strconv.Atoi(strings.TrimSpace(line[idx+1:]))
+					info.ServiceNRestarts, _ = strconv.Atoi(strings.TrimSpace(line[idx+1:]))
 				}
 			}
 		}
@@ -1204,7 +1198,7 @@ func collectSystemInfo() {
 
 	if skipVersionCheck {
 		// Keep existing version info during updates - don't log repeatedly
-		// Version info is preserved from previous checks in systemInfo global
+		// Version info is preserved from previous checks in cached info
 	} else {
 		cmd := exec.Command("/usr/bin/AIS-catcher", "-h", "JSON")
 		output, err := cmd.CombinedOutput()
@@ -1214,48 +1208,48 @@ func collectSystemInfo() {
 			log.Printf("Command error: %v", err)
 			if exitErr, ok := err.(*exec.ExitError); ok {
 				log.Printf("Exit error code: %d", exitErr.ExitCode())
-				systemInfo.AISCatcherAvailable = true
-				systemInfo.AISCatcherVersion = "v0.60 or earlier"
-				systemInfo.AISCatcherVersionCode = -1
-				systemInfo.AISCatcherDescribe = "Version before JSON support"
+				info.AISCatcherAvailable = true
+				info.AISCatcherVersion = "v0.60 or earlier"
+				info.AISCatcherVersionCode = -1
+				info.AISCatcherDescribe = "Version before JSON support"
 			} else {
-				systemInfo.AISCatcherAvailable = false
-				systemInfo.AISCatcherVersion = "not installed"
-				systemInfo.AISCatcherVersionCode = 0
-				systemInfo.AISCatcherDescribe = "Not found in system"
+				info.AISCatcherAvailable = false
+				info.AISCatcherVersion = "not installed"
+				info.AISCatcherVersionCode = 0
+				info.AISCatcherDescribe = "Not found in system"
 			}
 		} else {
 			var jsonOutput map[string]interface{}
 			if err := json.Unmarshal([]byte(firstLine), &jsonOutput); err != nil {
 				log.Printf("JSON unmarshal error: %v", err)
-				systemInfo.AISCatcherAvailable = true
-				systemInfo.AISCatcherVersion = "unknown"
-				systemInfo.AISCatcherVersionCode = -1
-				systemInfo.AISCatcherDescribe = "Invalid JSON output"
+				info.AISCatcherAvailable = true
+				info.AISCatcherVersion = "unknown"
+				info.AISCatcherVersionCode = -1
+				info.AISCatcherDescribe = "Invalid JSON output"
 			} else {
-				systemInfo.AISCatcherAvailable = true
-				systemInfo.AISCatcherVersion = jsonOutput["version"].(string)
-				systemInfo.AISCatcherVersionCode = int(jsonOutput["version_code"].(float64))
-				systemInfo.AISCatcherDescribe = jsonOutput["version_describe"].(string)
+				info.AISCatcherAvailable = true
+				info.AISCatcherVersion = jsonOutput["version"].(string)
+				info.AISCatcherVersionCode = int(jsonOutput["version_code"].(float64))
+				info.AISCatcherDescribe = jsonOutput["version_describe"].(string)
 
 				// Try to get commit directly from JSON if available
 				if commitVal, ok := jsonOutput["commit"]; ok {
 					if commitStr, ok := commitVal.(string); ok && commitStr != "" {
-						systemInfo.AISCatcherCommit = commitStr
+						info.AISCatcherCommit = commitStr
 						if len(commitStr) > 7 {
-							systemInfo.AISCatcherCommit = commitStr[:7]
+							info.AISCatcherCommit = commitStr[:7]
 						}
 					}
 				}
 
 				// Parse build type from describe string (format: v0.66-0-g1abc2def or v0.66-123-g1abc2def)
-				describe := systemInfo.AISCatcherDescribe
+				describe := info.AISCatcherDescribe
 				if idx := strings.LastIndex(describe, "-g"); idx != -1 {
 					// If we didn't get commit from JSON, extract from describe
-					if systemInfo.AISCatcherCommit == "" {
-						systemInfo.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
-						if len(systemInfo.AISCatcherCommit) > 7 {
-							systemInfo.AISCatcherCommit = systemInfo.AISCatcherCommit[:7]
+					if info.AISCatcherCommit == "" {
+						info.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
+						if len(info.AISCatcherCommit) > 7 {
+							info.AISCatcherCommit = info.AISCatcherCommit[:7]
 						}
 					}
 
@@ -1265,14 +1259,14 @@ func collectSystemInfo() {
 					if len(parts) >= 2 {
 						buildNum := parts[len(parts)-1]
 						if buildNum == "0" {
-							systemInfo.AISCatcherBuildType = "source"
+							info.AISCatcherBuildType = "source"
 						} else {
-							systemInfo.AISCatcherBuildType = "package (#" + buildNum + ")"
+							info.AISCatcherBuildType = "package (#" + buildNum + ")"
 						}
 					}
-				} else if systemInfo.AISCatcherCommit == "" {
+				} else if info.AISCatcherCommit == "" {
 					// If no -g in describe and no commit from JSON, it's a release build
-					systemInfo.AISCatcherBuildType = "Release"
+					info.AISCatcherBuildType = "Release"
 				}
 			}
 		}
@@ -1284,7 +1278,7 @@ func collectSystemInfo() {
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.HasPrefix(line, "model name") {
-				systemInfo.CPUInfo = strings.TrimSpace(strings.Split(line, ":")[1])
+				info.CPUInfo = strings.TrimSpace(strings.Split(line, ":")[1])
 				break
 			}
 		}
@@ -1299,7 +1293,7 @@ func collectSystemInfo() {
 				fields := strings.Fields(line)
 				if len(fields) >= 2 {
 					if mem, err := strconv.ParseUint(fields[1], 10, 64); err == nil {
-						systemInfo.TotalMemory = mem * 1024 // Convert from KB to bytes
+						info.TotalMemory = mem * 1024 // Convert from KB to bytes
 					}
 				}
 				break
@@ -1309,20 +1303,22 @@ func collectSystemInfo() {
 
 	// Get Kernel Version
 	if kernel, err := exec.Command("uname", "-r").Output(); err == nil {
-		systemInfo.KernelVersion = strings.TrimSpace(string(kernel))
+		info.KernelVersion = strings.TrimSpace(string(kernel))
 	}
 
 	// Check for updates from GitHub
 	// Always use async to avoid blocking page load (especially on slow/unreachable GitHub API)
 	// JavaScript on system page will fetch this data via AJAX after page loads
-	if time.Since(systemInfo.LastChecked) > 10*time.Minute {
-		systemInfo.LastChecked = time.Now() // pre-stamp to prevent thundering herd
+	if time.Since(info.LastChecked) > 10*time.Minute {
+		info.LastChecked = time.Now() // pre-stamp to prevent thundering herd
 		go checkLatestVersion()
 	}
-	if time.Since(systemInfo.ControlLastChecked) > 10*time.Minute {
-		systemInfo.ControlLastChecked = time.Now() // pre-stamp to prevent thundering herd
+	if time.Since(info.ControlLastChecked) > 10*time.Minute {
+		info.ControlLastChecked = time.Now() // pre-stamp to prevent thundering herd
 		go checkControlLatestVersion()
 	}
+
+	return info
 }
 
 // checkLatestVersion fetches the latest release from GitHub
@@ -2426,14 +2422,6 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func checkTailCommand() error {
-	_, err := exec.LookPath("tail")
-	if err != nil {
-		return fmt.Errorf("tail command not found in PATH")
-	}
-	return nil
-}
-
 // makeConfigHandler creates a handler for config pages that follow the same pattern
 func makeConfigHandler(title, contentTemplate string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -2475,10 +2463,18 @@ type webviewerServer struct {
 }
 
 func webviewerHandler(w http.ResponseWriter, r *http.Request) {
+	isLoggedIn := false
+	if cookie, err := r.Cookie(sessionCookieName); err == nil {
+		if user, ok := sessionManager.Get(cookie.Value); ok && user == defaultUsername {
+			isLoggedIn = true
+		}
+	}
+
 	hasServer := false
 	port := ""
 	webviewerActive := false
 	serversJSON := template.JS("[]")
+	requestedPort := ""
 
 	jsonContent, err := readConfigJSON()
 	if err == nil && len(jsonContent) > 0 {
@@ -2497,7 +2493,8 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 					} else if portStr, ok := sv["port"].(string); ok {
 						entry.Port = portStr
 					}
-					if entry.Port == "" {
+					portNum, err := strconv.Atoi(entry.Port)
+					if err != nil || portNum < 1 || portNum > 65535 {
 						continue
 					}
 					if active, ok := sv["active"].(bool); ok {
@@ -2509,6 +2506,19 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 					hasServer = true
 					port = entries[0].Port
 					webviewerActive = entries[0].Active
+
+					// Use port from URL path if provided: /webviewer/{port}
+					if suffix := strings.TrimPrefix(r.URL.Path, "/webviewer/"); suffix != "" {
+						for _, e := range entries {
+							if e.Port == suffix {
+								port = e.Port
+								webviewerActive = e.Active
+								requestedPort = port
+								break
+							}
+						}
+					}
+
 					if b, err := json.Marshal(entries); err == nil {
 						serversJSON = template.JS(b)
 					}
@@ -2523,9 +2533,95 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 		"port":            port,
 		"WebviewerActive": webviewerActive,
 		"ServersJSON":     serversJSON,
+		"IsLoggedIn":      isLoggedIn,
+		"RequestedPort":   requestedPort,
 	}
 
 	renderTemplate(w, "webviewer.html", data)
+}
+
+func webviewerToggleHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		sendJSONResponse(w, false, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Port   string `json:"port"`
+		Active bool   `json:"active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendJSONResponse(w, false, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	portNum, err := strconv.Atoi(req.Port)
+	if err != nil || portNum < 1 || portNum > 65535 {
+		sendJSONResponse(w, false, "Invalid port", http.StatusBadRequest)
+		return
+	}
+
+	jsonContent, err := readConfigJSON()
+	if err != nil {
+		sendJSONResponse(w, false, "Failed to read config", http.StatusInternalServerError)
+		return
+	}
+
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(jsonContent, &cfg); err != nil {
+		sendJSONResponse(w, false, "Invalid config JSON", http.StatusInternalServerError)
+		return
+	}
+
+	if configValue, _ := cfg["config"].(string); configValue != "aiscatcher" {
+		sendJSONResponse(w, false, "Invalid config", http.StatusBadRequest)
+		return
+	}
+
+	servers, _ := cfg["server"].([]interface{})
+	found := false
+	for _, s := range servers {
+		sv, ok := s.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		var svPort string
+		if p, ok := sv["port"].(float64); ok {
+			svPort = fmt.Sprintf("%.0f", p)
+		} else if p, ok := sv["port"].(string); ok {
+			svPort = p
+		}
+		if svPort == req.Port {
+			sv["active"] = req.Active
+			found = true
+			break
+		}
+	}
+	if !found {
+		servers = append(servers, map[string]interface{}{
+			"port":   portNum,
+			"active": req.Active,
+		})
+		cfg["server"] = servers
+	}
+
+	body, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		sendJSONResponse(w, false, "Failed to marshal config", http.StatusInternalServerError)
+		return
+	}
+
+	hashValue := calculate32BitHash(string(body))
+	if err := updateConfig(func(c *Config) { c.ConfigJSONHash = uint32(hashValue) }); err != nil {
+		sendJSONResponse(w, false, "Failed to update hash", http.StatusInternalServerError)
+		return
+	}
+	if err := os.WriteFile(configJSONFilePath, body, 0644); err != nil {
+		sendJSONResponse(w, false, "Failed to save config", http.StatusInternalServerError)
+		return
+	}
+
+	sendJSONResponse(w, true, "", http.StatusOK)
 }
 
 // makeReadOnlyConfigHandler creates a handler for GET-only config pages
@@ -2946,11 +3042,8 @@ func main() {
 		os.Exit(0)
 	}
 
-	collectSystemInfo()
+	systemInfo = collectSystemInfo(systemInfo)
 
-	if err := checkTailCommand(); err != nil {
-		log.Fatalf("Required command not found: %v", err)
-	}
 
 	err = loadControlSettings()
 	if err != nil {
@@ -3020,7 +3113,9 @@ func main() {
 	http.HandleFunc("/status", authMiddleware(statusHandler))
 	http.HandleFunc("/device", authMiddleware(makeConfigHandler("Device Configuration", "device-setup")))
 	http.HandleFunc("/server", authMiddleware(makeConfigHandler("Webviewer Setup", "server-setup")))
-	http.HandleFunc("/webviewer", authMiddleware(webviewerHandler))
+	http.HandleFunc("/webviewer", webviewerHandler)
+	http.HandleFunc("/webviewer/", webviewerHandler)
+	http.HandleFunc("/api/webviewer/toggle", authMiddleware(webviewerToggleHandler))
 	http.HandleFunc("/logout", authMiddleware(logoutHandler))
 	http.HandleFunc("/device-list", authMiddleware(deviceListHandler))
 	http.HandleFunc("/serial-list", authMiddleware(serialListHandler))

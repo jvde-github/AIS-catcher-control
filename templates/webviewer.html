@@ -128,6 +128,19 @@
                 max-width: 100%;
             }
         }
+
+        #login-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        #login-overlay.open {
+            display: flex;
+        }
     </style>
 </head>
 <body>
@@ -144,6 +157,33 @@
         <iframe id="webviewer-frame" src="" class="hidden" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
         
         <div id="config-overlay" onclick="closeConfigPanel()"></div>
+
+        <!-- Login Modal -->
+        <div id="login-overlay">
+            <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
+                <h3 class="text-lg font-semibold text-slate-800 mb-1">Sign In</h3>
+                <p class="text-sm text-slate-500 mb-4">Authentication required to continue.</p>
+                <div id="login-error" class="hidden mb-3 text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></div>
+                <form id="login-form" onsubmit="submitLogin(event)" class="space-y-3">
+                    <input id="login-username" name="username" type="text" autocomplete="username"
+                        placeholder="Username"
+                        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400" />
+                    <input id="login-password" name="password" type="password" autocomplete="current-password"
+                        placeholder="Password"
+                        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400" />
+                    <div class="flex gap-2 pt-1">
+                        <button type="button" onclick="closeLoginModal()"
+                            class="flex-1 px-4 py-2 rounded-lg text-sm font-medium border border-slate-300 text-slate-600 hover:bg-slate-50 transition">
+                            Cancel
+                        </button>
+                        <button type="submit" id="login-submit"
+                            class="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-slate-800 text-white hover:bg-slate-700 transition">
+                            Sign In
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
         
         <!-- Config Panel -->
         <div id="config-panel">
@@ -164,30 +204,42 @@
     </div>
     
     <nav id="bottom-bar">
-        <div class="flex items-center justify-around sm:justify-center h-16 sm:gap-12">
-            <button class="hub-button" data-view="control" onclick="window.location.href='/control'">
-                <svg viewBox="0 -960 960 960" fill="currentColor">
+        <!-- Status indicator + viewer picker (bottom-left) -->
+        <div id="status-dot-wrap" class="absolute left-3 bottom-0 h-16 flex flex-col items-start justify-center gap-1" style="z-index:51">
+            <div class="relative group">
+                <span id="status-dot" class="block w-2.5 h-2.5 rounded-full bg-slate-500 cursor-default"></span>
+                <div class="absolute bottom-full left-0 mb-2 min-w-max px-2.5 py-1.5 rounded-lg bg-slate-800 text-white text-xs shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 whitespace-nowrap">
+                    <div id="status-dot-label" class="font-medium">Checking&#8230;</div>
+                    <div id="status-dot-uptime" class="text-slate-400 text-xs mt-0.5"></div>
+                    <div class="absolute top-full left-3 border-4 border-transparent border-t-slate-800"></div>
+                </div>
+            </div>
+            <select id="viewer-select" class="hidden text-[10px] bg-transparent text-slate-400 border-0 outline-none cursor-pointer leading-none p-0 max-w-[3.5rem]" title="Switch webviewer" onchange="switchViewer(this.value)"></select>
+        </div>
+        <div id="nav-buttons" class="flex items-center justify-center h-16 gap-6 sm:gap-12 pl-16 pr-4 transition-opacity">
+            <button id="nav-start-restart" class="hub-button" data-view="control" onclick="onStartRestartClick()">
+                <svg id="nav-sr-icon" viewBox="0 -960 960 960" fill="currentColor">
                     <path d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z" />
                 </svg>
-                <span>Control</span>
+                <span id="nav-sr-label">Start</span>
             </button>
-            <button class="hub-button" data-view="input" onclick="openConfig('input')">
+            <button id="nav-btn-input" class="hub-button" data-view="input" onclick="openConfig('input')">
                 <svg viewBox="0 -960 960 960" fill="currentColor">
                     <path d="M160-80q-33 0-56.5-23.5T80-160v-480q0-25 13.5-45t36.5-29l506-206 26 66-330 134h468q33 0 56.5 23.5T880-640v480q0 33-23.5 56.5T800-80H160Zm0-80h640v-280H160v280Zm160-40q42 0 71-29t29-71q0-42-29-71t-71-29q-42 0-71 29t-29 71q0 42 29 71t71 29ZM160-520h480v-80h80v80h80v-120H160v120Zm0 360v-280 280Z" />
                 </svg>
                 <span>Input</span>
             </button>
-            <button class="hub-button" data-view="output" onclick="openConfig('output')">
+            <button id="nav-btn-output" class="hub-button" data-view="output" onclick="openConfig('output')">
                 <svg viewBox="0 -960 960 960" fill="currentColor">
                     <path d="M680-80q-50 0-85-35t-35-85q0-6 3-28L282-392q-16 15-37 23.5t-45 8.5q-50 0-85-35t-35-85q0-50 35-85t85-35q24 0 45 8.5t37 23.5l281-164q-2-7-2.5-13.5T560-760q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35q-24 0-45-8.5T598-672L317-508q2-7 2.5-13.5t.5-14.5q0-8-.5-14.5T317-452l281 164q16-15 37-23.5t45-8.5q50 0 85 35t35 85q0 50-35 85t-85 35Zm0-80q17 0 28.5-11.5T720-200q0-17-11.5-28.5T680-240q-17 0-28.5 11.5T640-200q0 17 11.5 28.5T680-160ZM200-440q17 0 28.5-11.5T240-480q0-17-11.5-28.5T200-520q-17 0-28.5 11.5T160-480q0 17 11.5 28.5T200-440Zm480-280q17 0 28.5-11.5T720-760q0-17-11.5-28.5T680-800q-17 0-28.5 11.5T640-760q0 17 11.5 28.5T680-720Zm0 520ZM200-480Zm480-280Z" />
                 </svg>
                 <span>Output</span>
             </button>
-            <button class="hub-button active" data-view="webviewer" onclick="openWebviewerInNewTab()">
+            <button id="nav-btn-control" class="hub-button" data-view="webviewer" onclick="window.location.href='/control'">
                 <svg viewBox="0 -960 960 960" fill="currentColor">
-                    <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z" />
+                    <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm80-80h400v-400H280v400Z"/>
                 </svg>
-                <span>Webviewer</span>
+                <span>Control</span>
             </button>
         </div>
     </nav>
@@ -224,6 +276,220 @@
         let hasServer = {{.HasServer}};
         let port = "{{.port}}";
         let webviewerActive = {{.WebviewerActive}};
+        let isLoggedIn = {{.IsLoggedIn}};
+        let pendingAction = null;
+        let serviceRunning = false;
+        let currentLoadTimeout = null;
+        let statusPollInterval = null;
+        const requestedPort = "{{.RequestedPort}}";
+
+        function setAuthButtons(loggedIn) {
+            ['nav-btn-input', 'nav-btn-output', 'nav-btn-control'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                if (loggedIn) {
+                    btn.classList.remove('opacity-40', 'pointer-events-none');
+                    btn.removeAttribute('title');
+                } else {
+                    btn.classList.add('opacity-40', 'pointer-events-none');
+                    btn.title = 'Login required';
+                }
+            });
+        }
+
+        // Apply auth-dependent UI state immediately
+        if (!isLoggedIn) {
+            setAuthButtons(false);
+            // Hide status dot — no point showing unknown state
+            const dotWrap = document.getElementById('status-dot-wrap');
+            if (dotWrap) dotWrap.style.display = 'none';
+            // Replace Start/Restart button with Login
+            const srBtn = document.getElementById('nav-start-restart');
+            if (srBtn) {
+                srBtn.onclick = () => { pendingAction = null; document.getElementById('login-overlay').classList.add('open'); setTimeout(() => document.getElementById('login-username').focus(), 50); };
+                document.getElementById('nav-sr-icon').innerHTML = '<path d="M480-120v-80h280v-560H480v-80h280q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H480Zm-80-160-55-58 102-102H120v-80h327L345-622l55-58 200 200-200 200Z"/>';
+                document.getElementById('nav-sr-label').textContent = 'Login';
+            }
+        }
+
+        function setNavBusy(busy) {
+            const nav = document.getElementById('nav-buttons');
+            const dot = document.getElementById('status-dot');
+            const dotLabel = document.getElementById('status-dot-label');
+            if (busy) {
+                nav.classList.add('opacity-50', 'pointer-events-none');
+                if (dot) dot.className = 'block w-2.5 h-2.5 rounded-full bg-amber-400 cursor-default';
+                if (dotLabel) dotLabel.textContent = 'Working...';
+            } else {
+                nav.classList.remove('opacity-50', 'pointer-events-none');
+            }
+        }
+
+        function updateStartRestartButton(running) {
+            serviceRunning = running;
+            // Update nav start/restart button
+            const btn = document.getElementById('nav-start-restart');
+            const label = document.getElementById('nav-sr-label');
+            const icon = document.getElementById('nav-sr-icon');
+            if (running) {
+                label.textContent = 'Restart';
+                icon.innerHTML = '<path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z"/>';
+            } else {
+                label.textContent = 'Start';
+                icon.innerHTML = '<path d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z"/>';
+            }
+            // Update status dot
+            const dot = document.getElementById('status-dot');
+            const dotLabel = document.getElementById('status-dot-label');
+            if (dot && dotLabel) {
+                if (running) {
+                    dot.className = 'block w-2.5 h-2.5 rounded-full bg-emerald-500 cursor-default';
+                    dotLabel.textContent = 'Running';
+                } else {
+                    dot.className = 'block w-2.5 h-2.5 rounded-full bg-slate-500 cursor-default';
+                    dotLabel.textContent = 'Stopped';
+                }
+            }
+        }
+
+        function switchViewer(selectedPort) {
+            clearTimeout(currentLoadTimeout);
+            const srv = allServers.find(s => String(s.port) === String(selectedPort));
+            if (!srv) return;
+            // Close config panel if open
+            closeConfigPanel();
+            const hubContainer = document.getElementById('hub-container');
+            // Remove dynamically inserted overlays (errors, picker) but not static elements
+            Array.from(hubContainer.children).forEach(el => {
+                if (el.id !== 'loading' && el.id !== 'webviewer-frame' && el.id !== 'config-overlay' && el.id !== 'config-panel' && el.id !== 'login-overlay') el.remove();
+            });
+            const iframe = document.getElementById('webviewer-frame');
+            iframe.classList.add('hidden');
+            iframe.src = '';
+            document.getElementById('loading').classList.remove('hidden');
+            proceedWithServer(srv.port, srv.active);
+        }
+
+        function initViewerSelect() {
+            if (allServers.length <= 1) return;
+            const sel = document.getElementById('viewer-select');
+            if (!sel) return;
+            sel.innerHTML = '';
+            allServers.forEach(srv => {
+                const opt = document.createElement('option');
+                opt.value = srv.port;
+                opt.textContent = ':' + srv.port;
+                if (String(srv.port) === String(port)) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            sel.classList.remove('hidden');
+        }
+
+        function pollUntilRunning(onReady, maxWaitMs = 30000) {
+            const interval = 2000;
+            let elapsed = 0;
+            const timer = setInterval(() => {
+                elapsed += interval;
+                fetch('/status')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.running) {
+                            clearInterval(timer);
+                            onReady();
+                        } else if (elapsed >= maxWaitMs) {
+                            clearInterval(timer);
+                            setNavBusy(false);
+                        }
+                    })
+                    .catch(() => {
+                        if (elapsed >= maxWaitMs) { clearInterval(timer); setNavBusy(false); }
+                    });
+            }, interval);
+        }
+
+        function onStartRestartClick() {
+            const action = serviceRunning ? 'restart' : 'start';
+            requireAuth(() => {
+                setNavBusy(true);
+                fetch('/api/' + action, { method: 'POST', credentials: 'include' })
+                    .then(() => pollUntilRunning(() => window.location.reload()))
+                    .catch(() => setNavBusy(false));
+            });
+        }
+
+        function requireAuth(callback) {
+            if (isLoggedIn) {
+                callback();
+                return;
+            }
+            pendingAction = callback;
+            const overlay = document.getElementById('login-overlay');
+            overlay.classList.add('open');
+            setTimeout(() => document.getElementById('login-username').focus(), 50);
+        }
+
+        function closeLoginModal() {
+            document.getElementById('login-overlay').classList.remove('open');
+            document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('login-form').reset();
+            pendingAction = null;
+        }
+
+        function submitLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const submitBtn = document.getElementById('login-submit');
+            const errorEl = document.getElementById('login-error');
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Signing in...';
+            errorEl.classList.add('hidden');
+
+            const body = new URLSearchParams({ username, password });
+            fetch('/login', {
+                method: 'POST',
+                credentials: 'include',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString()
+            })
+            .then(res => {
+                // On success, server redirects to /control or /change-password
+                // On failure, server returns 200 with the login page
+                const url = res.url || '';
+                if (url.includes('/login')) {
+                    // Still on login page = wrong credentials
+                    errorEl.textContent = 'Invalid credentials';
+                    errorEl.classList.remove('hidden');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Sign In';
+                } else {
+                    // Logged in successfully
+                    isLoggedIn = true;
+                    setAuthButtons(true);
+                    // Restore status dot and Start/Restart button
+                    const dotWrap = document.getElementById('status-dot-wrap');
+                    if (dotWrap) dotWrap.style.display = '';
+                    const srBtn = document.getElementById('nav-start-restart');
+                    if (srBtn) srBtn.onclick = onStartRestartClick;
+                    // Fetch status to set correct button label
+                    fetch('/status').then(r => r.json()).then(d => updateStartRestartButton(!!d.running)).catch(() => {});
+                    closeLoginModal();
+                    if (pendingAction) {
+                        const action = pendingAction;
+                        pendingAction = null;
+                        action();
+                    }
+                }
+            })
+            .catch(() => {
+                errorEl.textContent = 'Connection error. Please try again.';
+                errorEl.classList.remove('hidden');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Sign In';
+            });
+        }
         const iframe = document.getElementById('webviewer-frame');
         const loadingDiv = document.getElementById('loading');
         const configPanel = document.getElementById('config-panel');
@@ -236,7 +502,7 @@
         function showError(title, message, showRestart = false) {
             const hubContainer = document.getElementById('hub-container');
             const errorDiv = document.createElement('div');
-            errorDiv.className = 'flex items-center justify-center h-full bg-slate-50 absolute inset-0';
+            errorDiv.className = 'flex items-center justify-center h-full bg-slate-50 absolute inset-0 z-10';
             errorDiv.innerHTML = `
                 <div class="max-w-md p-8 text-center">
                     <svg class="h-16 w-16 text-amber-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,13 +520,26 @@
             hubContainer.insertBefore(errorDiv, hubContainer.firstChild);
             if (showRestart) {
                 document.getElementById('error-restart-btn').addEventListener('click', function() {
-                    this.textContent = 'Restarting...';
-                    this.disabled = true;
-                    fetch('/api/restart', { method: 'POST' })
-                        .then(() => setTimeout(() => window.location.reload(), 3000))
-                        .catch(() => { this.textContent = 'Restart Service'; this.disabled = false; });
+                    const btn = this;
+                    requireAuth(() => {
+                        btn.textContent = 'Restarting...';
+                        btn.disabled = true;
+                        fetch('/api/restart', { method: 'POST', credentials: 'include' })
+                            .then(() => pollUntilRunning(() => window.location.reload()))
+                            .catch(() => { btn.disabled = false; btn.textContent = 'Restart Service'; });
+                    });
                 });
             }
+        }
+
+        function startStatusPolling() {
+            if (statusPollInterval) return;
+            statusPollInterval = setInterval(() => {
+                fetch('/status', { credentials: 'include' })
+                    .then(r => r.json())
+                    .then(data => updateStartRestartButton(!!data.running))
+                    .catch(() => {});
+            }, 12000);
         }
 
         function checkServiceStatus() {
@@ -273,33 +552,46 @@
                     return response.json();
                 })
                 .then(data => {
+                    updateStartRestartButton(!!data.running);
                     if (!data.running) {
                         const hubContainer = document.getElementById('hub-container');
                         const errorDiv = document.createElement('div');
-                        errorDiv.className = 'flex items-center justify-center h-full bg-slate-50 absolute inset-0';
+                        errorDiv.className = 'flex items-center justify-center h-full bg-slate-50 absolute inset-0 z-10';
                         errorDiv.innerHTML = `
                             <div class="max-w-md p-8 text-center">
                                 <svg class="h-16 w-16 text-amber-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                                 </svg>
                                 <h3 class="text-xl font-semibold text-slate-800 mb-2">AIS-catcher Not Running</h3>
-                                <p class="text-slate-600 mb-4">The AIS-catcher service is not currently running. Please start the service from the Control page.</p>
-                                <a href="/control" class="inline-block bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg transition">
-                                    Go to Control
-                                </a>
+                                <p class="text-slate-600 mb-4">The AIS-catcher service is not currently running.</p>
+                                <div class="flex flex-col items-center gap-3">
+                                    <button id="notrunning-start-btn" class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg transition font-medium">Start Service</button>
+                                    <a href="/control" class="text-sm text-slate-500 hover:text-slate-700 underline">Go to Control</a>
+                                </div>
                             </div>
                         `;
                         loadingDiv.classList.add('hidden');
                         hubContainer.insertBefore(errorDiv, hubContainer.firstChild);
+                        document.getElementById('notrunning-start-btn').addEventListener('click', function() {
+                            const btn = this;
+                            requireAuth(() => {
+                                btn.textContent = 'Starting...';
+                                btn.disabled = true;
+                                fetch('/api/start', { method: 'POST', credentials: 'include' })
+                                    .then(() => pollUntilRunning(() => window.location.reload()))
+                                    .catch(() => { btn.disabled = false; btn.textContent = 'Start Service'; });
+                            });
+                        });
                         return;
                     }
                     // Service is running — load the webviewer iframe
                     loadWebviewer();
+                    startStatusPolling();
                 })
-                .catch(error => {
+                .catch(() => {
                     clearTimeout(timeoutId);
-                    console.error('Error checking service status:', error);
                     loadWebviewer();
+                    startStatusPolling();
                 });
         }
 
@@ -307,7 +599,7 @@
             const hubContainer = document.getElementById('hub-container');
             const errorDiv = document.createElement('div');
             errorDiv.id = 'webviewer-disabled-msg';
-            errorDiv.className = 'flex items-center justify-center h-full bg-slate-50 absolute inset-0';
+            errorDiv.className = 'flex items-center justify-center h-full bg-slate-50 absolute inset-0 z-10';
             errorDiv.innerHTML = `
                 <div class="max-w-md p-8 text-center">
                     <svg class="h-16 w-16 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -330,40 +622,32 @@
         }
 
         function enableAndRestart() {
+            requireAuth(_doEnableAndRestart);
+        }
+
+        function _doEnableAndRestart() {
             const btn = document.getElementById('enable-webviewer-btn');
             if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
-            fetch('/api/config', { credentials: 'include' })
-                .then(r => r.json())
-                .then(cfg => {
-                    // Enable the server entry matching the selected port
-                    if (!cfg.server) cfg.server = [];
-                    const targetPort = parseInt(port) || 8100;
-                    let entry = cfg.server.find(s => s.port === targetPort);
-                    if (!entry) { entry = { port: targetPort }; cfg.server.push(entry); }
-                    entry.active = true;
-
-                    return fetch('/api/config', {
-                        method: 'POST',
-                        credentials: 'include',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(cfg)
-                    });
-                })
-                .then(r => {
-                    if (!r.ok) throw new Error('Save failed');
-                    if (btn) btn.textContent = 'Restarting...';
-                    return fetch('/api/restart', { method: 'POST', credentials: 'include' });
-                })
-                .then(() => {
-                    // Wait for service to restart then reload
-                    setTimeout(() => window.location.reload(), 3000);
-                })
-                .catch(err => {
-                    console.error('Enable failed:', err);
-                    if (btn) { btn.disabled = false; btn.textContent = 'Enable & Restart'; }
-                    alert('Failed to enable webviewer: ' + err.message);
-                });
+            fetch('/api/webviewer/toggle', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ port: String(port), active: true })
+            })
+            .then(r => {
+                if (!r.ok) throw new Error('Save failed');
+                if (btn) btn.textContent = 'Restarting...';
+                return fetch('/api/restart', { method: 'POST', credentials: 'include' });
+            })
+            .then(() => {
+                pollUntilRunning(() => window.location.reload());
+            })
+            .catch(err => {
+                console.error('Enable failed:', err);
+                if (btn) { btn.disabled = false; btn.textContent = 'Enable & Restart'; }
+                alert('Failed to enable webviewer: ' + err.message);
+            });
         }
 
         function openWebviewerInNewTab() {
@@ -392,7 +676,7 @@
 
                 iframe.src = newUrl;
                 
-                let loadTimeout = setTimeout(() => {
+                currentLoadTimeout = setTimeout(() => {
                     showError(
                         'Webviewer Not Responding',
                         'Port ' + port + ' is not responding. If this server was recently added, a service restart is required to activate it.',
@@ -401,13 +685,13 @@
                 }, 8000);
 
                 iframe.onload = function() {
-                    clearTimeout(loadTimeout);
+                    clearTimeout(currentLoadTimeout);
                     loadingDiv.classList.add('hidden');
                     iframe.classList.remove('hidden');
                 };
 
                 iframe.onerror = function() {
-                    clearTimeout(loadTimeout);
+                    clearTimeout(currentLoadTimeout);
                     showError(
                         'Webviewer Load Error',
                         'Failed to load the webviewer on port ' + port + '. Please check the service status on the Control page.'
@@ -420,7 +704,10 @@
         }
 
         function openConfig(type) {
-            // Clear unsaved state when opening
+            requireAuth(() => _openConfig(type));
+        }
+
+        function _openConfig(type) {
             if (typeof App !== 'undefined' && App.setUnsaved) {
                 App.setUnsaved(false);
             }
@@ -737,6 +1024,7 @@
             fetch('/status')
                 .then(res => res.json())
                 .then(data => {
+                    updateStartRestartButton(!!data.running);
                     const statusEl = document.getElementById('hub-status');
                     const uptimeEl = document.getElementById('hub-uptime');
                     
@@ -750,22 +1038,33 @@
                     if (uptimeEl) {
                         uptimeEl.textContent = 'Uptime: ' + (data.uptime || 'N/A');
                     }
+
+                    // Update status dot uptime
+                    const dotUptime = document.getElementById('status-dot-uptime');
+                    if (dotUptime) dotUptime.textContent = data.running ? (data.uptime || '') : '';
                 })
                 .catch(err => console.error('Failed to fetch status:', err));
         }
 
         function controlService(action) {
-            fetch(`/api/${action}`, { method: 'POST' })
+            requireAuth(() => _doControlService(action));
+        }
+
+        function _doControlService(action) {
+            setNavBusy(true);
+            fetch(`/api/${action}`, { method: 'POST', credentials: 'include' })
                 .then(res => res.json())
                 .then(data => {
-                    setTimeout(updateControlStatus, 1000);
+                    setTimeout(() => { updateControlStatus(); setNavBusy(false); }, 1500);
                 })
-                .catch(err => console.error('Service control failed:', err));
+                .catch(err => { console.error('Service control failed:', err); setNavBusy(false); });
         }
 
         function proceedWithServer(selectedPort, selectedActive) {
             port = selectedPort;
             webviewerActive = selectedActive;
+            sessionStorage.setItem('webviewer_port', String(selectedPort));
+            initViewerSelect();
             if (!webviewerActive) {
                 loadingDiv.classList.add('hidden');
                 showWebviewerDisabled();
@@ -801,6 +1100,7 @@
                     </span>
                 `;
                 btn.addEventListener('click', () => {
+                    sessionStorage.setItem('webviewer_port', srv.port);
                     pickerDiv.remove();
                     loadingDiv.classList.remove('hidden');
                     proceedWithServer(srv.port, srv.active);
@@ -815,8 +1115,16 @@
                 'Webviewer Not Configured',
                 'No webviewer server has been configured. Please add a server configuration in the Webviewer settings.'
             );
+        } else if (requestedPort) {
+            proceedWithServer(port, webviewerActive);
         } else if (allServers.length > 1) {
-            showServerPicker();
+            const savedPort = sessionStorage.getItem('webviewer_port');
+            const saved = savedPort && allServers.find(s => String(s.port) === String(savedPort));
+            if (saved) {
+                proceedWithServer(saved.port, saved.active);
+            } else {
+                showServerPicker();
+            }
         } else {
             proceedWithServer(port, webviewerActive);
         }

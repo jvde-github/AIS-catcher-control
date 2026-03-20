@@ -444,6 +444,14 @@ const webviewerSchema = {
         defaultValue: 'settings',
         width: 75
     },
+    webcontrol_http: {
+        name: 'webcontrol_http',
+        label: 'Web Control Link',
+        type: 'text',
+        jsonpath: 'webcontrol_http',
+        defaultValue: '',
+        placeholder: 'http://127.0.0.1:8110'
+    },
     active: {
         name: 'active',
         label: 'Active',
