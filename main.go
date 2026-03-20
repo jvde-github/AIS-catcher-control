@@ -1259,7 +1259,7 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 					if len(parts) >= 2 {
 						buildNum := parts[len(parts)-1]
 						if buildNum == "0" {
-							info.AISCatcherBuildType = "source"
+							info.AISCatcherBuildType = "Release"
 						} else {
 							info.AISCatcherBuildType = "package (#" + buildNum + ")"
 						}
