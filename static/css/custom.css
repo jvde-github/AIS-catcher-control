@@ -1,3 +1,10 @@
+/* On narrow screens, fields with a fixed percentage width should go full-width */
+@media (max-width: 639px) {
+  .field-sized {
+    flex: 1 1 100% !important;
+  }
+}
+
 /* Custom slider styling */
 .slider-thumb {
   -webkit-appearance: none;

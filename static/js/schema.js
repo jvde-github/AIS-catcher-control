@@ -40,6 +40,13 @@ const httpSchema = {
         type: 'text',
         placeholder: 'Optional description'
     },
+    active: {
+        name: 'active',
+        label: 'Active',
+        type: 'toggle',
+        defaultValue: true,
+        width: 25
+    },
     id: {
         name: 'id',
         label: 'ID',
@@ -58,21 +65,21 @@ const httpSchema = {
         label: 'Gzip',
         type: 'toggle',
         defaultValue: false,
-        width: 25
+        width: 25,
     },
     response: {
         name: 'response',
         label: 'Response',
         type: 'toggle',
         defaultValue: true,
-        width: 25
+        width: 25,
     },
     unique: {
         name: 'unique',
         label: 'Unique',
         type: 'toggle',
         defaultValue: false,
-        width: 25
+        width: 25,
     },
     position_interval: {
         name: 'position_interval',
@@ -82,7 +89,7 @@ const httpSchema = {
         defaultInteger: 60,
         min: 0,
         max: 300,
-        step: 1
+        step: 1,
     }
 };
 
@@ -124,14 +131,14 @@ const udpSchema = {
         label: 'Broadcast',
         type: 'toggle',
         defaultValue: false,
-        width: 25
+        width: 25,
     },
     unique: {
         name: 'unique',
         label: 'Unique',
         type: 'toggle',
         defaultValue: false,
-        width: 25
+        width: 25,
     },
     msgformat: {
         name: 'msgformat',
@@ -142,7 +149,7 @@ const udpSchema = {
             { value: 'NMEA', label: 'NMEA' },
             { value: 'JSON_NMEA', label: 'JSON with NMEA' },
             { value: 'JSON_FULL', label: 'JSON Full' }
-        ]
+        ],
     },
     position_interval: {
         name: 'position_interval',
@@ -153,7 +160,7 @@ const udpSchema = {
         min: 0,
         max: 300,
         step: 1,
-        placeholder: '0-300 seconds'
+        placeholder: '0-300 seconds',
     }
 };
 
@@ -195,21 +202,21 @@ const tcpSchema = {
         label: 'Reconnect',
         type: 'toggle',
         defaultValue: true,
-        width: 25
+        width: 25,
     },
     keep_alive: {
         name: 'keep_alive',
         label: 'Keep Alive',
         type: 'toggle',
         defaultValue: false,
-        width: 25
+        width: 25,
     },
     unique: {
         name: 'unique',
         label: 'Unique',
         type: 'toggle',
         defaultValue: false,
-        width: 25
+        width: 25,
     },
     msgformat: {
         name: 'msgformat',
@@ -220,7 +227,7 @@ const tcpSchema = {
             { value: 'NMEA', label: 'NMEA' },
             { value: 'JSON_NMEA', label: 'JSON with NMEA' },
             { value: 'JSON_FULL', label: 'JSON Full' }
-        ]
+        ],
     },
     position_interval: {
         name: 'position_interval',
@@ -230,7 +237,7 @@ const tcpSchema = {
         defaultInteger: 60,
         min: 0,
         max: 300,
-        step: 1
+        step: 1,
     }
 };
 
@@ -302,6 +309,13 @@ const mqttSchema = {
         type: 'text',
         placeholder: 'Optional description'
     },
+    active: {
+        name: 'active',
+        label: 'Active',
+        type: 'toggle',
+        defaultValue: true,
+        width: 25
+    },
     topic: {
         name: 'topic',
         label: 'Topic',
@@ -325,7 +339,7 @@ const mqttSchema = {
             { value: '0', label: '0 - At most once' },
             { value: '1', label: '1 - At least once' },
             { value: '2', label: '2 - Exactly once' }
-        ]
+        ],
     },
     msgformat: {
         name: 'msgformat',
@@ -336,14 +350,14 @@ const mqttSchema = {
             { value: 'NMEA', label: 'NMEA' },
             { value: 'JSON_NMEA', label: 'JSON with NMEA' },
             { value: 'JSON_FULL', label: 'JSON Full' }
-        ]
+        ],
     },
     unique: {
         name: 'unique',
         label: 'Unique',
         type: 'toggle',
         defaultValue: false,
-        width: 25
+        width: 25,
     },
     position_interval: {
         name: 'position_interval',
@@ -353,7 +367,7 @@ const mqttSchema = {
         defaultInteger: 60,
         min: 0,
         max: 300,
-        step: 1
+        step: 1,
     }
 };
 
@@ -462,7 +476,7 @@ const webviewerSchema = {
     },
     share_loc: {
         name: 'share_loc',
-        label: 'Show Location',
+        label: 'Location',
         type: 'toggle',
         jsonpath: 'share_loc',
         defaultValue: false,
@@ -577,6 +591,14 @@ const receiverSchema = {
             field: "input",
             value: ["RTLSDR", "AIRSPY", "AIRSPYHF", "HYDRASDR", "HACKRF"]
         }
+    },
+    active: {
+        name: "active",
+        label: "Active",
+        type: "toggle",
+        jsonpath: "active",
+        defaultValue: true,
+        width: 25
     },
     rtlsdr_tuner: {
         name: "tuner",

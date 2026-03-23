@@ -14,6 +14,13 @@
   <link rel="stylesheet" href="/static/css/tailwind.css?v={{ .CssVersion }}">
   
   <style>
+    /* On narrow screens, schema config fields with a set width expand to full-width */
+    @media (max-width: 639px) {
+      .field-sized {
+        flex: 1 1 100% !important;
+      }
+    }
+
     :root {
       --sidebar-width-mobile: 260px;
       --sidebar-width-tablet: 5rem; /* 20 (tailwind w-20) */

@@ -228,9 +228,10 @@
         description: 'mt-0.5 text-[10px] sm:text-xs text-slate-500 ml-0.5',
         button: 'w-full sm:w-auto bg-white border border-slate-300 text-slate-700 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-slate-50 transition duration-200 shadow-sm inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-medium',
         buttonPrimary: 'px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition duration-200 shadow-sm flex items-center justify-center min-w-[40px] sm:min-w-[44px] text-xs sm:text-sm',
-        card: 'bg-white p-3 sm:p-6 rounded-none sm:rounded-xl border-x-0 sm:border-x border-slate-200 shadow-sm sm:max-w-2xl sm:mx-auto mb-2 sm:mb-6 relative hover:shadow-md transition-shadow duration-300',
-        cardHeader: 'flex justify-between items-center mb-3 sm:mb-6 pb-2 sm:pb-4 border-b border-slate-100',
-        deleteBtn: 'text-rose-600 hover:text-rose-700 hover:bg-rose-50 p-1.5 sm:p-2 rounded-lg transition duration-200',
+        card: 'bg-white rounded-none sm:rounded-xl border-x-0 sm:border-x border-slate-200 shadow-sm sm:max-w-2xl sm:mx-auto mb-2 sm:mb-6 relative hover:shadow-md transition-shadow duration-300 overflow-hidden',
+        cardHeader: 'flex justify-between items-center px-3 sm:px-5 py-2 sm:py-2.5 bg-slate-100 border-b border-slate-200',
+        cardBody: 'p-3 sm:p-5',
+        deleteBtn: 'text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1 sm:p-1.5 rounded-lg transition duration-200',
         chevron: 'pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500',
         saveActive: 'bg-slate-800 text-white px-4 sm:px-6 py-1.5 sm:py-2 rounded-lg hover:bg-slate-700 shadow-md transition-all duration-200 text-xs sm:text-sm font-medium transform hover:-translate-y-0.5',
         saveInactive: 'bg-white border border-slate-300 text-slate-400 px-4 sm:px-6 py-1.5 sm:py-2 rounded-lg hover:bg-slate-50 shadow-sm transition-all duration-200 text-xs sm:text-sm font-medium cursor-default',
@@ -533,7 +534,7 @@
                 );
             }
 
-            const container = el('div', 'mb-1.5 sm:mb-2 transition-all duration-200', {
+            const container = el('div', `mb-1.5 sm:mb-2 transition-all duration-200${field.width ? ' field-sized' : ''}`, {
                 dataset: { field: field.name, dependsOn: field.dependsOn ? JSON.stringify(field.dependsOn) : null },
                 style: field.width ? `flex: 0 1 calc(${field.width}% - 0.375rem); min-width: 0;` : 'flex: 1 1 100%;'
             });
@@ -632,31 +633,60 @@
             const items = this.config.isList ? this.data : [this.data];
 
             items.forEach((item, index) => {
-                const wrapper = el('div', Styles.card, { dataset: { receiverCard: index } },
-                    this.config.isList ? el('div', Styles.cardHeader, {},
-                        el('h4', 'text-base sm:text-lg font-semibold text-slate-800', {}, `${this.config.title} ${index + 1}`),
-                        el('button', Styles.deleteBtn, {
-                            type: 'button',
-                            title: 'Remove Item',
-                            onClick: () => this.removeItem(index)
-                        }, Icons.delete())
-                    ) : null
-                );
+                const activeField = this.config.isList ? this.fields.find(f => f.name === 'active') : null;
+                const isActive = activeField
+                    ? Utils.toBoolean(item.active !== undefined ? item.active : activeField.defaultValue)
+                    : true;
 
-                const fieldsDiv = el('div', 'flex flex-wrap gap-x-3 gap-y-2');
+                const wrapper = el('div', Styles.card, { dataset: { receiverCard: index } });
+
+                if (this.config.isList) {
+                    const toggleInput = activeField ? el('input', 'sr-only peer', {
+                        type: 'checkbox',
+                        checked: isActive,
+                        onChange: e => this.updateValue(index, activeField, e.target.checked)
+                    }) : null;
+
+                    const header = el('div', Styles.cardHeader, {},
+                        el('div', 'flex items-center gap-2', {},
+                            el('span', 'flex items-center justify-center w-5 h-5 text-xs font-bold bg-slate-200 text-slate-600 rounded-full', {}, `${index + 1}`),
+                            el('h4', 'text-sm sm:text-sm font-semibold text-slate-700', {}, this.config.title)
+                        ),
+                        el('div', 'flex items-center gap-2 sm:gap-3', {},
+                            activeField ? el('label', 'flex items-center gap-1.5 cursor-pointer select-none', {},
+                                el('span', 'text-xs font-medium text-slate-400', {}, 'Active'),
+                                el('div', 'relative inline-flex items-center', {},
+                                    toggleInput,
+                                    el('div', "w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500")
+                                )
+                            ) : null,
+                            el('button', Styles.deleteBtn, {
+                                type: 'button',
+                                title: 'Remove Item',
+                                onClick: () => this.removeItem(index)
+                            }, Icons.delete())
+                        )
+                    );
+                    wrapper.appendChild(header);
+                }
+
+                const fieldsDiv = el('div', this.config.isList ? Styles.cardBody : 'p-3 sm:p-5');
+                const innerFields = el('div', 'flex flex-wrap gap-x-3 gap-y-2');
                 this.fields.forEach(field => {
+                    if (activeField && field.name === 'active') return;
                     const fieldEl = Renderer.renderField(field, index, item,
                         (fld, val) => this.updateValue(index, fld, val),
-                        () => Renderer.updateVisibility(fieldsDiv, item),
+                        () => Renderer.updateVisibility(innerFields, item),
                         this.config.containerId
                     );
-                    fieldsDiv.appendChild(fieldEl);
+                    innerFields.appendChild(fieldEl);
                 });
+                fieldsDiv.appendChild(innerFields);
 
                 wrapper.appendChild(fieldsDiv);
                 this.container.appendChild(wrapper);
 
-                Renderer.updateVisibility(fieldsDiv, item);
+                Renderer.updateVisibility(innerFields, item);
             });
 
             this.renderControls();
