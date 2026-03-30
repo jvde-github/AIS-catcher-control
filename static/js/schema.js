@@ -581,6 +581,21 @@ const receiverSchema = {
         },
         onChange: "clearSerial"
     },
+    channel: {
+        name: "channel",
+        label: "Channel",
+        type: "select",
+        jsonpath: "channel",
+        defaultValue: "AB",
+        options: [
+            { value: "AB", label: "AB" },
+            { value: "CD", label: "CD" }
+        ],
+        dependsOn: {
+            field: "input",
+            value: ["RTLSDR", "AIRSPY", "AIRSPYHF", "HACKRF", "HYDRASDR"]
+        }
+    },
     serial: {
         name: "serial",
         label: "Serial Key",
@@ -652,7 +667,7 @@ const receiverSchema = {
     },
     rtlsdr_freqoffset: {
         name: "rtlsdr_freqoffset",
-        label: "Frequency Offset",
+        label: "Frequency Correction (ppm)",
         type: "number",
         jsonpath: "rtlsdr.freqoffset",
         min: -50,
