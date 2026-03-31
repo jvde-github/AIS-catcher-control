@@ -491,6 +491,14 @@
   }
   
   function updateMainDiagnosticCards(data) {
+      // Update installed status
+      const installedEl = document.getElementById('installedStatus');
+      if (installedEl && data.ais_catcher_available !== undefined) {
+          installedEl.innerHTML = data.ais_catcher_available
+              ? '<span class="text-emerald-600">Yes</span>'
+              : '<span class="text-rose-600">No</span>';
+      }
+
       // Update current version display
       const currentVersionEl = document.getElementById('currentVersionDisplay');
       if (currentVersionEl && data.ais_catcher_version) {
