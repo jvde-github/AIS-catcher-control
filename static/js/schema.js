@@ -90,6 +90,13 @@ const httpSchema = {
         min: 0,
         max: 300,
         step: 1,
+    },
+    zones: {
+        name: 'zone',
+        label: 'Zones',
+        type: 'zones',
+        defaultValue: [],
+        hint: 'No zones — receives from all inputs'
     }
 };
 
@@ -161,6 +168,13 @@ const udpSchema = {
         max: 300,
         step: 1,
         placeholder: '0-300 seconds',
+    },
+    zones: {
+        name: 'zone',
+        label: 'Zones',
+        type: 'zones',
+        defaultValue: [],
+        hint: 'No zones — receives from all inputs'
     }
 };
 
@@ -238,6 +252,13 @@ const tcpSchema = {
         min: 0,
         max: 300,
         step: 1,
+    },
+    zones: {
+        name: 'zone',
+        label: 'Zones',
+        type: 'zones',
+        defaultValue: [],
+        hint: 'No zones — receives from all inputs'
     }
 };
 
@@ -291,6 +312,13 @@ const tcpServerSchema = {
         min: 0,
         max: 300,
         step: 1
+    },
+    zones: {
+        name: 'zone',
+        label: 'Zones',
+        type: 'zones',
+        defaultValue: [],
+        hint: 'No zones — receives from all inputs'
     }
 };
 
@@ -368,6 +396,13 @@ const mqttSchema = {
         min: 0,
         max: 300,
         step: 1,
+    },
+    zones: {
+        name: 'zone',
+        label: 'Zones',
+        type: 'zones',
+        defaultValue: [],
+        hint: 'No zones — receives from all inputs'
     }
 };
 
@@ -521,6 +556,14 @@ const webviewerSchema = {
         jsonpath: 'decoder',
         defaultValue: false,
         width: 24
+    },
+    zones: {
+        name: 'zone',
+        label: 'Zones',
+        type: 'zones',
+        jsonpath: 'zone',
+        defaultValue: [],
+        hint: 'No zones — receives from all inputs'
     }
 };
 
@@ -549,6 +592,13 @@ const sharingSchema = {
         buttonIcon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8L10 14" /></svg>',
         onClick: 'openSharingManagement',
         skipSave: true  // Don't save this field to JSON
+    },
+    sharing_zone: {
+        name: 'sharing_zone',
+        label: 'Zones',
+        type: 'zones',
+        defaultValue: [],
+        hint: 'No zones — receives from all inputs'
     }
 };
 
@@ -1345,6 +1395,13 @@ const receiverSchema = {
         jsonpath: "verbose",
         defaultValue: false,
         width: 25
+    },
+    zones: {
+        name: "zone",
+        label: "Zones",
+        type: "zones",
+        jsonpath: "zone",
+        defaultValue: []
     }
 };
 

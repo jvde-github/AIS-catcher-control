@@ -1,0 +1,247 @@
+{{ define "zones" }}
+<div class="max-w-5xl mx-auto px-4 py-6">
+    <h3 class="hidden md:block text-xl font-semibold text-gray-800 mb-1">Data Flow</h3>
+    <p class="text-sm text-slate-500 mb-4">Signal routing between inputs and outputs based on shared zones.</p>
+
+    <div id="zones-loading" class="text-center text-slate-400 py-16">Loading&hellip;</div>
+    <div id="zones-empty" class="hidden text-center text-slate-400 py-16">No receivers or outputs configured.</div>
+
+    <div id="zones-patch" class="hidden">
+        <!-- Legend -->
+        <div id="zones-legend" class="flex flex-wrap gap-2 mb-5"></div>
+
+        <!-- Column headers -->
+        <div class="grid mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider" style="grid-template-columns:1fr 100px 1fr">
+            <div>Input</div>
+            <div></div>
+            <div>Output</div>
+        </div>
+
+        <!-- Patch graph -->
+        <div id="zones-graph" class="relative" style="min-height:60px">
+            <div class="grid gap-0" style="grid-template-columns:1fr 100px 1fr">
+                <div id="zones-inputs"  class="flex flex-col gap-3 pr-2"></div>
+                <div></div>
+                <div id="zones-outputs" class="flex flex-col gap-3 pl-2"></div>
+            </div>
+            <svg id="zones-svg" class="absolute inset-0 pointer-events-none" style="width:100%;overflow:visible"></svg>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const ZONE_COLORS_HEX = [
+        '#93c5fd', '#6ee7b7', '#c4b5fd', '#fcd34d',
+        '#fca5a5', '#67e8f9', '#fdba74', '#5eead4',
+    ];
+    const ZONE_BADGE_CLASSES = [
+        'bg-blue-100 text-blue-700 border border-blue-200',
+        'bg-emerald-100 text-emerald-700 border border-emerald-200',
+        'bg-violet-100 text-violet-700 border border-violet-200',
+        'bg-amber-100 text-amber-700 border border-amber-200',
+        'bg-rose-100 text-rose-700 border border-rose-200',
+        'bg-cyan-100 text-cyan-700 border border-cyan-200',
+        'bg-orange-100 text-orange-700 border border-orange-200',
+        'bg-teal-100 text-teal-700 border border-teal-200',
+    ];
+
+    function zoneHash(zone) {
+        let h = 0;
+        for (let i = 0; i < zone.length; i++) h = (h * 31 + zone.charCodeAt(i)) & 0xFFFF;
+        return h;
+    }
+    function zoneHex(zone)      { return ZONE_COLORS_HEX[zoneHash(zone) % ZONE_COLORS_HEX.length]; }
+    function zoneBadgeCls(zone) { return ZONE_BADGE_CLASSES[zoneHash(zone) % ZONE_BADGE_CLASSES.length]; }
+
+    function badge(zone) {
+        const s = document.createElement('span');
+        s.className = `inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${zoneBadgeCls(zone)}`;
+        s.textContent = zone;
+        return s;
+    }
+
+    function receiverLabel(item, idx) {
+        const type = item.input || 'Unknown';
+        const id   = item.serial ? `#${item.serial}` : `#${idx + 1}`;
+        return `${type} ${id}`;
+    }
+
+    function outputLabel(type, item) {
+        if (item && item.description) return `${type} · ${item.description}`;
+        if (item && item.host && item.port) return `${type} · ${item.host}:${item.port}`;
+        if (item && item.url)  return `${type} · ${item.url}`;
+        if (item && item.host) return `${type} · ${item.host}`;
+        if (item && item.port) return `${type} · :${item.port}`;
+        return type;
+    }
+
+    function createNode(label, zones, active, isInput, href) {
+        const borderColor = active ? 'border-r-green-400' : 'border-r-red-400';
+        const div = href ? document.createElement('a') : document.createElement('div');
+        if (href) { div.href = href; }
+        div.className = `bg-white border border-slate-200 border-r-[6px] ${borderColor} rounded-lg px-3 py-2.5 shadow-sm min-w-0 ${href ? 'cursor-pointer hover:bg-slate-50 transition-colors' : ''}`;
+
+        const lbl = document.createElement('div');
+        lbl.className = 'text-sm font-medium text-slate-700 truncate';
+        lbl.textContent = label;
+        div.appendChild(lbl);
+
+        if (zones && zones.length > 0) {
+            const row = document.createElement('div');
+            row.className = 'flex flex-wrap gap-1 mt-1';
+            zones.forEach(z => row.appendChild(badge(z)));
+            div.appendChild(row);
+        } else if (!isInput) {
+            const note = document.createElement('div');
+            note.className = 'text-xs text-slate-400 italic mt-0.5';
+            note.textContent = 'all inputs';
+            div.appendChild(note);
+        }
+
+        return div;
+    }
+
+    function drawConnections(inputEls, outputEls, connections, svg, graphEl) {
+        svg.innerHTML = '';
+        svg.setAttribute('height', graphEl.offsetHeight);
+        const gr = graphEl.getBoundingClientRect();
+
+        connections.forEach(({ ii, oi, zones, isAll }) => {
+            const iEl = inputEls[ii];
+            const oEl = outputEls[oi];
+            if (!iEl || !oEl) return;
+
+            const ir = iEl.getBoundingClientRect();
+            const or = oEl.getBoundingClientRect();
+
+            const x1 = ir.right  - gr.left;
+            const y1 = ir.top    + ir.height / 2 - gr.top;
+            const x2 = or.left   - gr.left;
+            const y2 = or.top    + or.height / 2 - gr.top;
+            const cx = (x1 + x2) / 2;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`);
+            path.setAttribute('fill', 'none');
+
+            if (isAll) {
+                path.setAttribute('stroke', '#cbd5e1');
+                path.setAttribute('stroke-width', '1.5');
+                path.setAttribute('stroke-dasharray', '5 3');
+            } else {
+                path.setAttribute('stroke', zoneHex(zones[0]));
+                path.setAttribute('stroke-width', '2.5');
+                path.setAttribute('opacity', '0.75');
+            }
+
+            svg.appendChild(path);
+        });
+    }
+
+    async function load() {
+        try {
+            const res = await fetch('/api/config');
+            if (!res.ok) throw new Error('fetch failed');
+            const cfg = await res.json();
+
+            const receivers = (cfg.receiver || []).map((item, i) => ({
+                label:  receiverLabel(item, i),
+                zones:  item.zone || [],
+                active: item.active !== false,
+                href:   '/device',
+            }));
+
+            const outputs = [];
+
+            [
+                { type: 'UDP',        key: 'udp',          href: '/udp' },
+                { type: 'TCP',        key: 'tcp',          href: '/tcp' },
+                { type: 'HTTP',       key: 'http',         href: '/http' },
+                { type: 'MQTT',       key: 'mqtt',         href: '/mqtt' },
+                { type: 'TCP Server', key: 'tcp_listener', href: '/tcp-servers' },
+                { type: 'Webviewer',  key: 'server',       href: '/server' },
+            ].forEach(({ type, key, href }) => {
+                (cfg[key] || []).forEach(item => {
+                    outputs.push({
+                        label:  outputLabel(type, item),
+                        zones:  item.zone || [],
+                        active: item.active !== false,
+                        href,
+                    });
+                });
+            });
+
+            // Community sharing: top-level boolean cfg.sharing
+            if (cfg.sharing !== undefined) {
+                outputs.push({
+                    label:  'Community',
+                    zones:  Array.isArray(cfg.sharing_zone) ? cfg.sharing_zone : [],
+                    active: cfg.sharing === true,
+                    href:   '/sharing',
+                });
+            }
+
+            document.getElementById('zones-loading').classList.add('hidden');
+
+            if (receivers.length === 0 && outputs.length === 0) {
+                document.getElementById('zones-empty').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('zones-patch').classList.remove('hidden');
+
+            // Legend
+            const allZones = new Set();
+            [...receivers, ...outputs].forEach(n => n.zones.forEach(z => allZones.add(z)));
+            const legendEl = document.getElementById('zones-legend');
+            if (allZones.size > 0) {
+                allZones.forEach(z => {
+                    const item = document.createElement('span');
+                    item.className = `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${zoneBadgeCls(z)}`;
+                    const dot = document.createElement('span');
+                    dot.className = 'w-2 h-2 rounded-full flex-shrink-0';
+                    dot.style.background = zoneHex(z);
+                    item.appendChild(dot);
+                    item.appendChild(document.createTextNode(z));
+                    legendEl.appendChild(item);
+                });
+            } else {
+                legendEl.remove();
+            }
+
+            const inputsEl  = document.getElementById('zones-inputs');
+            const outputsEl = document.getElementById('zones-outputs');
+
+            const inputEls  = receivers.map(r => { const n = createNode(r.label, r.zones, r.active, true,  r.href); inputsEl.appendChild(n);  return n; });
+            const outputEls = outputs.map(o  => { const n = createNode(o.label, o.zones, o.active, false, o.href); outputsEl.appendChild(n); return n; });
+
+            // Compute connections
+            const connections = [];
+            outputs.forEach((output, oi) => {
+                if (output.zones.length === 0) {
+                    receivers.forEach((_, ii) => connections.push({ ii, oi, zones: [], isAll: true }));
+                } else {
+                    receivers.forEach((receiver, ii) => {
+                        const shared = output.zones.filter(z => receiver.zones.includes(z));
+                        if (shared.length > 0) connections.push({ ii, oi, zones: shared, isAll: false });
+                    });
+                }
+            });
+
+            const svg     = document.getElementById('zones-svg');
+            const graphEl = document.getElementById('zones-graph');
+
+            const redraw = () => drawConnections(inputEls, outputEls, connections, svg, graphEl);
+            requestAnimationFrame(redraw);
+            new ResizeObserver(redraw).observe(graphEl);
+
+        } catch (e) {
+            document.getElementById('zones-loading').textContent = 'Failed to load configuration.';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', load);
+})();
+</script>
+{{ end }}

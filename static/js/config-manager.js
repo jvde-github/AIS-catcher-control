@@ -59,6 +59,166 @@
     }
 
     // ============================================================================
+    // Zone utilities
+    // ============================================================================
+
+    const ZONE_COLORS = [
+        'bg-blue-100 text-blue-700 border border-blue-200',
+        'bg-emerald-100 text-emerald-700 border border-emerald-200',
+        'bg-violet-100 text-violet-700 border border-violet-200',
+        'bg-amber-100 text-amber-700 border border-amber-200',
+        'bg-rose-100 text-rose-700 border border-rose-200',
+        'bg-cyan-100 text-cyan-700 border border-cyan-200',
+        'bg-orange-100 text-orange-700 border border-orange-200',
+        'bg-teal-100 text-teal-700 border border-teal-200',
+    ];
+
+    function getZoneColor(zone) {
+        let hash = 0;
+        for (let i = 0; i < zone.length; i++) hash = (hash * 31 + zone.charCodeAt(i)) & 0xFFFF;
+        return ZONE_COLORS[hash % ZONE_COLORS.length];
+    }
+
+    async function fetchAllZones() {
+        try {
+            const res = await fetch('/api/config');
+            if (!res.ok) return [];
+            const cfg = await res.json();
+            const zones = new Set();
+            ['receiver', 'udp', 'tcp', 'http', 'mqtt', 'tcp_listener', 'server'].forEach(key => {
+                (cfg[key] || []).forEach(item => { if (Array.isArray(item.zone)) item.zone.forEach(z => zones.add(z)); });
+            });
+            if (Array.isArray(cfg.sharing_zone)) cfg.sharing_zone.forEach(z => zones.add(z));
+            return [...zones].sort();
+        } catch { return []; }
+    }
+
+    let activeZoneEdit = { zones: [], onUpdate: null, allZones: [] };
+
+    function ensureZoneModal() {
+        if (document.getElementById('cm-zone-modal')) return;
+        const modal = el('div', 'fixed inset-0 flex items-center justify-center hidden z-[100] p-4',
+            { id: 'cm-zone-modal', style: 'background-color: rgba(0,0,0,0.3)' },
+            el('div', 'bg-white rounded-lg shadow-xl w-full max-w-sm flex flex-col relative', {},
+                el('div', 'flex justify-between items-center p-4 border-b flex-shrink-0', {},
+                    el('h3', 'text-base font-medium text-gray-800', {}, 'Manage Zones'),
+                    el('button', 'text-gray-600 hover:text-gray-800', { type: 'button', onClick: () => modal.classList.add('hidden') },
+                        el('svg', 'h-5 w-5', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
+                            el('path', '', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M6 18L18 6M6 6l12 12' })
+                        )
+                    )
+                ),
+                el('div', 'p-4 flex flex-col gap-4', { id: 'cm-zone-body' }),
+                el('div', 'flex justify-end p-4 border-t flex-shrink-0', {},
+                    el('button', 'bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition text-sm', {
+                        type: 'button', onClick: () => modal.classList.add('hidden')
+                    }, 'Done')
+                )
+            )
+        );
+        document.body.appendChild(modal);
+    }
+
+    function openZoneModal(currentZones, onUpdate) {
+        ensureZoneModal();
+        activeZoneEdit.zones = [...currentZones];
+        activeZoneEdit.onUpdate = onUpdate;
+        fetchAllZones().then(all => {
+            activeZoneEdit.allZones = all;
+            renderZoneModalBody();
+        });
+        document.getElementById('cm-zone-modal').classList.remove('hidden');
+    }
+
+    function renderZoneModalBody() {
+        const body = document.getElementById('cm-zone-body');
+        if (!body) return;
+        body.innerHTML = '';
+
+        // Current zone chips
+        const chipsWrap = el('div', 'flex flex-wrap gap-1.5 min-h-[2rem]');
+        if (activeZoneEdit.zones.length === 0) {
+            chipsWrap.appendChild(el('span', 'text-xs text-slate-400 italic', {}, 'No zones assigned'));
+        } else {
+            activeZoneEdit.zones.forEach((zone, i) => {
+                const chip = el('span', `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getZoneColor(zone)}`, {},
+                    zone,
+                    el('button', 'ml-0.5 hover:opacity-60 font-bold leading-none', {
+                        type: 'button',
+                        onClick: () => {
+                            activeZoneEdit.zones.splice(i, 1);
+                            activeZoneEdit.onUpdate([...activeZoneEdit.zones]);
+                            renderZoneModalBody();
+                        }
+                    }, '×')
+                );
+                chipsWrap.appendChild(chip);
+            });
+        }
+        body.appendChild(chipsWrap);
+
+        // Add zone input
+        const addSection = el('div', 'flex flex-col gap-1');
+        const inputRow = el('div', 'flex gap-2');
+        const input = el('input', 'flex-1 px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500', {
+            type: 'text',
+            placeholder: 'Zone name (e.g. internal)',
+            onKeydown: (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); addZoneFromInput(); }
+            },
+            onInput: () => {
+                input.value = input.value.replace(/[^a-zA-Z0-9_-]/g, '');
+                renderSuggestions(input.value.toLowerCase());
+            }
+        });
+        inputRow.appendChild(input);
+        inputRow.appendChild(el('button', 'px-3 py-1.5 bg-slate-800 text-white rounded-lg text-sm hover:bg-slate-700 transition', {
+            type: 'button', onClick: addZoneFromInput
+        }, 'Add'));
+        addSection.appendChild(inputRow);
+
+        const suggestionsDiv = el('div', 'flex flex-wrap gap-1 mt-1', { id: 'cm-zone-suggestions' });
+        addSection.appendChild(suggestionsDiv);
+        body.appendChild(addSection);
+
+        function addZoneFromInput() {
+            const val = input.value.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+            if (!val) return;
+            input.value = val;
+            if (!activeZoneEdit.zones.includes(val)) {
+                activeZoneEdit.zones.push(val);
+                activeZoneEdit.onUpdate([...activeZoneEdit.zones]);
+                if (!activeZoneEdit.allZones.includes(val)) activeZoneEdit.allZones.push(val);
+            }
+            input.value = '';
+            renderZoneModalBody();
+        }
+
+        function renderSuggestions(query) {
+            suggestionsDiv.innerHTML = '';
+            const suggestions = activeZoneEdit.allZones.filter(z =>
+                !activeZoneEdit.zones.includes(z) && (query === '' || z.toLowerCase().includes(query))
+            );
+            suggestions.slice(0, 8).forEach(z => {
+                suggestionsDiv.appendChild(el('button', `text-xs px-2 py-0.5 rounded-full ${getZoneColor(z)} hover:opacity-80 transition`, {
+                    type: 'button',
+                    onClick: () => {
+                        if (!activeZoneEdit.zones.includes(z)) {
+                            activeZoneEdit.zones.push(z);
+                            activeZoneEdit.onUpdate([...activeZoneEdit.zones]);
+                        }
+                        input.value = '';
+                        renderZoneModalBody();
+                    }
+                }, z));
+            });
+        }
+
+        renderSuggestions('');
+        setTimeout(() => input.focus(), 50);
+    }
+
+    // ============================================================================
     // 1. Core Utilities & DOM Builder
     // ============================================================================
 
@@ -496,6 +656,57 @@
                     }
                 });
                 return el('div', Styles.sliderContainer, {}, slider, display);
+            }
+
+            if (type === 'zones') {
+                const zones = Array.isArray(currentValue) ? [...currentValue] : [];
+
+                const wrapper = el('div', 'flex flex-col gap-1');
+                const badgesDiv = el('div', 'flex flex-wrap items-center gap-1');
+                const manageBtn = el('button', 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200 transition', {
+                    type: 'button',
+                    onClick: () => openZoneModal(zones, (updated) => {
+                        zones.length = 0;
+                        updated.forEach(z => zones.push(z));
+                        onUpdate([...zones]);
+                        renderZoneBadges();
+                    })
+                },
+                    el('svg', 'w-3 h-3', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
+                        el('path', '', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M12 4v16m8-8H4' })
+                    ),
+                    'Add Zone'
+                );
+
+                function renderZoneBadges() {
+                    badgesDiv.innerHTML = '';
+                    zones.forEach((zone, i) => {
+                        badgesDiv.appendChild(
+                            el('span', `inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium ${getZoneColor(zone)}`, {},
+                                zone,
+                                el('button', 'ml-0.5 hover:opacity-60 font-bold leading-none', {
+                                    type: 'button',
+                                    onClick: () => {
+                                        zones.splice(i, 1);
+                                        onUpdate([...zones]);
+                                        renderZoneBadges();
+                                    }
+                                }, '×')
+                            )
+                        );
+                    });
+                    badgesDiv.appendChild(manageBtn);
+                    if (field.hint) {
+                        const hintText = zones.length === 0 ? field.hint : '';
+                        hintEl.textContent = hintText;
+                    }
+                }
+
+                const hintEl = el('span', 'text-xs text-slate-400 italic');
+                renderZoneBadges();
+                wrapper.appendChild(badgesDiv);
+                if (field.hint) wrapper.appendChild(hintEl);
+                return wrapper;
             }
 
             return el('input', Styles.input, {
