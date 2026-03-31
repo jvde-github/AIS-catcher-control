@@ -1318,6 +1318,26 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		go checkControlLatestVersion()
 	}
 
+	// Recompute UpdateAvailable using the freshly-read installed commit and the
+	// cached GitHub latest commit. This makes the flag accurate immediately
+	// after a manual binary update, without waiting for the next GitHub re-check.
+	if info.LatestCommit != "" && info.AISCatcherAvailable {
+		currentVersion := ""
+		if len(info.AISCatcherVersion) > 0 {
+			parts := strings.Fields(info.AISCatcherVersion)
+			if len(parts) > 0 {
+				currentVersion = strings.TrimPrefix(parts[0], "v")
+			}
+		}
+		latestTag := strings.TrimPrefix(info.LatestVersionTag, "v")
+		if info.AISCatcherBuildType == "source" {
+			info.UpdateAvailable = info.AISCatcherCommit != "" && info.AISCatcherCommit != info.LatestCommit
+		} else {
+			info.UpdateAvailable = (currentVersion != latestTag && latestTag != "") ||
+				(currentVersion == latestTag && info.AISCatcherCommit != "" && info.AISCatcherCommit != info.LatestCommit)
+		}
+	}
+
 	return info
 }
 
