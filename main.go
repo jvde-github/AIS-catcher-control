@@ -666,9 +666,9 @@ func broadcastResult(msgType, content string) {
 	go func() {
 		time.Sleep(2 * time.Second) // Brief delay to ensure any file writes are complete
 		cachedSysInfo.Lock()
-		cachedSysInfo.lastFetch = time.Time{}       // Force cache refresh
-		systemInfo.LastChecked = time.Time{}        // Force version check
-		systemInfo.ControlLastChecked = time.Time{} // Force control version check
+		cachedSysInfo.lastFetch = time.Time{}              // Force cache refresh
+		cachedSysInfo.info.LastChecked = time.Time{}       // Force GitHub version re-check
+		cachedSysInfo.info.ControlLastChecked = time.Time{} // Force Control version re-check
 		cachedSysInfo.Unlock()
 		getCachedSystemInfo() // Trigger immediate refresh
 	}()
@@ -1365,63 +1365,31 @@ func checkLatestVersion() {
 		return
 	}
 
-	cachedSysInfo.Lock()
-	defer cachedSysInfo.Unlock()
-
-	// Sync installed binary fields from cache — collectSystemInfo() may have refreshed
-	// them since the global systemInfo was last updated (only set at startup).
-	systemInfo.AISCatcherAvailable = cachedSysInfo.info.AISCatcherAvailable
-	systemInfo.AISCatcherVersion = cachedSysInfo.info.AISCatcherVersion
-	systemInfo.AISCatcherVersionCode = cachedSysInfo.info.AISCatcherVersionCode
-	systemInfo.AISCatcherDescribe = cachedSysInfo.info.AISCatcherDescribe
-	systemInfo.AISCatcherCommit = cachedSysInfo.info.AISCatcherCommit
-	systemInfo.AISCatcherBuildType = cachedSysInfo.info.AISCatcherBuildType
-
-	systemInfo.LatestVersion = release.Name
-	systemInfo.LatestVersionTag = release.TagName
-	systemInfo.LastChecked = time.Now()
-
 	// Get the latest commit from main branch (not from the release tag)
+	var latestCommit string
 	commitResp, err := client.Get("https://api.github.com/repos/jvde-github/AIS-catcher/commits/main")
 	if err == nil && commitResp.StatusCode == http.StatusOK {
 		var commit struct {
 			SHA string `json:"sha"`
 		}
 		if json.NewDecoder(commitResp.Body).Decode(&commit) == nil {
-			systemInfo.LatestCommit = commit.SHA[:7] // First 7 chars of commit (git standard)
+			latestCommit = commit.SHA[:7]
 		}
 		commitResp.Body.Close()
 	}
 
-	// Check if update is available
-	if systemInfo.AISCatcherAvailable && systemInfo.AISCatcherVersion != "" {
-		currentVersion := systemInfo.AISCatcherVersion
-		latestTag := strings.TrimPrefix(release.TagName, "v")
+	// Only update GitHub-related fields on the cache, preserving the
+	// installed binary fields that collectSystemInfo() keeps fresh.
+	cachedSysInfo.Lock()
+	defer cachedSysInfo.Unlock()
 
-		// Extract version from current version string (e.g., "v0.66" from full string)
-		if strings.Contains(currentVersion, "v") {
-			parts := strings.Fields(currentVersion)
-			if len(parts) > 0 {
-				currentVersion = strings.TrimPrefix(parts[0], "v")
-			}
-		}
-
-		// For Source builds, only check commit hash
-		// For prebuilt packages, check version OR commit
-		if systemInfo.AISCatcherBuildType == "source" {
-			// Source build: only suggest update if commit differs
-			systemInfo.UpdateAvailable = systemInfo.AISCatcherCommit != "" &&
-				systemInfo.LatestCommit != "" &&
-				systemInfo.AISCatcherCommit != systemInfo.LatestCommit
-		} else {
-			// Prebuilt package: suggest update if version differs OR commit differs
-			systemInfo.UpdateAvailable = (currentVersion != latestTag && latestTag != "") ||
-				(currentVersion == latestTag && systemInfo.AISCatcherCommit != "" &&
-					systemInfo.LatestCommit != "" && systemInfo.AISCatcherCommit != systemInfo.LatestCommit)
-		}
+	info := &cachedSysInfo.info
+	info.LatestVersion = release.Name
+	info.LatestVersionTag = release.TagName
+	info.LastChecked = time.Now()
+	if latestCommit != "" {
+		info.LatestCommit = latestCommit
 	}
-
-	cachedSysInfo.info = systemInfo
 }
 
 // checkControlLatestVersion fetches the latest commit from Control GitHub repo
@@ -1454,8 +1422,9 @@ func checkControlLatestVersion() {
 	cachedSysInfo.Lock()
 	defer cachedSysInfo.Unlock()
 
-	systemInfo.ControlLatestCommit = commit.SHA[:7] // First 7 chars
-	systemInfo.ControlLastChecked = time.Now()
+	info := &cachedSysInfo.info
+	info.ControlLatestCommit = commit.SHA[:7]
+	info.ControlLastChecked = time.Now()
 
 	// Compare raw short commit hash against latest commit on main
 	if buildCommit != "unknown" && buildCommit != "" {
@@ -1463,10 +1432,8 @@ func checkControlLatestVersion() {
 		if len(current) > 7 {
 			current = current[:7]
 		}
-		systemInfo.ControlUpdateAvailable = current != systemInfo.ControlLatestCommit
+		info.ControlUpdateAvailable = current != info.ControlLatestCommit
 	}
-
-	cachedSysInfo.info = systemInfo
 }
 
 func init() {
@@ -2909,15 +2876,15 @@ func updateCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Pre-stamp timestamps before launching goroutines to prevent thundering herd
 	cachedSysInfo.Lock()
-	aisWasReset := systemInfo.LastChecked.IsZero()
-	controlWasReset := systemInfo.ControlLastChecked.IsZero()
-	needAISCatcherCheck := aisWasReset || time.Since(systemInfo.LastChecked) > 15*time.Minute
-	needControlCheck := controlWasReset || time.Since(systemInfo.ControlLastChecked) > 15*time.Minute
+	aisWasReset := cachedSysInfo.info.LastChecked.IsZero()
+	controlWasReset := cachedSysInfo.info.ControlLastChecked.IsZero()
+	needAISCatcherCheck := aisWasReset || time.Since(cachedSysInfo.info.LastChecked) > 15*time.Minute
+	needControlCheck := controlWasReset || time.Since(cachedSysInfo.info.ControlLastChecked) > 15*time.Minute
 	if needAISCatcherCheck {
-		systemInfo.LastChecked = time.Now()
+		cachedSysInfo.info.LastChecked = time.Now()
 	}
 	if needControlCheck {
-		systemInfo.ControlLastChecked = time.Now()
+		cachedSysInfo.info.ControlLastChecked = time.Now()
 	}
 	cachedSysInfo.Unlock()
 
