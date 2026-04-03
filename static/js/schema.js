@@ -460,21 +460,25 @@ const webviewerSchema = {
         label: 'Plugin Directory',
         type: 'text',
         jsonpath: 'plugin_dir',
-        placeholder: '/path/to/plugins'
+        placeholder: '/path/to/plugins',
+        width: 50
     },
-    cdn: {
-        name: 'cdn',
-        label: 'CDN URL',
+    webcontrol_http: {
+        name: 'webcontrol_http',
+        label: 'Web Control Link',
         type: 'text',
-        jsonpath: 'cdn',
-        placeholder: 'https://cdn.example.com'
+        jsonpath: 'webcontrol_http',
+        defaultValue: '',
+        placeholder: 'http://127.0.0.1:8110',
+        width: 50
     },
     file: {
         name: 'file',
         label: 'File',
         type: 'text',
         jsonpath: 'file',
-        required: true
+        required: true,
+        width: 75
     },
     backup: {
         name: 'backup',
@@ -485,21 +489,23 @@ const webviewerSchema = {
         min: 0,
         width: 25
     },
+    history: {
+        name: 'history',
+        label: 'Ship Display Timeout (s)',
+        type: 'number',
+        jsonpath: 'history',
+        defaultValue: 1800,
+        min: 5,
+        max: 43200,
+        width: 50
+    },
     context: {
         name: 'context',
         label: 'Context',
         type: 'text',
         jsonpath: 'context',
         defaultValue: 'settings',
-        width: 75
-    },
-    webcontrol_http: {
-        name: 'webcontrol_http',
-        label: 'Web Control Link',
-        type: 'text',
-        jsonpath: 'webcontrol_http',
-        defaultValue: '',
-        placeholder: 'http://127.0.0.1:8110'
+        width: 50
     },
     active: {
         name: 'active',
