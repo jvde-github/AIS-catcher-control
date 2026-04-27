@@ -54,11 +54,6 @@ RUN bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catc
 RUN systemctl enable ais-catcher.service || true
 RUN systemctl enable ais-catcher-control.service || true
 
-# Enable docker mode via systemd service override
-RUN mkdir -p /etc/systemd/system/ais-catcher-control.service.d && \
-    printf '[Service]\nExecStart=\nExecStart=/usr/bin/AIS-catcher-control -docker\n' \
-    > /etc/systemd/system/ais-catcher-control.service.d/docker.conf
-
 # Store initial config files in a separate location (volume mount will hide /etc/AIS-catcher)
 RUN mkdir -p /opt/ais-catcher-defaults && \
     cp -r /etc/AIS-catcher/* /opt/ais-catcher-defaults/

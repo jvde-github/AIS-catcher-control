@@ -1551,7 +1551,6 @@ type Config struct {
 	Port            string `json:"port"`
 	ConfigCmdHash   uint32 `json:"config_cmd_hash"`
 	ConfigJSONHash  uint32 `json:"config_json_hash"`
-	Docker          bool   `json:"docker"`
 	LicenseAccepted bool   `json:"license_accepted"`
 }
 
@@ -1619,7 +1618,6 @@ func loadControlSettings() error {
 			Port:           "8110",
 			ConfigCmdHash:  435605018,
 			ConfigJSONHash: 3798370746,
-			Docker:         false,
 		}
 		data, err := json.MarshalIndent(config, "", "    ")
 		if err != nil {
@@ -1901,23 +1899,6 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getServiceStatus() string {
-	if getConfig().Docker {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "/usr/bin/is-running.sh")
-		_ = cmd.Run() // We only care about the exit code
-
-		exitCode := cmd.ProcessState.ExitCode()
-
-		if exitCode == 1 {
-			return "inactive (stopped)"
-		} else if exitCode == 0 {
-			return "active (running)"
-		} else {
-			return "unknown"
-		}
-	}
-
 	saCtx, saCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer saCancel()
 	cmd := exec.CommandContext(saCtx, "systemctl", "is-active", "ais-catcher.service")
@@ -1948,17 +1929,6 @@ func getServiceStatus() string {
 }
 
 func getServiceUptime() string {
-	if getConfig().Docker {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "/usr/bin/uptime.sh")
-		output, err := cmd.Output()
-		if err != nil {
-			return "Unknown"
-		}
-		return strings.TrimSpace(string(output))
-	}
-
 	aeCtx, aeCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer aeCancel()
 	cmd := exec.CommandContext(aeCtx, "systemctl", "show", "ais-catcher.service", "--property=ActiveEnterTimestamp")
@@ -3001,7 +2971,6 @@ func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 
 	resetHashes := flag.Bool("overwrite-hashes", false, "Reset configuration file hashes")
-	dockerMode := flag.Bool("docker", false, "Run in Docker mode")
 	flag.Parse()
 
 	err := initPaths()
@@ -3047,17 +3016,8 @@ func main() {
 		log.Fatal("Failed to load configuration:", err)
 	}
 
-	if *dockerMode {
-		config.Docker = true
-	}
-
 	if err := migrateConfigAtStartup(); err != nil {
 		log.Printf("Config migration error: %v", err)
-	}
-
-	// message if running in Docker mode
-	if config.Docker {
-		log.Println("Running in Docker mode")
 	}
 
 	staticFSys, err := fs.Sub(staticFS, "static")
