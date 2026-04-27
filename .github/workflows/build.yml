@@ -145,18 +145,19 @@ jobs:
           name: AIS-catcher-control_binaries
           path: build/*
 
-      # Step 11: Get the latest release
-      - name: Get the Latest Release
+      # Step 11: Get the release by tag
+      - name: Get Release by Tag
         id: get_latest_release
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const latestRelease = await github.rest.repos.getLatestRelease({
+            const release = await github.rest.repos.getReleaseByTag({
               owner: context.repo.owner,
-              repo: context.repo.repo
+              repo: context.repo.repo,
+              tag: 'v0.1'
             });
-            core.setOutput('release_id', latestRelease.data.id);
+            core.setOutput('release_id', release.data.id);
 
       # Step 12: Upload Assets to the Latest Release
       - name: Upload Assets to Latest Release
