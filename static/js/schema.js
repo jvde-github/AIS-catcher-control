@@ -671,6 +671,18 @@ const receiverSchema = {
         defaultValue: true,
         width: 25
     },
+    sensitivity_high: {
+        name: "sensitivity_high",
+        label: "High Sensitivity",
+        type: "toggle",
+        jsonpath: "sensitivity_high",
+        defaultValue: false,
+        width: 25,
+        dependsOn: {
+            field: "input",
+            value: ["RTLSDR", "AIRSPY", "AIRSPYHF", "HACKRF", "HYDRASDR"]
+        }
+    },
     rtlsdr_tuner: {
         name: "tuner",
         label: "Tuner Gain",
