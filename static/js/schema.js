@@ -474,7 +474,7 @@ const webviewerSchema = {
     },
     file: {
         name: 'file',
-        label: 'File',
+        label: 'Backup File',
         type: 'text',
         jsonpath: 'file',
         required: true,
@@ -482,7 +482,7 @@ const webviewerSchema = {
     },
     backup: {
         name: 'backup',
-        label: 'Backup',
+        label: 'Interval (min)',
         type: 'number',
         jsonpath: 'backup',
         defaultValue: 10,
