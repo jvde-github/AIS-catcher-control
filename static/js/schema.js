@@ -523,6 +523,14 @@ const webviewerSchema = {
         defaultValue: false,
         width: 24
     },
+    use_gps: {
+        name: 'use_gps',
+        label: 'Use GPS',
+        type: 'toggle',
+        jsonpath: 'use_gps',
+        defaultValue: true,
+        width: 24
+    },
     realtime: {
         name: 'realtime',
         label: 'Realtime',

@@ -2986,22 +2986,22 @@ func sendJSONResponse(w http.ResponseWriter, status bool, errorMsg string, statu
 	json.NewEncoder(w).Encode(response)
 }
 
-func getFileVersion(staticFSys fs.FS, filepath string) string {
-	f, err := staticFSys.Open(filepath)
-	if err != nil {
-		log.Printf("Error opening %s for versioning: %v", filepath, err)
-		return ""
+func getFileVersion(staticFSys fs.FS, paths ...string) string {
+	h := sha256.New()
+	for _, p := range paths {
+		f, err := staticFSys.Open(p)
+		if err != nil {
+			log.Printf("Error opening %s for versioning: %v", p, err)
+			return ""
+		}
+		if _, err := io.Copy(h, f); err != nil {
+			f.Close()
+			log.Printf("Error reading %s for versioning: %v", p, err)
+			return ""
+		}
+		f.Close()
 	}
-	defer f.Close()
-
-	content, err := io.ReadAll(f)
-	if err != nil {
-		log.Printf("Error reading %s for versioning: %v", filepath, err)
-		return ""
-	}
-
-	hash := sha256.Sum256(content)
-	return hex.EncodeToString(hash[:])[:8]
+	return hex.EncodeToString(h.Sum(nil))[:8]
 }
 
 func apiConfigHandler(w http.ResponseWriter, r *http.Request) {
@@ -3367,7 +3367,7 @@ func main() {
 	}
 
 	cssVersion = getFileVersion(staticFSys, "css/tailwind.css")
-	jsVersion = getFileVersion(staticFSys, "js/config-manager.js")
+	jsVersion = getFileVersion(staticFSys, "js/config-manager.js", "js/schema.js")
 
 	_, err = readConfigJSON()
 	if err != nil {
