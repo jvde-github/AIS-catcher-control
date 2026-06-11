@@ -603,7 +603,26 @@
       updateStatus('Running');
       showProgress(true);
 
-      connectSSE(action);
+      fetch('/api/system-action-start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action })
+      })
+          .then(async (resp) => {
+              if (!resp.ok) {
+                  let message = 'Failed to start action';
+                  try {
+                      const data = await resp.json();
+                      if (data.error) message = data.error;
+                  } catch (e) {}
+                  throw new Error(message);
+              }
+              connectSSE(action);
+          })
+          .catch((err) => {
+              appendOutput('\n<span class="text-rose-400">✗ Error: ' + err.message + '</span>\n');
+              finishOperation('Failed', true);
+          });
   }
 
   function finishOperation(status, isError = false, connectionLost = false) {

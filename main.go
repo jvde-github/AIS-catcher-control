@@ -16,6 +16,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,8 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/process"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -396,7 +396,7 @@ func getActionScript(action string) (string, bool) {
 		reload = true
 
 	case "system-halt":
-		script = `echo "Initiating system reboot..." && shutdown`
+		script = `echo "Initiating system shutdown..." && shutdown`
 		reload = true
 
 	case "update-all":
@@ -471,6 +471,7 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 
 	requestedAction := r.URL.Query().Get("action")
 
+	// Attach-only: actions are started via POST /api/system-action-start (CSRF).
 	globalActionState.Lock()
 	if globalActionState.IsRunning {
 		// If an action is running, we can only attach to it if the requested action matches
@@ -482,40 +483,23 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// Proceed to attach
 	} else {
-		// If not running, we can start a new one if requested
-		if requestedAction != "" {
-			script, reload := getActionScript(requestedAction)
-			if script == "" {
-				globalActionState.Unlock()
-				sendSSEMessage(w, flusher, "error", "Invalid action")
-				return
+		// Not running: replay the recent result for late-connecting clients.
+		if globalActionState.Result != nil {
+			result := *globalActionState.Result
+			history := make([]string, len(globalActionState.Logs))
+			copy(history, globalActionState.Logs)
+			globalActionState.Unlock()
+			for _, line := range history {
+				sendSSEMessage(w, flusher, "output", line)
 			}
-
-			// Start new action
-			globalActionState.IsRunning = true
-			globalActionState.ActionName = requestedAction
-			globalActionState.Logs = []string{}
-			globalActionState.Result = nil
-
-			// Run in background
-			go runSystemAction(requestedAction, script, reload)
+			sendSSEMessage(w, flusher, result.Type, result.Content)
 		} else {
-			// Not running, no action requested.
-			// If there is a recent result (action just finished), send it to late-connecting clients.
-			if globalActionState.Result != nil {
-				result := *globalActionState.Result
-				history := make([]string, len(globalActionState.Logs))
-				copy(history, globalActionState.Logs)
-				globalActionState.Unlock()
-				for _, line := range history {
-					sendSSEMessage(w, flusher, "output", line)
-				}
-				sendSSEMessage(w, flusher, result.Type, result.Content)
-			} else {
-				globalActionState.Unlock()
+			globalActionState.Unlock()
+			if requestedAction != "" {
+				sendSSEMessage(w, flusher, "error", "No such action in progress")
 			}
-			return
 		}
+		return
 	}
 
 	// Subscribe to updates
@@ -554,6 +538,50 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// systemActionStartHandler is POST-only: GET requests can be triggered
+// cross-site with cookies attached (CSRF).
+func systemActionStartHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		sendJSONResponse(w, false, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil || req.Action == "" {
+		sendJSONResponse(w, false, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	script, reload := getActionScript(req.Action)
+	if script == "" {
+		sendJSONResponse(w, false, "Invalid action", http.StatusBadRequest)
+		return
+	}
+
+	globalActionState.Lock()
+	if globalActionState.IsRunning {
+		running := globalActionState.ActionName
+		globalActionState.Unlock()
+		if running == req.Action {
+			// already running — report success so the client attaches
+			sendJSONResponse(w, true, "", http.StatusOK)
+			return
+		}
+		sendJSONResponse(w, false, "Another system action is already in progress", http.StatusConflict)
+		return
+	}
+	globalActionState.IsRunning = true
+	globalActionState.ActionName = req.Action
+	globalActionState.Logs = []string{}
+	globalActionState.Result = nil
+	globalActionState.Unlock()
+
+	go runSystemAction(req.Action, script, reload)
+	sendJSONResponse(w, true, "", http.StatusOK)
 }
 
 func runSystemAction(actionName, script string, reload bool) {
@@ -606,6 +634,7 @@ func runSystemAction(actionName, script string, reload bool) {
 
 	// Stream output
 	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		log := scanner.Text()
 		if log != "" {
@@ -666,11 +695,12 @@ func broadcastResult(msgType, content string) {
 	go func() {
 		time.Sleep(2 * time.Second) // Brief delay to ensure any file writes are complete
 		cachedSysInfo.Lock()
-		cachedSysInfo.lastFetch = time.Time{}              // Force cache refresh
-		cachedSysInfo.info.LastChecked = time.Time{}       // Force GitHub version re-check
-		cachedSysInfo.info.ControlLastChecked = time.Time{} // Force Control version re-check
+		cachedSysInfo.lastFetch = time.Time{} // Force cache refresh
 		cachedSysInfo.Unlock()
-		getCachedSystemInfo() // Trigger immediate refresh
+		// synchronous, so the update flags clear right after a successful update
+		getCachedSystemInfo()
+		checkLatestVersion()
+		checkControlLatestVersion()
 	}()
 }
 
@@ -973,7 +1003,7 @@ func migrateConfigAtStartup() error {
 	log.Println(strings.Repeat("=", 50))
 
 	// Save migrated config back to file
-	if err := os.WriteFile(configJSONFilePath, migratedContent, 0644); err != nil {
+	if err := writeFileAtomic(configJSONFilePath, migratedContent, 0644); err != nil {
 		log.Printf("Failed to save migrated config: %v", err)
 		return err
 	}
@@ -1054,6 +1084,7 @@ func updateScriptLogsHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		// Send each log line as an SSE message.
 		line := parseJournalLine(scanner.Text())
@@ -1081,22 +1112,160 @@ func sendSSEMessage(w http.ResponseWriter, flusher http.Flusher, messageType str
 	flusher.Flush()
 }
 
+// userHZ is the kernel USER_HZ used for /proc tick values; fixed at 100 on Linux.
+const userHZ = 100
+
 func findAISCatcherPID() (int32, error) {
-	processes, err := process.Processes()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if out, err := exec.CommandContext(ctx, "systemctl", "show", "ais-catcher.service", "--property=MainPID").Output(); err == nil {
+		s := strings.TrimPrefix(strings.TrimSpace(string(out)), "MainPID=")
+		if pid, err := strconv.ParseInt(s, 10, 32); err == nil && pid > 0 {
+			return int32(pid), nil
+		}
+	}
+
+	// fallback for AIS-catcher running outside the service
+	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return 0, err
 	}
-
-	for _, p := range processes {
-		name, err := p.Name()
+	for _, e := range entries {
+		pid, err := strconv.ParseInt(e.Name(), 10, 32)
 		if err != nil {
 			continue
 		}
-		if name == "AIS-catcher" {
-			return p.Pid, nil
+		comm, err := os.ReadFile("/proc/" + e.Name() + "/comm")
+		if err == nil && strings.TrimSpace(string(comm)) == "AIS-catcher" {
+			return int32(pid), nil
 		}
 	}
 	return 0, fmt.Errorf("AIS-catcher process not found")
+}
+
+func readProcStatus(pid int32) (rssKB uint64, threads int32, err error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if v, ok := strings.CutPrefix(line, "VmRSS:"); ok {
+			if f := strings.Fields(v); len(f) > 0 {
+				rssKB, _ = strconv.ParseUint(f[0], 10, 64)
+			}
+		} else if v, ok := strings.CutPrefix(line, "Threads:"); ok {
+			n, _ := strconv.ParseInt(strings.TrimSpace(v), 10, 32)
+			threads = int32(n)
+		}
+	}
+	return rssKB, threads, nil
+}
+
+func readProcStat(pid int32) (utime, stime, starttime uint64, err error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	// comm may contain spaces and parens; fields start after the last ')'
+	s := string(data)
+	idx := strings.LastIndexByte(s, ')')
+	if idx < 0 {
+		return 0, 0, 0, fmt.Errorf("malformed /proc/%d/stat", pid)
+	}
+	fields := strings.Fields(s[idx+1:])
+	if len(fields) < 20 {
+		return 0, 0, 0, fmt.Errorf("malformed /proc/%d/stat", pid)
+	}
+	utime, _ = strconv.ParseUint(fields[11], 10, 64)
+	stime, _ = strconv.ParseUint(fields[12], 10, 64)
+	starttime, _ = strconv.ParseUint(fields[19], 10, 64)
+	return utime, stime, starttime, nil
+}
+
+var cachedBootTime int64
+
+func bootTime() (int64, error) {
+	if cachedBootTime != 0 {
+		return cachedBootTime, nil
+	}
+	data, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		return 0, err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if v, ok := strings.CutPrefix(line, "btime "); ok {
+			bt, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+			if err == nil {
+				cachedBootTime = bt
+			}
+			return bt, err
+		}
+	}
+	return 0, fmt.Errorf("btime not found in /proc/stat")
+}
+
+// prevProcCPU and prevSysCPU are only touched from collectSystemInfo, which
+// runs under the cachedSysInfo write lock.
+var prevProcCPU struct {
+	pid   int32
+	ticks uint64
+	at    time.Time
+}
+
+func processCPUPercent(pid int32, ticks uint64, started time.Time) float64 {
+	now := time.Now()
+	prevPid, prevTicks, prevAt := prevProcCPU.pid, prevProcCPU.ticks, prevProcCPU.at
+	prevProcCPU.pid, prevProcCPU.ticks, prevProcCPU.at = pid, ticks, now
+
+	if prevPid == pid && ticks >= prevTicks {
+		if elapsed := now.Sub(prevAt).Seconds(); elapsed > 0 {
+			return float64(ticks-prevTicks) / userHZ / elapsed * 100
+		}
+	}
+	// first sample: average since process start
+	if life := now.Sub(started).Seconds(); !started.IsZero() && life > 0 {
+		return float64(ticks) / userHZ / life * 100
+	}
+	return 0
+}
+
+var prevSysCPU struct {
+	busy  uint64
+	total uint64
+}
+
+func systemCPUPercent() (float64, bool) {
+	data, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		return 0, false
+	}
+	line, _, _ := strings.Cut(string(data), "\n")
+	fields := strings.Fields(line)
+	if len(fields) < 5 || fields[0] != "cpu" {
+		return 0, false
+	}
+	var total, idle uint64
+	for i, f := range fields[1:] {
+		v, err := strconv.ParseUint(f, 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		total += v
+		if i == 3 || i == 4 { // idle + iowait
+			idle += v
+		}
+	}
+	busy := total - idle
+	prevBusy, prevTotal := prevSysCPU.busy, prevSysCPU.total
+	prevSysCPU.busy, prevSysCPU.total = busy, total
+
+	if prevTotal > 0 && total > prevTotal && busy >= prevBusy {
+		return float64(busy-prevBusy) / float64(total-prevTotal) * 100, true
+	}
+	if total > 0 {
+		return float64(busy) / float64(total) * 100, true // first sample: since boot
+	}
+	return 0, false
 }
 
 // getCachedSystemInfo returns cached system info or fetches new if expired
@@ -1130,26 +1299,15 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 
 	if pid, err := findAISCatcherPID(); err == nil {
 		info.ProcessID = pid
-		if proc, err := process.NewProcess(pid); err == nil {
-			// Memory usage
-			if memInfo, err := proc.MemoryInfo(); err == nil {
-				info.ProcessMemoryUsage = float64(memInfo.RSS) / 1024 / 1024 // Convert to MB
+		if rssKB, threads, err := readProcStatus(pid); err == nil {
+			info.ProcessMemoryUsage = float64(rssKB) / 1024 // Convert to MB
+			info.ProcessThreadCount = threads
+		}
+		if utime, stime, starttime, err := readProcStat(pid); err == nil {
+			if bt, err := bootTime(); err == nil {
+				info.ProcessStartTime = time.Unix(bt+int64(starttime/userHZ), 0)
 			}
-
-			// CPU usage
-			if cpuPercent, err := proc.CPUPercent(); err == nil {
-				info.ProcessCPUUsage = cpuPercent
-			}
-
-			// Start time
-			if createTime, err := proc.CreateTime(); err == nil {
-				info.ProcessStartTime = time.Unix(createTime/1000, 0)
-			}
-
-			// Thread count
-			if numThreads, err := proc.NumThreads(); err == nil {
-				info.ProcessThreadCount = numThreads
-			}
+			info.ProcessCPUUsage = processCPUPercent(pid, utime+stime, info.ProcessStartTime)
 		}
 	} else {
 		// Process not found - reset all process-related fields
@@ -1160,10 +1318,8 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		info.ProcessThreadCount = 0
 	}
 
-	// System-wide CPU usage - use non-blocking measurement (0 duration)
-	// This returns the average since the last call instead of blocking
-	if cpuPercent, err := cpu.Percent(0, false); err == nil && len(cpuPercent) > 0 {
-		info.SystemCPUUsage = cpuPercent[0]
+	if pct, ok := systemCPUPercent(); ok {
+		info.SystemCPUUsage = pct
 	}
 
 	// Keep existing system info collection
@@ -1200,7 +1356,10 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		// Keep existing version info during updates - don't log repeatedly
 		// Version info is preserved from previous checks in cached info
 	} else {
-		cmd := exec.Command("/usr/bin/AIS-catcher", "-h", "JSON")
+		// runs while the system-info cache lock is held, so it must be bounded
+		vCtx, vCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer vCancel()
+		cmd := exec.CommandContext(vCtx, "/usr/bin/AIS-catcher", "-h", "JSON")
 		output, err := cmd.CombinedOutput()
 		firstLine := strings.Split(string(output), "\n")[0]
 
@@ -1228,9 +1387,21 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 				info.AISCatcherDescribe = "Invalid JSON output"
 			} else {
 				info.AISCatcherAvailable = true
-				info.AISCatcherVersion = jsonOutput["version"].(string)
-				info.AISCatcherVersionCode = int(jsonOutput["version_code"].(float64))
-				info.AISCatcherDescribe = jsonOutput["version_describe"].(string)
+				if v, ok := jsonOutput["version"].(string); ok {
+					info.AISCatcherVersion = v
+				} else {
+					info.AISCatcherVersion = "unknown"
+				}
+				if vc, ok := jsonOutput["version_code"].(float64); ok {
+					info.AISCatcherVersionCode = int(vc)
+				} else {
+					info.AISCatcherVersionCode = -1
+				}
+				if d, ok := jsonOutput["version_describe"].(string); ok {
+					info.AISCatcherDescribe = d
+				} else {
+					info.AISCatcherDescribe = ""
+				}
 
 				// Try to get commit directly from JSON if available
 				if commitVal, ok := jsonOutput["commit"]; ok {
@@ -1321,24 +1492,35 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 	// Recompute UpdateAvailable using the freshly-read installed commit and the
 	// cached GitHub latest commit. This makes the flag accurate immediately
 	// after a manual binary update, without waiting for the next GitHub re-check.
-	if info.LatestCommit != "" && info.AISCatcherAvailable {
-		currentVersion := ""
-		if len(info.AISCatcherVersion) > 0 {
-			parts := strings.Fields(info.AISCatcherVersion)
-			if len(parts) > 0 {
-				currentVersion = strings.TrimPrefix(parts[0], "v")
-			}
-		}
-		latestTag := strings.TrimPrefix(info.LatestVersionTag, "v")
-		if info.AISCatcherBuildType == "source" {
-			info.UpdateAvailable = info.AISCatcherCommit != "" && info.AISCatcherCommit != info.LatestCommit
-		} else {
-			info.UpdateAvailable = (currentVersion != latestTag && latestTag != "") ||
-				(currentVersion == latestTag && info.AISCatcherCommit != "" && info.AISCatcherCommit != info.LatestCommit)
-		}
-	}
+	recomputeUpdateAvailable(&info)
 
 	return info
+}
+
+// recomputeUpdateAvailable derives UpdateAvailable from the installed binary
+// and the cached GitHub data on info.
+func recomputeUpdateAvailable(info *SystemInfo) {
+	if !info.AISCatcherAvailable {
+		info.UpdateAvailable = false
+		return
+	}
+	latestTag := strings.TrimPrefix(info.LatestVersionTag, "v")
+	if latestTag == "" && info.LatestCommit == "" {
+		return // no GitHub data yet — keep the previous value
+	}
+	currentVersion := ""
+	if parts := strings.Fields(info.AISCatcherVersion); len(parts) > 0 {
+		currentVersion = strings.TrimPrefix(parts[0], "v")
+	}
+	if strings.EqualFold(info.AISCatcherBuildType, "source") {
+		info.UpdateAvailable = info.LatestCommit != "" &&
+			info.AISCatcherCommit != "" && info.AISCatcherCommit != info.LatestCommit
+		return
+	}
+	info.UpdateAvailable = (latestTag != "" && currentVersion != latestTag) ||
+		(currentVersion == latestTag &&
+			info.AISCatcherCommit != "" && info.LatestCommit != "" &&
+			info.AISCatcherCommit != info.LatestCommit)
 }
 
 // checkLatestVersion fetches the latest release from GitHub
@@ -1368,12 +1550,14 @@ func checkLatestVersion() {
 	// Get the latest commit from main branch (not from the release tag)
 	var latestCommit string
 	commitResp, err := client.Get("https://api.github.com/repos/jvde-github/AIS-catcher/commits/main")
-	if err == nil && commitResp.StatusCode == http.StatusOK {
-		var commit struct {
-			SHA string `json:"sha"`
-		}
-		if json.NewDecoder(commitResp.Body).Decode(&commit) == nil {
-			latestCommit = commit.SHA[:7]
+	if err == nil {
+		if commitResp.StatusCode == http.StatusOK {
+			var commit struct {
+				SHA string `json:"sha"`
+			}
+			if json.NewDecoder(commitResp.Body).Decode(&commit) == nil && len(commit.SHA) >= 7 {
+				latestCommit = commit.SHA[:7]
+			}
 		}
 		commitResp.Body.Close()
 	}
@@ -1390,6 +1574,7 @@ func checkLatestVersion() {
 	if latestCommit != "" {
 		info.LatestCommit = latestCommit
 	}
+	recomputeUpdateAvailable(info)
 }
 
 // checkControlLatestVersion fetches the latest commit from Control GitHub repo
@@ -1416,6 +1601,10 @@ func checkControlLatestVersion() {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil {
 		log.Printf("Failed to decode Control commit: %v", err)
+		return
+	}
+	if len(commit.SHA) < 7 {
+		log.Printf("Unexpected Control commit SHA from GitHub: %q", commit.SHA)
 		return
 	}
 
@@ -1544,7 +1733,75 @@ func (sm *SessionManager) Delete(sessionID string) {
 	delete(sm.sessions, sessionID)
 }
 
+func (sm *SessionManager) DeleteAll() {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.sessions = make(map[string]sessionEntry)
+}
+
 var sessionManager = NewSessionManager()
+
+// loginLimiter applies a per-IP lockout after repeated failed logins.
+type loginLimiter struct {
+	mu       sync.Mutex
+	failures map[string]*loginFailure
+}
+
+type loginFailure struct {
+	count       int
+	lockedUntil time.Time
+	lastFailure time.Time
+}
+
+var loginAttempts = &loginLimiter{failures: make(map[string]*loginFailure)}
+
+func (l *loginLimiter) blocked(ip string) (time.Duration, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if f, ok := l.failures[ip]; ok {
+		if remaining := time.Until(f.lockedUntil); remaining > 0 {
+			return remaining, true
+		}
+	}
+	return 0, false
+}
+
+func (l *loginLimiter) recordFailure(ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now()
+	for k, f := range l.failures {
+		if now.Sub(f.lastFailure) > time.Hour {
+			delete(l.failures, k)
+		}
+	}
+	f := l.failures[ip]
+	if f == nil {
+		f = &loginFailure{}
+		l.failures[ip] = f
+	}
+	f.count++
+	f.lastFailure = now
+	if f.count >= 5 {
+		f.lockedUntil = now.Add(time.Duration(f.count-4) * 30 * time.Second)
+	}
+}
+
+func (l *loginLimiter) recordSuccess(ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.failures, ip)
+}
+
+// clientIP deliberately ignores X-Forwarded-For, which is spoofable without a
+// trusted proxy in front.
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
 
 type Config struct {
 	PasswordHash    string `json:"password_hash"`
@@ -1602,9 +1859,26 @@ func initPaths() error {
 }
 
 func hashPassword(password string) string {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatalf("Failed to hash password: %v", err)
+	}
+	return string(hash)
+}
+
+// legacyHashPassword verifies hashes written by earlier versions; they are
+// upgraded to bcrypt on first login.
+func legacyHashPassword(password string) string {
 	h := sha256.New()
 	h.Write([]byte(password))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func verifyPassword(password, stored string) bool {
+	if strings.HasPrefix(stored, "$2") {
+		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil
+	}
+	return legacyHashPassword(password) == stored
 }
 
 func loadControlSettings() error {
@@ -1623,7 +1897,7 @@ func loadControlSettings() error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(settingsFilePath, data, 0644)
+		return writeFileAtomic(settingsFilePath, data, 0644)
 	} else if err != nil {
 		return err
 	}
@@ -1636,13 +1910,41 @@ func saveControlSettings(c Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(settingsFilePath, data, 0644)
+	return writeFileAtomic(settingsFilePath, data, 0644)
 }
 
 func calculate32BitHash(input string) uint32 {
 	h := fnv.New32a()
 	h.Write([]byte(input))
 	return h.Sum32()
+}
+
+// configFileMu serializes read-modify-write cycles on config.json.
+var configFileMu sync.Mutex
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, perm); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // Authentication functions
@@ -1681,7 +1983,7 @@ func authenticate(username, password string) bool {
 	if username != defaultUsername {
 		return false
 	}
-	return hashPassword(password) == getConfig().PasswordHash
+	return verifyPassword(password, getConfig().PasswordHash)
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -1703,7 +2005,27 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
+	ip := clientIP(r)
+	if wait, blocked := loginAttempts.blocked(ip); blocked {
+		data := map[string]interface{}{
+			"CssVersion": cssVersion,
+			"JsVersion":  jsVersion,
+			"message":    fmt.Sprintf("Too many failed attempts. Try again in %d seconds.", int(wait.Seconds())+1),
+		}
+		renderTemplate(w, "login.html", data)
+		return
+	}
+
 	if authenticate(username, password) {
+		loginAttempts.recordSuccess(ip)
+
+		// upgrade legacy SHA-256 hash to bcrypt
+		if !strings.HasPrefix(getConfig().PasswordHash, "$2") {
+			if err := updateConfig(func(c *Config) { c.PasswordHash = hashPassword(password) }); err != nil {
+				log.Printf("Failed to upgrade password hash to bcrypt: %v", err)
+			}
+		}
+
 		sessionID := sessionManager.Create(username)
 		http.SetCookie(w, &http.Cookie{
 			Name:     sessionCookieName,
@@ -1714,12 +2036,13 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			SameSite: http.SameSiteLaxMode,
 		})
 
-		if password == defaultPassword && hashPassword(password) == getConfig().PasswordHash {
+		if password == defaultPassword {
 			http.Redirect(w, r, "/change-password", http.StatusSeeOther)
 		} else {
 			http.Redirect(w, r, "/control", http.StatusSeeOther)
 		}
 	} else {
+		loginAttempts.recordFailure(ip)
 		data := map[string]interface{}{
 			"CssVersion": cssVersion,
 			"JsVersion":  jsVersion,
@@ -1810,6 +2133,17 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sessionManager.DeleteAll()
+	sessionID := sessionManager.Create(defaultUsername)
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    sessionID,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	http.Redirect(w, r, "/control", http.StatusSeeOther)
 }
 
@@ -1819,8 +2153,9 @@ func deviceListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Execute the AIS-catcher command
-	cmd := exec.Command("/usr/bin/AIS-catcher", "-l", "JSON", "ON")
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/usr/bin/AIS-catcher", "-l", "JSON", "ON")
 	stdout, err := cmd.Output()
 	if err != nil {
 		log.Printf("Error executing AIS-catcher: %v", err)
@@ -2093,7 +2428,7 @@ func readConfigCmd() ([]byte, error) {
 }
 
 func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
 		return fmt.Errorf("failed to read request body: %v", err)
 	}
@@ -2119,19 +2454,21 @@ func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("invalid JSON: version value must be 1")
 	}
 
-	hashValue := calculate32BitHash(string(body))
+	configFileMu.Lock()
+	defer configFileMu.Unlock()
 
-	err = updateConfig(func(c *Config) {
-		c.ConfigJSONHash = uint32(hashValue)
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to update control settings with new hash: %v", err)
-	}
-
-	err = os.WriteFile(configJSONFilePath, body, 0644)
+	// the hash must only ever describe content that made it to disk
+	err = writeFileAtomic(configJSONFilePath, body, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to save config.json: %v", err)
+	}
+
+	hashValue := calculate32BitHash(string(body))
+	err = updateConfig(func(c *Config) {
+		c.ConfigJSONHash = hashValue
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update control settings with new hash: %v", err)
 	}
 
 	return nil
@@ -2326,6 +2663,7 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		}()
 
 		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 		for scanner.Scan() {
 			jsonLine := scanner.Text()
 			var logMsg LogMessage
@@ -2528,6 +2866,9 @@ func webviewerToggleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	configFileMu.Lock()
+	defer configFileMu.Unlock()
+
 	jsonContent, err := readConfigJSON()
 	if err != nil {
 		sendJSONResponse(w, false, "Failed to read config", http.StatusInternalServerError)
@@ -2578,13 +2919,13 @@ func webviewerToggleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashValue := calculate32BitHash(string(body))
-	if err := updateConfig(func(c *Config) { c.ConfigJSONHash = uint32(hashValue) }); err != nil {
-		sendJSONResponse(w, false, "Failed to update hash", http.StatusInternalServerError)
+	if err := writeFileAtomic(configJSONFilePath, body, 0644); err != nil {
+		sendJSONResponse(w, false, "Failed to save config", http.StatusInternalServerError)
 		return
 	}
-	if err := os.WriteFile(configJSONFilePath, body, 0644); err != nil {
-		sendJSONResponse(w, false, "Failed to save config", http.StatusInternalServerError)
+	hashValue := calculate32BitHash(string(body))
+	if err := updateConfig(func(c *Config) { c.ConfigJSONHash = hashValue }); err != nil {
+		sendJSONResponse(w, false, "Failed to update hash", http.StatusInternalServerError)
 		return
 	}
 
@@ -2753,7 +3094,9 @@ func editConfigJSONHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Save file
-		if err := os.WriteFile(configJSONFilePath, []byte(newContent), 0644); err != nil {
+		configFileMu.Lock()
+		defer configFileMu.Unlock()
+		if err := writeFileAtomic(configJSONFilePath, []byte(newContent), 0644); err != nil {
 			renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "Failed to save file: "+err.Error(), "")
 			return
 		}
@@ -2785,7 +3128,7 @@ func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
 		sanitizedContent := sanitizeFileContent(newContent)
 
 		// Save file
-		if err := os.WriteFile(configCmdFilePath, []byte(sanitizedContent), 0644); err != nil {
+		if err := writeFileAtomic(configCmdFilePath, []byte(sanitizedContent), 0644); err != nil {
 			renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", newContent, "Failed to save file: "+err.Error(), "")
 			return
 		}
@@ -2814,18 +3157,16 @@ func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 	// Return immediately with cached data (even if stale) for fast page load
 	cachedSysInfo.RLock()
 	sysInfo := cachedSysInfo.info
+	stale := time.Since(cachedSysInfo.lastFetch) > cachedSysInfo.cacheTTL
+	cachedSysInfo.RUnlock()
 	if sysInfo.BuildVersion == "" {
 		// First time, need to collect at least basic info
-		cachedSysInfo.RUnlock()
 		sysInfo = getCachedSystemInfo()
-	} else {
-		cachedSysInfo.RUnlock()
+	} else if stale {
 		// Trigger async refresh if data is getting old
-		if time.Since(cachedSysInfo.lastFetch) > cachedSysInfo.cacheTTL {
-			go func() {
-				getCachedSystemInfo() // Refresh in background
-			}()
-		}
+		go func() {
+			getCachedSystemInfo() // Refresh in background
+		}()
 	}
 
 	memoryGB := float64(sysInfo.TotalMemory) / 1073741824.0
@@ -3080,6 +3421,7 @@ func main() {
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
 	http.HandleFunc("/system", authMiddleware(systemInfoHandler))
 	http.HandleFunc("/api/update-check", authMiddleware(updateCheckHandler))
+	http.HandleFunc("/api/system-action-start", authMiddleware(systemActionStartHandler))
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
 	http.HandleFunc("/system-action-status", authMiddleware(systemActionStatusHandler))
 	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
@@ -3111,5 +3453,10 @@ func main() {
 
 	addr := ":" + getConfig().Port
 	log.Printf("Server started at %s\n", addr)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	server := &http.Server{
+		Addr: addr,
+		// write/idle timeouts stay unset: SSE endpoints hold connections open
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	log.Fatal(server.ListenAndServe())
 }
