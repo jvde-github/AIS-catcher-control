@@ -482,7 +482,7 @@ const webviewerSchema = {
     },
     backup: {
         name: 'backup',
-        label: 'Interval (min)',
+        label: 'Minutes',
         type: 'number',
         jsonpath: 'backup',
         defaultValue: 10,
@@ -491,7 +491,7 @@ const webviewerSchema = {
     },
     history: {
         name: 'history',
-        label: 'Ship Display Timeout (s)',
+        label: 'Ship Timeout (s)',
         type: 'number',
         jsonpath: 'history',
         defaultValue: 1800,
