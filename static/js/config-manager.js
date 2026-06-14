@@ -250,6 +250,18 @@
         return element;
     };
 
+    // Parse a numeric string the way AIS-catcher's Parse::Integer does, honoring a
+    // trailing K/k (×1000), e.g. "288K" -> 288000. Returns null if not numeric.
+    const parseNumberLike = (str) => {
+        const s = String(str).trim();
+        const m = /^([+-]?(?:\d+\.?\d*|\.\d+))([kK]?)$/.exec(s);
+        if (!m) return null;
+        let n = parseFloat(m[1]);
+        if (!isFinite(n)) return null;
+        if (m[2]) n *= 1000;
+        return n;
+    };
+
     const Utils = {
         debounce: (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; },
         getNested: (obj, path) => path?.split('.').reduce((a, p) => a?.[p], obj),
@@ -264,7 +276,187 @@
             const num = parseInt(str, 10);
             return isNaN(num) ? 0 : num * mult;
         },
-        toBoolean: v => typeof v === 'string' ? ['true', 'on', 'yes', '1'].includes(v.toLowerCase()) : !!v
+        toBoolean: v => typeof v === 'string' ? ['true', 'on', 'yes', '1'].includes(v.toLowerCase()) : !!v,
+
+        // Coerce a value to its schema type, mirroring AIS-catcher's permissive
+        // parsing. status 'failed' means leave the value as-is and warn rather than
+        // write a wrong value.
+        coerceValue(value, type) {
+            if (value === undefined || value === null) return { value, status: 'same' };
+            switch (type) {
+                case 'toggle': {
+                    if (typeof value === 'boolean') return { value, status: 'same' };
+                    if (typeof value === 'number') {
+                        if (value === 1) return { value: true, status: 'converted' };
+                        if (value === 0) return { value: false, status: 'converted' };
+                        return { value, status: 'failed' };
+                    }
+                    if (typeof value === 'string') {
+                        const s = value.trim().toLowerCase();
+                        if (['true', 'on', 'yes', '1'].includes(s)) return { value: true, status: 'converted' };
+                        if (['false', 'off', 'no', '0'].includes(s)) return { value: false, status: 'converted' };
+                    }
+                    return { value, status: 'failed' };
+                }
+                case 'number':
+                case 'integer-select': {
+                    if (typeof value === 'number') return { value, status: 'same' };
+                    if (typeof value === 'string') {
+                        const n = parseNumberLike(value);
+                        if (n !== null) return { value: n, status: 'converted' };
+                    }
+                    return { value, status: 'failed' };
+                }
+                case 'off-number':
+                case 'switch-integer': {
+                    // Valid as either false (off) or a number.
+                    if (typeof value === 'number') return { value, status: 'same' };
+                    if (typeof value === 'boolean') return value === false ? { value: false, status: 'same' } : { value, status: 'failed' };
+                    if (typeof value === 'string') {
+                        const s = value.trim().toLowerCase();
+                        if (['false', 'off', 'no'].includes(s)) return { value: false, status: 'converted' };
+                        const n = parseNumberLike(value);
+                        if (n !== null) return { value: n, status: 'converted' };
+                    }
+                    return { value, status: 'failed' };
+                }
+                case 'text':
+                case 'select': {
+                    if (typeof value === 'string') return { value, status: 'same' };
+                    if (typeof value === 'number' || typeof value === 'boolean') return { value: String(value), status: 'converted' };
+                    return { value, status: 'failed' };
+                }
+                case 'zones': {
+                    if (Array.isArray(value)) {
+                        return value.every(v => typeof v === 'string')
+                            ? { value, status: 'same' }
+                            : { value: value.map(String), status: 'converted' };
+                    }
+                    return { value, status: 'failed' };
+                }
+                default:
+                    return { value, status: 'same' };
+            }
+        }
+    };
+
+    // ============================================================================
+    // Config Normalizer — single source of truth for config.json shape. Migrates
+    // legacy layouts and coerces values to canonical types, in-memory on load and
+    // persisted on save (AIS-catcher itself still accepts the legacy shapes).
+    // ============================================================================
+    const ConfigNormalizer = {
+        // Schemas resolved lazily so this works regardless of script eval order.
+        arraySchemas: {
+            receiver: () => receiverSchema,
+            server: () => webviewerSchema,
+            http: () => httpSchema,
+            mqtt: () => mqttSchema,
+            tcp: () => tcpSchema,
+            udp: () => udpSchema,
+            tcp_listener: () => tcpServerSchema,
+        },
+        topLevelSchemas: () => [sharingSchema, generalSettingsSchema],
+
+        // Root-level keys that belong inside a receiver object (from Config.cpp).
+        receiverKeys: ['serial', 'input', 'verbose', 'model', 'meta', 'own_mmsi',
+            'rtlsdr', 'rtltcp', 'airspy', 'airspyhf', 'hydrasdr', 'sdrplay', 'serialport',
+            'hackrf', 'udpserver', 'soapysdr', 'nmea2000', 'file', 'zmq',
+            'spyserver', 'wavfile'],
+
+        migrate(cfg) {
+            let changed = false;
+
+            // server object -> array of one
+            if (cfg.server && !Array.isArray(cfg.server) && typeof cfg.server === 'object') {
+                cfg.server = [cfg.server];
+                changed = true;
+            }
+
+            // root-level receiver keys -> a receiver[] entry
+            const receiverCfg = {};
+            let hasReceiverSettings = false;
+            for (const key of this.receiverKeys) {
+                if (Object.prototype.hasOwnProperty.call(cfg, key)) {
+                    receiverCfg[key] = cfg[key];
+                    delete cfg[key];
+                    hasReceiverSettings = true;
+                    changed = true;
+                }
+            }
+            if (!Array.isArray(cfg.receiver)) cfg.receiver = [];
+            if (hasReceiverSettings) {
+                if (!('input' in receiverCfg) && !('serial' in receiverCfg)) receiverCfg.input = 'RTLSDR';
+                cfg.receiver.push(receiverCfg);
+            }
+
+            // json/json_full flags -> msgformat in channel arrays
+            for (const key of ['udp', 'tcp_listener', 'tcp']) {
+                if (!Array.isArray(cfg[key])) continue;
+                for (const ch of cfg[key]) {
+                    if (ch && typeof ch === 'object' && this.migrateMsgFormat(ch)) changed = true;
+                }
+            }
+            return changed;
+        },
+
+        migrateMsgFormat(ch) {
+            let changed = false;
+            if ('msgformat' in ch) {
+                if ('json' in ch) { delete ch.json; changed = true; }
+                if ('json_full' in ch) { delete ch.json_full; changed = true; }
+                return changed;
+            }
+            const hasJSON = 'json' in ch, hasJSONFull = 'json_full' in ch;
+            ch.msgformat = (hasJSONFull && Utils.toBoolean(ch.json_full)) ? 'JSON_FULL'
+                : (hasJSON && Utils.toBoolean(ch.json)) ? 'JSON_NMEA'
+                    : 'NMEA';
+            if (hasJSON) delete ch.json;
+            if (hasJSONFull) delete ch.json_full;
+            return true;
+        },
+
+        coerceFields(obj, fields, prefix) {
+            const warnings = [];
+            let changed = false;
+            if (!obj || typeof obj !== 'object') return { warnings, changed };
+            for (const field of fields) {
+                if (!field.type || field.type === 'button') continue;
+                const cur = field.jsonpath ? Utils.getNested(obj, field.jsonpath) : obj[field.name];
+                if (cur === undefined || cur === null) continue;
+                const { value, status } = Utils.coerceValue(cur, field.type);
+                if (status === 'converted') {
+                    if (field.jsonpath) Utils.setNested(obj, field.jsonpath, value);
+                    else obj[field.name] = value;
+                    changed = true;
+                } else if (status === 'failed') {
+                    warnings.push({ path: prefix + (field.jsonpath || field.name), value: cur, type: field.type });
+                }
+            }
+            return { warnings, changed };
+        },
+
+        normalize(cfg) {
+            const warnings = [];
+            if (!cfg || typeof cfg !== 'object') return { config: cfg, warnings, changed: false };
+            let changed = this.migrate(cfg);
+
+            for (const [key, getSchema] of Object.entries(this.arraySchemas)) {
+                if (!Array.isArray(cfg[key])) continue;
+                const fields = Object.values(getSchema());
+                cfg[key].forEach((item, i) => {
+                    const r = this.coerceFields(item, fields, `${key}[${i}].`);
+                    warnings.push(...r.warnings);
+                    if (r.changed) changed = true;
+                });
+            }
+            for (const schema of this.topLevelSchemas()) {
+                const r = this.coerceFields(cfg, Object.values(schema), '');
+                warnings.push(...r.warnings);
+                if (r.changed) changed = true;
+            }
+            return { config: cfg, warnings, changed };
+        }
     };
 
     const ActionRegistry = {
@@ -440,6 +632,28 @@
             const div = el('div', 'fixed bottom-6 right-6 z-50 flex flex-col items-end', { id: 'toast-container' });
             document.body.appendChild(div);
             return div;
+        },
+
+        // Persistent banner for values that could not be normalized — these mirror
+        // what AIS-catcher itself would reject, so it doubles as a pre-flight check.
+        notifyWarnings(warnings) {
+            if (!warnings || !warnings.length) return;
+            const msgs = warnings.map(w => `${w.path} = ${JSON.stringify(w.value)} is not a valid ${w.type}`);
+            console.warn('Config normalization warnings:', msgs);
+            let banner = document.getElementById('normalize-warning-banner');
+            if (!banner) {
+                banner = el('div', 'fixed bottom-6 right-6 z-50 max-w-md w-full bg-amber-50 border border-amber-200 text-amber-800 rounded-lg shadow-sm px-4 py-3 text-sm', { id: 'normalize-warning-banner' });
+                document.body.appendChild(banner);
+            }
+            banner.innerHTML = '';
+            banner.appendChild(el('div', 'flex items-start justify-between gap-3', {},
+                el('div', '', {},
+                    el('p', 'font-semibold mb-1', {}, `${msgs.length} config value(s) could not be normalized and were left unchanged:`),
+                    el('div', 'space-y-1', {}, ...msgs.slice(0, 12).map(m => el('div', '', {}, m))),
+                    msgs.length > 12 ? el('p', 'mb-1 text-amber-700', {}, `…and ${msgs.length - 12} more (see console).`) : null
+                ),
+                el('button', 'text-amber-700 font-bold leading-none', { type: 'button', title: 'Dismiss', onClick: () => banner.remove() }, '✕')
+            ));
         },
 
         setUnsaved(bool) {
@@ -816,23 +1030,25 @@
         }
 
         async loadData() {
+            let fullConfig = null;
             try {
                 const res = await fetch('/api/config');
                 if (!res.ok) throw new Error('Fetch failed');
-                const fullConfig = await res.json();
-                this.data = this.config.channelType
-                    ? (fullConfig[this.config.channelType] || (this.config.isList ? [] : {}))
-                    : fullConfig;
+                fullConfig = await res.json();
             } catch {
                 const jsonEl = document.getElementById('json_content');
                 if (jsonEl?.textContent.trim()) {
-                    try {
-                        const fullConfig = JSON.parse(jsonEl.textContent);
-                        this.data = this.config.channelType
-                            ? (fullConfig[this.config.channelType] || (this.config.isList ? [] : {}))
-                            : fullConfig;
-                    } catch { }
+                    try { fullConfig = JSON.parse(jsonEl.textContent); } catch { }
                 }
+            }
+            if (fullConfig && typeof fullConfig === 'object') {
+                const { warnings } = ConfigNormalizer.normalize(fullConfig);
+                if (warnings.length) App.notifyWarnings(warnings);
+                this.data = this.config.channelType
+                    ? (fullConfig[this.config.channelType] || (this.config.isList ? [] : {}))
+                    : fullConfig;
+            } else {
+                this.data = this.config.isList ? [] : {};
             }
             if (!this.config.isList) {
                 this.fields.forEach(f => this.data[f.name] ??= f.defaultValue);
@@ -1063,6 +1279,11 @@
                 if (!fullConfig.config) fullConfig.config = 'aiscatcher';
                 if (!fullConfig.version) fullConfig.version = 1;
 
+                // Normalize the whole document so the file converges to one
+                // canonical form regardless of which page wrote it.
+                const { warnings } = ConfigNormalizer.normalize(fullConfig);
+                if (warnings.length) App.notifyWarnings(warnings);
+
                 // Save merged config
                 const saveRes = await fetch('/api/config', {
                     method: 'POST',
@@ -1090,6 +1311,7 @@
     // ============================================================================
 
     global.App = App;
+    global.normalizeConfig = (cfg) => ConfigNormalizer.normalize(cfg);
     global.createConfigManager = (config) => new ConfigManager(config);
     global.createSimpleConfigManager = (config) => { config.isList = false; return new ConfigManager(config); };
     global.createChannelManager = (config) => { config.isList = true; return new ConfigManager(config); };

@@ -704,324 +704,6 @@ func broadcastResult(msgType, content string) {
 	}()
 }
 
-func MigrateAISCatcherConfig(jsonData []byte) ([]byte, error) {
-	var config map[string]interface{}
-
-	if err := json.Unmarshal(jsonData, &config); err != nil {
-		return nil, fmt.Errorf("invalid JSON: %v", err)
-	}
-
-	// Validate it's an AIS-catcher config
-	if configType, ok := config["config"].(string); !ok || configType != "aiscatcher" {
-		return nil, fmt.Errorf("not a valid AIS-catcher configuration")
-	}
-
-	if version, ok := config["version"].(float64); !ok || int(version) != 1 {
-		return nil, fmt.Errorf("unsupported configuration version")
-	}
-
-	// Receiver-related keys that should be moved to receivers array
-	// Based on the C++ Config.cpp parser
-	receiverKeys := []string{
-		"serial", "input", "verbose", "model", "meta", "own_mmsi",
-		"rtlsdr", "rtltcp", "airspy", "airspyhf", "hydrasdr", "sdrplay", "serialport",
-		"hackrf", "udpserver", "soapysdr", "nmea2000", "file", "zmq",
-		"spyserver", "wavfile",
-	}
-
-	// Check if receiver array exists and validate it's actually an array
-	var receiverArray []interface{}
-	if receiverValue, exists := config["receiver"]; exists {
-		// Try to cast to array
-		if arr, ok := receiverValue.([]interface{}); ok {
-			receiverArray = arr
-			log.Printf("Found existing receiver array with %d entries", len(receiverArray))
-		} else {
-			// receiver exists but is not an array, create new array
-			log.Println("Warning: 'receiver' exists but is not an array, creating new array")
-			receiverArray = []interface{}{}
-		}
-	} else {
-		// receiver doesn't exist, create new array
-		receiverArray = []interface{}{}
-	}
-
-	// Extract receiver settings from root
-	receiverConfig := make(map[string]interface{})
-	hasReceiverSettings := false
-
-	for _, key := range receiverKeys {
-		if value, exists := config[key]; exists {
-			receiverConfig[key] = value
-			delete(config, key)
-			hasReceiverSettings = true
-			log.Printf("Moved receiver key '%s' from root to receiver config", key)
-		}
-	}
-
-	// Verify that receiver keys have been removed from root
-	for _, key := range receiverKeys {
-		if _, stillExists := config[key]; stillExists {
-			log.Printf("WARNING: Key '%s' still exists at root after deletion!", key)
-		}
-	}
-
-	// If there are receiver settings in root, add them as an additional object to the array
-	if hasReceiverSettings {
-		// Set default input to "rtlsdr" if neither input nor serial are specified
-		_, hasInput := receiverConfig["input"]
-		_, hasSerial := receiverConfig["serial"]
-		if !hasInput && !hasSerial {
-			receiverConfig["input"] = "RTLSDR"
-			log.Println("No input or serial specified, defaulting to rtlsdr input")
-		}
-
-		receiverArray = append(receiverArray, receiverConfig)
-		log.Printf("Added receiver settings from root to receiver array")
-
-		// Log which keys were moved
-		var movedKeys []string
-		for key := range receiverConfig {
-			movedKeys = append(movedKeys, key)
-		}
-		log.Printf("Moved keys: %v", movedKeys)
-	}
-
-	// Update config with the receiver array (can be empty)
-	config["receiver"] = receiverArray
-
-	// Final verification: check for any receiver keys still at root level
-	log.Println("Final config keys at root level:")
-	for key := range config {
-		log.Printf("  - %s", key)
-	}
-
-	return json.MarshalIndent(config, "", "  ")
-}
-
-// migrateMsgFormat migrates json/json_full flags to msgformat in channel objects
-func migrateMsgFormat(channel map[string]interface{}) bool {
-	modified := false
-
-	// Check if msgformat already exists
-	if _, exists := channel["msgformat"]; exists {
-		// msgformat already set, still remove old keys if present
-		if _, hasJSON := channel["json"]; hasJSON {
-			delete(channel, "json")
-			modified = true
-		}
-		if _, hasJSONFull := channel["json_full"]; hasJSONFull {
-			delete(channel, "json_full")
-			modified = true
-		}
-		return modified
-	}
-
-	// Extract json and json_full flags
-	jsonFlag, hasJSON := channel["json"].(bool)
-	jsonFullFlag, hasJSONFull := channel["json_full"].(bool)
-
-	// Determine msgformat based on flags
-	msgFormat := "NMEA" // default
-
-	if hasJSONFull && jsonFullFlag {
-		msgFormat = "JSON_FULL"
-	} else if hasJSON && jsonFlag {
-		msgFormat = "JSON_NMEA"
-	}
-
-	// Set msgformat
-	channel["msgformat"] = msgFormat
-	modified = true
-
-	// Remove old keys
-	if hasJSON {
-		delete(channel, "json")
-	}
-	if hasJSONFull {
-		delete(channel, "json_full")
-	}
-
-	return modified
-}
-
-// Add this function to perform one-time migration at startup
-func migrateConfigAtStartup() error {
-	jsonContent, err := os.ReadFile(configJSONFilePath)
-	if err != nil {
-		return err
-	}
-
-	var configMap map[string]interface{}
-	if err := json.Unmarshal(jsonContent, &configMap); err != nil {
-		return nil // Not valid JSON, skip migration
-	}
-
-	// Check if it's an AIS-catcher config
-	if configType, ok := configMap["config"].(string); !ok || configType != "aiscatcher" {
-		return nil // Not an AIS-catcher config
-	}
-
-	needsReceiverMigration := false
-	needsMsgFormatMigration := false
-	needsServerArrayMigration := false
-
-	// Check if receiver array migration is needed
-	// Migration needed if receiver array doesn't exist OR if there are root-level receiver keys
-	receiverKeys := []string{
-		"serial", "input", "verbose", "model", "meta", "own_mmsi",
-		"rtlsdr", "rtltcp", "airspy", "airspyhf", "hydrasdr", "sdrplay", "serialport",
-		"hackrf", "udpserver", "soapysdr", "nmea2000", "file", "zmq",
-		"spyserver", "wavfile",
-	}
-
-	if _, exists := configMap["receiver"]; !exists {
-		needsReceiverMigration = true
-	} else {
-		// Receiver array exists, but check if there are root-level receiver settings
-		for _, key := range receiverKeys {
-			if _, exists := configMap[key]; exists {
-				needsReceiverMigration = true
-				log.Printf("Found root-level receiver key '%s' with existing receiver array - migration needed", key)
-				break
-			}
-		}
-	}
-
-	// Check if server needs to be converted from object to array
-	if serverValue, exists := configMap["server"]; exists {
-		// Check if it's an object (map) instead of an array
-		if serverObj, isMap := serverValue.(map[string]interface{}); isMap {
-			// It's an object, not an array - needs migration
-			log.Println("Detected 'server' as object, will migrate to array")
-			needsServerArrayMigration = true
-			// Convert to array immediately
-			configMap["server"] = []interface{}{serverObj}
-		}
-	}
-
-	// Check if msgformat migration is needed for udp, tcp_listener, tcp arrays
-	channelArrays := []string{"udp", "tcp_listener", "tcp"}
-	for _, arrayKey := range channelArrays {
-		if arrayValue, ok := configMap[arrayKey].([]interface{}); ok {
-			for _, item := range arrayValue {
-				if channel, ok := item.(map[string]interface{}); ok {
-					// Check if this channel needs migration
-					if _, hasJSON := channel["json"]; hasJSON {
-						needsMsgFormatMigration = true
-						break
-					}
-					if _, hasJSONFull := channel["json_full"]; hasJSONFull {
-						needsMsgFormatMigration = true
-						break
-					}
-					if _, hasMsgFormat := channel["msgformat"]; !hasMsgFormat {
-						// No msgformat and no old flags - might need default
-						needsMsgFormatMigration = true
-						break
-					}
-				}
-			}
-			if needsMsgFormatMigration {
-				break
-			}
-		}
-	}
-
-	// If no migration needed, return
-	if !needsReceiverMigration && !needsMsgFormatMigration && !needsServerArrayMigration {
-		return nil
-	}
-
-	// Migration needed - show before
-	log.Println("=== CONFIG MIGRATION NEEDED ===")
-	log.Println("Original configuration:")
-	log.Printf("%s", string(jsonContent))
-	log.Println("\n" + strings.Repeat("=", 50))
-
-	// Perform receiver migration if needed
-	var migratedContent []byte
-	if needsReceiverMigration {
-		migratedContent, err = MigrateAISCatcherConfig(jsonContent)
-		if err != nil {
-			log.Printf("Receiver migration failed: %v", err)
-			return err
-		}
-		// Re-parse the migrated content for further processing
-		// IMPORTANT: Create a fresh map to avoid retaining old keys
-		configMap = make(map[string]interface{})
-		if err := json.Unmarshal(migratedContent, &configMap); err != nil {
-			log.Printf("Failed to parse migrated content: %v", err)
-			return err
-		}
-		// Re-apply server array migration if needed (since we reparsed configMap)
-		if needsServerArrayMigration {
-			if serverValue, exists := configMap["server"]; exists {
-				if serverObj, isMap := serverValue.(map[string]interface{}); isMap {
-					configMap["server"] = []interface{}{serverObj}
-				}
-			}
-		}
-	}
-
-	// Server array migration has been applied to configMap
-	if needsServerArrayMigration {
-		log.Println("Server object converted to array")
-	}
-
-	// Perform msgformat migration if needed
-	modified := needsServerArrayMigration // Server migration already done
-	if needsMsgFormatMigration {
-		for _, arrayKey := range channelArrays {
-			if arrayValue, ok := configMap[arrayKey].([]interface{}); ok {
-				for _, item := range arrayValue {
-					if channel, ok := item.(map[string]interface{}); ok {
-						if migrateMsgFormat(channel) {
-							modified = true
-						}
-					}
-				}
-			}
-		}
-
-		if modified {
-			log.Println("Migrated msgformat in channel arrays (udp, tcp_listener, tcp)")
-		}
-	}
-
-	// If any migration was performed, marshal the config
-	if modified {
-		migratedContent, err = json.MarshalIndent(configMap, "", "  ")
-		if err != nil {
-			log.Printf("Failed to marshal migrated config: %v", err)
-			return err
-		}
-	}
-
-	log.Println("Migrated configuration:")
-	log.Printf("%s", string(migratedContent))
-	log.Println(strings.Repeat("=", 50))
-
-	// Save migrated config back to file
-	if err := writeFileAtomic(configJSONFilePath, migratedContent, 0644); err != nil {
-		log.Printf("Failed to save migrated config: %v", err)
-		return err
-	}
-
-	log.Println("Migration completed and saved to file")
-
-	// Update hash to prevent integrity error
-	err = updateConfig(func(c *Config) {
-		c.ConfigJSONHash = calculate32BitHash(string(migratedContent))
-	})
-	if err != nil {
-		log.Printf("Failed to update config hash: %v", err)
-		return err
-	}
-
-	return nil
-}
-
 func systemActionCancelHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -3101,8 +2783,9 @@ func editConfigJSONHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Update hash
-		if err := updateConfig(func(c *Config) { c.ConfigJSONHash = uint32(0) }); err != nil {
+		// Record the hash of what we just wrote so the integrity check passes.
+		hashValue := calculate32BitHash(newContent)
+		if err := updateConfig(func(c *Config) { c.ConfigJSONHash = hashValue }); err != nil {
 			renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "Failed to update control settings: "+err.Error(), "")
 			return
 		}
@@ -3133,8 +2816,9 @@ func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Update hash
-		if err := updateConfig(func(c *Config) { c.ConfigCmdHash = uint32(0) }); err != nil {
+		// Record the hash of what we just wrote so the integrity check passes.
+		hashValue := calculate32BitHash(sanitizedContent)
+		if err := updateConfig(func(c *Config) { c.ConfigCmdHash = hashValue }); err != nil {
 			renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", newContent, "Failed to update control settings: "+err.Error(), "")
 			return
 		}
@@ -3351,14 +3035,9 @@ func main() {
 
 	systemInfo = collectSystemInfo(systemInfo)
 
-
 	err = loadControlSettings()
 	if err != nil {
 		log.Fatal("Failed to load configuration:", err)
-	}
-
-	if err := migrateConfigAtStartup(); err != nil {
-		log.Printf("Config migration error: %v", err)
 	}
 
 	staticFSys, err := fs.Sub(staticFS, "static")

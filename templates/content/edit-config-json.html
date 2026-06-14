@@ -4,8 +4,8 @@
         <div class="px-0 md:px-6 py-0 md:py-6">
             <h3 class="hidden md:block text-xl font-medium text-gray-800 mb-4">Edit config.json</h3>
             <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4" role="alert">
-                <p class="font-bold">Warning</p>
-                <p>After saving changes here, you will no longer be able to use the standard menus to edit the configuration.</p>
+                <p class="font-bold">Advanced</p>
+                <p>Editing raw JSON is for advanced changes. Use <span class="font-semibold">Check &amp; Format</span> to validate, normalize types and pretty-print without saving. On save the same normalization runs; any values that can't be interpreted are kept as-is and listed.</p>
             </div>
             <form method="POST">
                 <textarea id="file_content" name="file_content" rows="20"
@@ -13,24 +13,150 @@
                     spellcheck="false">{{ .FileContent }}</textarea>
                 <!-- Display error or success message -->
                 {{ if .ErrorMessage }}
-                <div class="mt-4 text-red-600">
+                <div id="server-error-msg" class="mt-4 text-red-600">
                     {{ .ErrorMessage }}
                 </div>
                 {{ end }}
                 {{ if .SuccessMessage }}
-                <div class="mt-4 text-green-600">
+                <div id="server-success-msg" class="mt-4 text-green-600">
                     {{ .SuccessMessage }}
                 </div>
                 {{ end }}
-                <!-- Submit Button -->
-                <div class="flex justify-end mt-4">
+                <!-- Action buttons -->
+                <div class="flex justify-end gap-3 mt-4">
+                    <button type="button" id="check-btn"
+                        class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md transition duration-200">
+                        Check &amp; Format
+                    </button>
                     <button type="submit"
                         class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-200">
                         Save
                     </button>
                 </div>
+                <div id="check-result" class="mt-3 text-sm"></div>
             </form>
         </div>
     </div>
 </div>
+<script>
+    // Runs on DOMContentLoaded because config-manager.js (which defines
+    // window.normalizeConfig) is loaded at the end of <body>, after this script.
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.querySelector('#edit-config-json form');
+        const ta = document.getElementById('file_content');
+        const checkBtn = document.getElementById('check-btn');
+        const panel = document.getElementById('check-result');
+        if (!form || !ta || !checkBtn || !panel) return;
+        const ready = () => typeof window.normalizeConfig === 'function';
+
+        const elx = (tag, cls, text) => {
+            const e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (text != null) e.textContent = text;
+            return e;
+        };
+
+        const warnLine = w => `${w.path} = ${JSON.stringify(w.value)}  (expected ${w.type})`;
+
+        const indexToLineCol = (text, idx) => {
+            const before = text.slice(0, idx).split('\n');
+            return { line: before.length, col: before[before.length - 1].length + 1 };
+        };
+        const lineColToIndex = (text, line, col) => {
+            const lines = text.split('\n');
+            let idx = 0;
+            for (let i = 0; i < line - 1 && i < lines.length; i++) idx += lines[i].length + 1;
+            return idx + (col - 1);
+        };
+        // Pull a character offset out of a JSON.parse error message across engines.
+        const errPos = (msg, text) => {
+            let m = /at position (\d+)/.exec(msg);
+            if (m) { const idx = +m[1]; return { idx, ...indexToLineCol(text, idx) }; }
+            m = /line (\d+) column (\d+)/.exec(msg);
+            if (m) { const line = +m[1], col = +m[2]; return { idx: lineColToIndex(text, line, col), line, col }; }
+            return null;
+        };
+        const selectRange = (start, end) => {
+            ta.focus();
+            ta.setSelectionRange(start, end);
+            const line = ta.value.slice(0, start).split('\n').length;
+            const lh = parseFloat(getComputedStyle(ta).lineHeight) || 18;
+            ta.scrollTop = Math.max(0, (line - 1) * lh - ta.clientHeight / 2);
+        };
+        // Best-effort: locate a warning's "leaf": value pair in the formatted JSON.
+        const locateWarning = w => {
+            const leaf = String(w.path).split('.').pop().replace(/\[\d+\]$/, '');
+            const target = `"${leaf}": ${JSON.stringify(w.value)}`;
+            const idx = ta.value.indexOf(target);
+            if (idx >= 0) selectRange(idx, idx + target.length);
+        };
+
+        // Drop stale messages rendered by the server from a previous save.
+        const clearServerMessages = () => {
+            ['server-error-msg', 'server-success-msg'].forEach(id => {
+                const e = document.getElementById(id);
+                if (e) e.remove();
+            });
+        };
+
+        const showError = msg => {
+            panel.innerHTML = '';
+            panel.appendChild(elx('div', 'text-red-600 font-semibold', '✗ ' + msg));
+        };
+
+        const showOk = warnings => {
+            panel.innerHTML = '';
+            panel.appendChild(elx('div', 'text-green-600 font-semibold mb-2', '✓ Valid JSON — formatted and normalized.'));
+            if (warnings.length) {
+                const box = elx('div', 'bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-3');
+                box.appendChild(elx('div', 'font-semibold mb-1', `${warnings.length} value(s) could not be normalized (click to locate):`));
+                const list = elx('div', 'space-y-1');
+                warnings.slice(0, 30).forEach(w => {
+                    const item = elx('div', 'font-mono cursor-pointer underline', warnLine(w));
+                    item.addEventListener('click', () => locateWarning(w));
+                    list.appendChild(item);
+                });
+                if (warnings.length > 30) list.appendChild(elx('div', '', `…and ${warnings.length - 30} more.`));
+                box.appendChild(list);
+                panel.appendChild(box);
+            }
+        };
+
+        // Check & Format: validate, normalize, pretty-print — without saving.
+        checkBtn.addEventListener('click', function () {
+            clearServerMessages();
+            if (!ready()) return showError('Normalizer not loaded — rebuild and restart the app.');
+            let cfg;
+            try {
+                cfg = JSON.parse(ta.value);
+            } catch (e) {
+                const pos = errPos(e.message, ta.value);
+                if (pos) {
+                    selectRange(pos.idx, Math.min(pos.idx + 1, ta.value.length));
+                    return showError(`Invalid JSON at line ${pos.line}, column ${pos.col}: ${e.message}`);
+                }
+                return showError('Invalid JSON: ' + e.message);
+            }
+            if (!cfg || typeof cfg !== 'object') return showError('Config must be a JSON object.');
+            const { config, warnings } = window.normalizeConfig(cfg);
+            ta.value = JSON.stringify(config, null, 2);
+            showOk(warnings || []);
+        });
+
+        // Save: normalize + format, surface warnings, then save (warn but allow).
+        form.addEventListener('submit', function () {
+            if (!ready()) return; // server still validates JSON
+            let cfg;
+            try { cfg = JSON.parse(ta.value); } catch { return; } // let the server report invalid JSON
+            if (!cfg || typeof cfg !== 'object') return;
+            const { config, warnings } = window.normalizeConfig(cfg);
+            ta.value = JSON.stringify(config, null, 2);
+            if (warnings && warnings.length) {
+                const list = warnings.slice(0, 15).map(w => '• ' + warnLine(w)).join('\n');
+                const more = warnings.length > 15 ? `\n…and ${warnings.length - 15} more.` : '';
+                alert(`${warnings.length} value(s) could not be normalized and were saved unchanged:\n\n${list}${more}`);
+            }
+        });
+    });
+</script>
 {{ end }}
