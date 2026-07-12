@@ -785,6 +785,10 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		// Keep existing version info during updates - don't log repeatedly
 		// Version info is preserved from previous checks in cached info
 	} else {
+		// reset so values from a previously installed binary never survive a reinstall
+		info.AISCatcherCommit = ""
+		info.AISCatcherBuildType = ""
+
 		// runs while the system-info cache lock is held, so it must be bounded
 		vCtx, vCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer vCancel()
