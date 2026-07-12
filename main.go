@@ -165,16 +165,6 @@ func parseJournalJSON(line string) (msg string, priority int, ts string, ok bool
 	return msg, priority, ts, true
 }
 
-type ConfigJSON struct {
-	Service ServiceConfig `json:"server"`
-}
-
-type ServiceConfig struct {
-	Port string `json:"port"`
-}
-
-var systemInfo SystemInfo
-
 // Global state for system actions
 type SystemActionState struct {
 	sync.Mutex
@@ -192,133 +182,6 @@ type SSEMessage struct {
 
 var globalActionState = SystemActionState{
 	Subscribers: make(map[chan SSEMessage]bool),
-}
-
-// ---------------------------------------------------------------------------
-// Wall-message broadcast hub
-// ---------------------------------------------------------------------------
-
-type WallHub struct {
-	sync.Mutex
-	subscribers map[chan string]struct{}
-}
-
-var wallHub = &WallHub{
-	subscribers: make(map[chan string]struct{}),
-}
-
-func (h *WallHub) subscribe() chan string {
-	ch := make(chan string, 8)
-	h.Lock()
-	h.subscribers[ch] = struct{}{}
-	h.Unlock()
-	return ch
-}
-
-func (h *WallHub) unsubscribe(ch chan string) {
-	h.Lock()
-	delete(h.subscribers, ch)
-	h.Unlock()
-	close(ch)
-}
-
-func (h *WallHub) broadcast(msg string) {
-	h.Lock()
-	defer h.Unlock()
-	for ch := range h.subscribers {
-		select {
-		case ch <- msg:
-		default: // drop if subscriber is slow
-		}
-	}
-}
-
-// startWallHub polls /run/systemd/shutdown/scheduled and fans any pending
-// shutdown/reboot notice out to all SSE subscribers. It also broadcasts a
-// cancellation notice when the file disappears.
-func startWallHub() {
-	go func() {
-		const scheduledFile = "/run/systemd/shutdown/scheduled"
-		wasScheduled := false
-		for {
-			data, err := os.ReadFile(scheduledFile)
-			if err == nil {
-				// File exists — parse fields
-				fields := map[string]string{}
-				for _, line := range strings.Split(string(data), "\n") {
-					if idx := strings.IndexByte(line, '='); idx > 0 {
-						fields[line[:idx]] = strings.Trim(line[idx+1:], "\"")
-					}
-				}
-				msg := fields["WALL_MESSAGE"]
-				// Unescape systemd hex encoding e.g. \x20 -> space
-				if unescaped, err := strconv.Unquote(`"` + msg + `"`); err == nil {
-					msg = unescaped
-				}
-				mode := fields["MODE"]
-				usecStr := fields["USEC"]
-
-				// Build human-readable banner
-				action := "Shutdown"
-				if mode == "reboot" {
-					action = "Reboot"
-				} else if mode == "halt" || mode == "poweroff" {
-					action = "Halt"
-				}
-				banner := action + " scheduled"
-				if usecStr != "" {
-					if usec, err := strconv.ParseInt(usecStr, 10, 64); err == nil {
-						t := time.Unix(usec/1_000_000, 0)
-						remaining := time.Until(t).Round(time.Second)
-						banner += " in " + remaining.String() + " (" + t.Format("15:04:05") + ")"
-					}
-				}
-				if msg != "" {
-					banner += " — " + msg
-				}
-				banner += ". Run 'shutdown -c' to cancel."
-
-				if !wasScheduled {
-					wallHub.broadcast(banner)
-					wasScheduled = true
-				}
-			} else {
-				if wasScheduled {
-					wallHub.broadcast("Scheduled shutdown/reboot has been cancelled.")
-					wasScheduled = false
-				}
-			}
-			time.Sleep(15 * time.Second)
-		}
-	}()
-}
-
-func wallStreamHandler(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	ch := wallHub.subscribe()
-	defer wallHub.unsubscribe(ch)
-
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case msg, ok := <-ch:
-			if !ok {
-				return
-			}
-			data, _ := json.Marshal(msg)
-			fmt.Fprintf(w, "data: %s\n\n", data)
-			flusher.Flush()
-		}
-	}
 }
 
 func rebootPendingHandler(w http.ResponseWriter, r *http.Request) {
@@ -348,92 +211,71 @@ func systemActionStatusHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func getActionScript(action string) (string, bool) {
-	var script string
-	var reload bool
+// aisInstallCmd downloads and runs the AIS-catcher installer with the given flags.
+func aisInstallCmd(flags string) string {
+	return "curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s --" + flags
+}
 
+const controlInstallCmd = "curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash"
+
+func getActionScript(action string) (string, bool) {
 	switch action {
 	case "system-update":
-		script = `echo "Starting system update..." && \
-        apt-get update -y && \
-        echo "System update completed"`
+		return `echo "Starting system update..." && apt-get update -y && echo "System update completed"`, false
 
 	case "ais-update-prebuilt":
-		script = fmt.Sprintf(`echo "Starting AIS-catcher prebuilt update..." && \
-        echo "Downloading and executing installation script..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p%s && \
-        echo "AIS-catcher installation completed"`, managedInstallFlag())
+		return `echo "Starting AIS-catcher prebuilt update..." && ` +
+			aisInstallCmd(" -p"+managedInstallFlag()) +
+			` && echo "AIS-catcher installation completed"`, false
 
 	case "ais-update-source":
-		script = fmt.Sprintf(`echo "Starting AIS-catcher source update..." && \
-        echo "Downloading and executing installation script..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s --%s && \
-        echo "AIS-catcher installation completed"`, managedInstallFlag())
+		return `echo "Starting AIS-catcher source update..." && ` +
+			aisInstallCmd(managedInstallFlag()) +
+			` && echo "AIS-catcher installation completed"`, false
 
 	case "control-update":
-		script = `echo "Starting AIS-catcher Control update..." && \
-        echo "Downloading and executing installation script..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
-        echo "AIS-catcher Control installation completed"`
-		reload = true
+		return `echo "Starting AIS-catcher Control update..." && ` +
+			controlInstallCmd +
+			` && echo "AIS-catcher Control installation completed"`, true
 
 	case "control-restart":
-		script = `echo "Restarting AIS-catcher Control..." && \
-        systemctl restart ais-catcher-control && \
-        echo "AIS-catcher Control restarted successfully"`
-		reload = true
+		return `echo "Restarting AIS-catcher Control..." && systemctl restart ais-catcher-control && echo "AIS-catcher Control restarted successfully"`, true
 
 	case "system-reboot":
-		script = `echo "Initiating system reboot..." && reboot`
-		reload = true
+		return `echo "Initiating system reboot..." && reboot`, true
 
 	case "system-halt":
-		script = `echo "Initiating system shutdown..." && shutdown`
-		reload = true
+		return `echo "Initiating system shutdown..." && shutdown`, true
 
 	case "update-all":
-		script = fmt.Sprintf(`echo "Starting full system update..." && \
-        echo "Step 1: Installing AIS-catcher..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p%s && \
-        echo "Step 2: Installing AIS-catcher Control..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
-        echo "Full system update completed"`, managedInstallFlag())
-		reload = true
+		return `echo "Step 1: Installing AIS-catcher..." && ` +
+			aisInstallCmd(" -p"+managedInstallFlag()) +
+			` && echo "Step 2: Installing AIS-catcher Control..." && ` +
+			controlInstallCmd +
+			` && echo "Full system update completed"`, true
 
 	case "update-all-reboot":
-		script = fmt.Sprintf(`echo "Starting full system update with reboot..." && \
-        echo "Step 1: Installing AIS-catcher..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p%s && \
-        echo "Step 2: Installing AIS-catcher Control..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
-        echo "Full system update completed" && \
-        echo "Step 3: Preparing for reboot..." && \
-        reboot`, managedInstallFlag())
-		reload = true
+		return `echo "Step 1: Installing AIS-catcher..." && ` +
+			aisInstallCmd(" -p"+managedInstallFlag()) +
+			` && echo "Step 2: Installing AIS-catcher Control..." && ` +
+			controlInstallCmd +
+			` && echo "Full system update completed" && echo "Step 3: Preparing for reboot..." && reboot`, true
 
 	case "switch-managed":
-		script = `echo "Switching AIS-catcher to managed mode..." && \
-        echo "Reinstalling prebuilt package with managed service configuration..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p -M && \
-        echo "AIS-catcher now runs in managed mode"`
-		reload = true
+		return `echo "Switching AIS-catcher to managed mode..." && ` +
+			aisInstallCmd(" -p -M") +
+			` && echo "AIS-catcher now runs in managed mode"`, true
 
 	case "switch-unmanaged":
-		script = `echo "Switching AIS-catcher to unmanaged (classic) mode..." && \
-        echo "Reinstalling prebuilt package with classic service configuration..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p && \
-        echo "AIS-catcher now runs in unmanaged mode"`
-		reload = true
+		return `echo "Switching AIS-catcher to unmanaged (classic) mode..." && ` +
+			aisInstallCmd(" -p") +
+			` && echo "AIS-catcher now runs in unmanaged mode"`, true
 
 	case "shutdown-cancel":
-		script = `echo "Cancelling pending shutdown/reboot..." && \
-        shutdown -c ; \
-        systemctl stop ais-catcher-reboot.service ; \
-        echo "Scheduled shutdown/reboot has been cancelled"`
-
+		return `echo "Cancelling pending shutdown/reboot..." && shutdown -c ; systemctl stop ais-catcher-reboot.service ; echo "Scheduled shutdown/reboot has been cancelled"`, false
 	}
 
-	return script, reload
+	return "", false
 }
 
 func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
@@ -680,82 +522,6 @@ func broadcastResult(msgType, content string) {
 		checkLatestVersion()
 		checkControlLatestVersion()
 	}()
-}
-
-func systemActionCancelHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	cancelPendingShutdown()
-
-	// Find and stop all ais-update-* transient services
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "systemctl", "list-units", "--type=service", "ais-update-*", "--no-pager", "--no-legend")
-	output, err := cmd.Output()
-	if err == nil {
-		units := strings.Split(string(output), "\n")
-		for _, unit := range units {
-			if strings.TrimSpace(unit) != "" {
-				unitName := strings.Fields(unit)[0]
-				stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
-				exec.CommandContext(stopCtx, "systemctl", "stop", unitName).Run()
-				stopCancel()
-			}
-		}
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func updateScriptLogsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
-		return
-	}
-
-	ctx := r.Context()
-	// Tail the logs from all ais-update-* transient units.
-	cmd := exec.Command("journalctl", "-f", "-u", "ais-update-*", "--no-pager", "--output=json")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		http.Error(w, "Failed to create stdout pipe: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := cmd.Start(); err != nil {
-		http.Error(w, "Failed to start journalctl: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Ensure the command is killed if the client disconnects.
-	go func() {
-		<-ctx.Done()
-		if cmd.Process != nil {
-			cmd.Process.Kill()
-		}
-	}()
-
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for scanner.Scan() {
-		// Send each log line as an SSE message.
-		line := parseJournalLine(scanner.Text())
-		fmt.Fprintf(w, "data: %s\n\n", strconv.Quote(line))
-		flusher.Flush()
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading update-script logs: %v", err)
-	}
-	cmd.Wait() // reap the process to avoid zombies
 }
 
 func sendSSEMessage(w http.ResponseWriter, flusher http.Flusher, messageType string, content string) {
@@ -1140,9 +906,7 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		info.KernelVersion = strings.TrimSpace(string(kernel))
 	}
 
-	// Check for updates from GitHub
-	// Always use async to avoid blocking page load (especially on slow/unreachable GitHub API)
-	// JavaScript on system page will fetch this data via AJAX after page loads
+	// GitHub checks run async so a slow/unreachable API never blocks page load
 	if time.Since(info.LastChecked) > 10*time.Minute {
 		info.LastChecked = time.Now() // pre-stamp to prevent thundering herd
 		go checkLatestVersion()
@@ -2029,26 +1793,24 @@ func managedInstallFlag() string {
 	return ""
 }
 
-func getServiceUptime() string {
+func getServiceUptime() (duration, since string) {
 	aeCtx, aeCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer aeCancel()
 	cmd := exec.CommandContext(aeCtx, "systemctl", "show", "ais-catcher.service", "--property=ActiveEnterTimestamp")
 	output, err := cmd.Output()
 	if err != nil {
-		return "Unknown"
+		return "Unknown", ""
 	}
 	line := strings.TrimSpace(string(output))
 	parts := strings.SplitN(line, "=", 2)
 	if len(parts) != 2 {
-		return "Unknown"
+		return "Unknown", ""
 	}
-	timestamp := parts[1]
-	t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", timestamp)
+	t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", parts[1])
 	if err != nil {
-		return "Unknown"
+		return "Unknown", ""
 	}
-	duration := time.Since(t)
-	return fmt.Sprintf("%s (since %s)", formatDuration(duration), t.Format("Jan 2, 2006 15:04:05"))
+	return formatDuration(time.Since(t)), t.Format("Jan 2, 2006 15:04:05")
 }
 
 func formatDuration(d time.Duration) string {
@@ -2114,45 +1876,21 @@ func getServiceEnabled() (bool, error) {
 	return status == "enabled", nil
 }
 
-func sanitizeFileContent(content string) string {
-	// Implement any necessary sanitization here
-	// For example, remove unwanted characters or validate JSON if editing config.json
-	return content
-}
-
-func parseJournalLine(line string) string {
-	// Parse JSON output from journalctl
-	var entry map[string]interface{}
-	if err := json.Unmarshal([]byte(line), &entry); err != nil {
-		// If JSON parsing fails, return the line as-is, but stripped of ANSI codes
-		return ansiEscape.ReplaceAllString(line, "")
+// journalctlArgs builds the argument list for reading logs from the given
+// source; returns nil for an unknown source.
+func journalctlArgs(source, priority string, extra ...string) []string {
+	var args []string
+	switch source {
+	case "ais-catcher":
+		args = append(args, "-u", "ais-catcher.service")
+	case "control":
+		args = append(args, "-u", "ais-catcher-control")
+	case "system":
+	default:
+		return nil
 	}
-
-	// Extract timestamp and message
-	timestamp := ""
-	if ts, ok := entry["__REALTIME_TIMESTAMP"].(string); ok {
-		// Convert microseconds timestamp to readable format
-		if usec, err := strconv.ParseInt(ts, 10, 64); err == nil {
-			t := time.Unix(usec/1000000, (usec%1000000)*1000)
-			timestamp = t.Format("2006-01-02T15:04:05-0700")
-		}
-	}
-
-	message := ""
-	if msg, ok := entry["MESSAGE"].(string); ok {
-		message = ansiEscape.ReplaceAllString(msg, "")
-	}
-
-	if timestamp != "" && message != "" {
-		return timestamp + " " + message
-	}
-
-	// Fallback to just the message if timestamp parsing failed
-	if message != "" {
-		return message
-	}
-
-	return ansiEscape.ReplaceAllString(line, "")
+	args = append(args, "-p", priority, "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
+	return append(args, extra...)
 }
 
 func readConfigJSON() ([]byte, error) {
@@ -2287,16 +2025,8 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	// Build journalctl command with context based on source
-	var cmd *exec.Cmd
-	switch logSource {
-	case "ais-catcher":
-		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher.service", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
-	case "control":
-		cmd = exec.CommandContext(ctx, "journalctl", "-u", "ais-catcher-control", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
-	case "system":
-		cmd = exec.CommandContext(ctx, "journalctl", "-p", priority, "-n", strconv.Itoa(lines), "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
-	default:
+	args := journalctlArgs(logSource, priority, "-n", strconv.Itoa(lines))
+	if args == nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"logs":  []LogMessage{},
@@ -2305,7 +2035,7 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := cmd.Output()
+	output, err := exec.CommandContext(ctx, "journalctl", args...).Output()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			log.Printf("Timeout fetching recent %s logs", logSource)
@@ -2386,18 +2116,12 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 
-		var cmd *exec.Cmd
-		switch logSource {
-		case "ais-catcher":
-			cmd = exec.Command("journalctl", "-u", "ais-catcher.service", "-p", priority, "-f", "-n", "0", "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
-		case "control":
-			cmd = exec.Command("journalctl", "-u", "ais-catcher-control", "-p", priority, "-f", "-n", "0", "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
-		case "system":
-			cmd = exec.Command("journalctl", "-p", priority, "-f", "-n", "0", "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
-		default:
+		args := journalctlArgs(logSource, priority, "-f", "-n", "0")
+		if args == nil {
 			log.Printf("Invalid log source: %s", logSource)
 			return
 		}
+		cmd := exec.Command("journalctl", args...)
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
@@ -2843,14 +2567,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	status := getServiceStatus()
 	sysInfo := getCachedSystemInfo()
 
-	// Split "2h 15m (since Mar 15, 2026 10:00:00)" into two parts
-	full := getServiceUptime()
-	uptimeDuration := full
-	uptimeSince := ""
-	if idx := strings.Index(full, " (since "); idx >= 0 {
-		uptimeDuration = full[:idx]
-		uptimeSince = full[idx+8 : len(full)-1] // strip " (since " prefix and ")" suffix
-	}
+	uptimeDuration, uptimeSince := getServiceUptime()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -3058,22 +2775,20 @@ func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
 
 	} else if r.Method == http.MethodPost {
 		newContent := r.FormValue("file_content")
-		sanitizedContent := sanitizeFileContent(newContent)
 
-		// Save file
-		if err := writeFileAtomic(configCmdFilePath, []byte(sanitizedContent), 0644); err != nil {
+		if err := writeFileAtomic(configCmdFilePath, []byte(newContent), 0644); err != nil {
 			renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", newContent, "Failed to save file: "+err.Error(), "")
 			return
 		}
 
 		// Record the hash of what we just wrote so the integrity check passes.
-		hashValue := calculate32BitHash(sanitizedContent)
+		hashValue := calculate32BitHash(newContent)
 		if err := updateConfig(func(c *Config) { c.ConfigCmdHash = hashValue }); err != nil {
 			renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", newContent, "Failed to update control settings: "+err.Error(), "")
 			return
 		}
 
-		renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", sanitizedContent, "", "Configuration saved successfully.")
+		renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", newContent, "", "Configuration saved successfully.")
 
 	} else {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -3088,59 +2803,6 @@ func systemRedirectHandler(w http.ResponseWriter, r *http.Request) {
 		target += "?" + r.URL.RawQuery
 	}
 	http.Redirect(w, r, target, http.StatusMovedPermanently)
-}
-
-// updateCheckHandler provides update status with 15-minute caching
-func updateCheckHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	// Pre-stamp timestamps before launching goroutines to prevent thundering herd
-	cachedSysInfo.Lock()
-	aisWasReset := cachedSysInfo.info.LastChecked.IsZero()
-	controlWasReset := cachedSysInfo.info.ControlLastChecked.IsZero()
-	needAISCatcherCheck := aisWasReset || time.Since(cachedSysInfo.info.LastChecked) > 15*time.Minute
-	needControlCheck := controlWasReset || time.Since(cachedSysInfo.info.ControlLastChecked) > 15*time.Minute
-	if needAISCatcherCheck {
-		cachedSysInfo.info.LastChecked = time.Now()
-	}
-	if needControlCheck {
-		cachedSysInfo.info.ControlLastChecked = time.Now()
-	}
-	cachedSysInfo.Unlock()
-
-	if needAISCatcherCheck {
-		// Run synchronously when explicitly reset (after an update action) so the
-		// response reflects the actual installed version, not the stale cached flag.
-		if aisWasReset {
-			checkLatestVersion()
-		} else {
-			go checkLatestVersion()
-		}
-	}
-	if needControlCheck {
-		if controlWasReset {
-			checkControlLatestVersion()
-		} else {
-			go checkControlLatestVersion()
-		}
-	}
-
-	// Return current update status
-	info := getCachedSystemInfo()
-	response := map[string]interface{}{
-		"ais_catcher_update_available": info.UpdateAvailable,
-		"ais_catcher_available":        info.AISCatcherAvailable,
-		"ais_catcher_current":          info.AISCatcherVersion,
-		"ais_catcher_latest":           info.LatestVersionTag,
-		"ais_catcher_current_commit":   info.AISCatcherCommit,
-		"ais_catcher_latest_commit":    info.LatestCommit,
-		"ais_catcher_build_type":       info.AISCatcherBuildType,
-		"control_update_available":     info.ControlUpdateAvailable,
-		"control_current":              info.BuildVersion,
-		"control_latest":               info.ControlLatestCommit,
-	}
-
-	json.NewEncoder(w).Encode(response)
 }
 
 // systemStatusAPIHandler provides real-time system status as JSON
@@ -3258,7 +2920,8 @@ func main() {
 		os.Exit(0)
 	}
 
-	systemInfo = collectSystemInfo(systemInfo)
+	cachedSysInfo.info = collectSystemInfo(cachedSysInfo.info)
+	cachedSysInfo.lastFetch = time.Now()
 
 	err = loadControlSettings()
 	if err != nil {
@@ -3328,18 +2991,14 @@ func main() {
 	http.HandleFunc("/editjson", authMiddleware(editConfigJSONHandler))
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
 	http.HandleFunc("/system", authMiddleware(systemRedirectHandler))
-	http.HandleFunc("/api/update-check", authMiddleware(updateCheckHandler))
 	http.HandleFunc("/api/system-action-start", authMiddleware(systemActionStartHandler))
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
 	http.HandleFunc("/system-action-status", authMiddleware(systemActionStatusHandler))
-	http.HandleFunc("/system-action-cancel", authMiddleware(systemActionCancelHandler))
 	http.HandleFunc("/api/system-status", authMiddleware(systemStatusAPIHandler))
 	http.HandleFunc("/api/watchdog-status", authMiddleware(watchdogStatusHandler))
-	http.HandleFunc("/update-script-logs", authMiddleware(updateScriptLogsHandler))
 	http.HandleFunc("/tcp-servers", authMiddleware(makeConfigHandler("TCP Servers", "tcp-servers")))
 	http.HandleFunc("/general", authMiddleware(makeConfigHandler("General Settings", "general-settings")))
 	http.HandleFunc("/dataflow", authMiddleware(makeReadOnlyConfigHandler("Data Flow", "zones")))
-	http.HandleFunc("/api/wall-stream", authMiddleware(wallStreamHandler))
 	http.HandleFunc("/api/reboot-pending", authMiddleware(rebootPendingHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -3356,8 +3015,6 @@ func main() {
 		}
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	})
-
-	startWallHub()
 
 	addr := ":" + getConfig().Port
 	log.Printf("Server started at %s\n", addr)
