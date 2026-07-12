@@ -1,5 +1,5 @@
 {{ define "control" }}
-<div class="space-y-6">
+<div class="max-w-5xl mx-auto space-y-4 sm:space-y-6">
     <!-- Custom Styles -->
     <style>
         .custom-scrollbar::-webkit-scrollbar {
@@ -62,12 +62,52 @@
         }
     </style>
 
+    {{if .SystemInfo.AISCatcherAvailable}}
+    {{if .SystemInfo.ManagedMode}}
+    <!-- Managed mode notice -->
+    <div class="bg-emerald-50 border border-emerald-200 rounded-none sm:rounded-xl px-4 sm:px-5 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div class="flex items-start gap-2 flex-1">
+            <svg class="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <div class="text-xs sm:text-sm text-emerald-900">
+                <p class="font-semibold">Managed mode</p>
+                <p class="mt-0.5">AIS-catcher manages its own configuration. Receiver, output and webviewer settings are edited in AIS-catcher's built-in interface, not in this panel.</p>
+            </div>
+        </div>
+        <a id="managedUILink" href="#" target="_blank" rel="noopener" class="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors">
+            Open AIS-catcher Control
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+        </a>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var link = document.getElementById('managedUILink');
+            if (link) link.href = 'http://' + window.location.hostname + ':{{.SystemInfo.ManagedPort}}';
+        });
+    </script>
+    {{else}}
+    <!-- Unmanaged: classic config editing is deprecated, push to managed mode -->
+    <div class="bg-amber-50 border border-amber-200 rounded-none sm:rounded-xl px-4 sm:px-5 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div class="flex items-start gap-2 flex-1">
+            <svg class="w-5 h-5 text-amber-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path></svg>
+            <div class="text-xs sm:text-sm text-amber-900">
+                <p class="font-semibold">Classic configuration is deprecated</p>
+                <p class="mt-0.5">AIS-catcher now manages its own configuration with a built-in setup interface. Editing config.json through this panel is deprecated and will be removed in a future release — please switch to managed mode. Switching reinstalls the prebuilt package; your current config.json stays on disk but is no longer used.</p>
+            </div>
+        </div>
+        <button onclick="startModeSwitch()" class="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors">
+            Switch to Managed Mode
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+        </button>
+    </div>
+    {{end}}
+    {{end}}
+
     <!-- Update Notifications -->
     <div id="update-notifications" class="bg-white rounded-xl border-2 border-orange-400 p-4 space-y-3"
         style="display: none;">
         <!-- AIS-catcher Update -->
-        <a id="ais-catcher-update-card" href="/system"
-            class="hidden block bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 rounded-lg p-3 transition-all duration-200 group">
+        <button id="ais-catcher-update-card" data-action="" onclick="preselectAction(this.dataset.action)"
+            class="hidden w-full text-left block bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 rounded-lg p-3 transition-all duration-200 group">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
                     <div
@@ -89,11 +129,11 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
             </div>
-        </a>
+        </button>
 
         <!-- Control Panel Update -->
-        <a id="control-update-card" href="/system"
-            class="hidden block bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 rounded-lg p-3 transition-all duration-200 group">
+        <button id="control-update-card" data-action="control-update" onclick="preselectAction(this.dataset.action)"
+            class="hidden w-full text-left block bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 rounded-lg p-3 transition-all duration-200 group">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
                     <div
@@ -114,11 +154,11 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
             </div>
-        </a>
+        </button>
     </div>
 
-    <!-- System Daemon Card -->
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <!-- 1. AIS-catcher Process -->
+    <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border border-slate-200 overflow-hidden">
         <!-- Header -->
         <div
             class="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
@@ -127,7 +167,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7">
                     </path>
                 </svg>
-                <h2 class="text-sm sm:text-base font-semibold text-slate-700">System Daemon</h2>
+                <h2 class="text-sm sm:text-base font-semibold text-slate-700">AIS-catcher Process</h2>
             </div>
             <div class="flex items-center gap-2">
                 <span id="svc-limit-badge"
@@ -161,7 +201,7 @@
         </div>
 
         <!-- Systemd health grid -->
-        <div class="px-4 sm:px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="px-4 sm:px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4 border-b border-slate-100">
             <div>
                 <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Restarts</p>
                 <p id="svc-restarts" class="text-sm font-medium text-slate-700 font-mono">—</p>
@@ -197,21 +237,232 @@
             </div>
         </div>
 
-    </div>
-
-    <!-- Action Card (separate, no header) -->
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div id="action-bar" class="px-4 sm:px-5 py-3 flex items-center justify-between gap-2 transition-opacity">
-            <!-- LEFT: primary contextual action -->
-            <div id="action-primary">
-                <div class="h-8 w-20 bg-slate-100 rounded animate-pulse"></div>
-            </div>
-            <!-- RIGHT: secondary actions -->
-            <div id="action-secondary" class="flex items-center gap-1.5"></div>
+        <!-- Inline service actions: 2-column grid on phones, right-aligned row on sm+ -->
+        <div id="action-bar" class="px-4 sm:px-5 py-3 grid grid-cols-2 gap-1.5 sm:flex sm:items-center sm:justify-end sm:flex-wrap transition-opacity">
+            <div class="h-8 bg-slate-100 rounded animate-pulse col-span-2 sm:col-span-1 sm:w-20"></div>
         </div>
     </div>
 
-    <!-- Unified Logs Section -->
+    <!-- 2. Software -->
+    <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border border-slate-200 overflow-hidden">
+        <div class="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                </svg>
+                <h2 class="text-sm sm:text-base font-semibold text-slate-700">Software</h2>
+            </div>
+            <span id="updateBadge" class="hidden items-center px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                <span id="updateBadgeText">Update Available</span>
+            </span>
+        </div>
+
+        <!-- AIS-catcher row -->
+        <div class="px-4 sm:px-5 pt-3">
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">AIS-catcher</p>
+        </div>
+        <div class="px-4 sm:px-5 py-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 border-b border-slate-100">
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Installed</p>
+                <p class="text-sm font-medium text-slate-700" id="installedStatus">{{if .SystemInfo.AISCatcherAvailable}}<span class="text-emerald-600">Yes</span>{{else}}<span class="text-rose-600">No</span>{{end}}</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Mode</p>
+                <p class="text-sm font-medium text-slate-700" id="modeDisplay">{{if .SystemInfo.ManagedMode}}<span class="text-emerald-600">Managed</span>{{else}}Unmanaged{{end}}</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Version</p>
+                <div id="currentVersionDisplay">
+                    <p class="text-sm font-medium text-slate-700 font-mono">{{if not .SystemInfo.AISCatcherAvailable}}&lt; 0.61{{else if eq .SystemInfo.AISCatcherVersionCode -1}}≤ 0.60{{else}}{{.SystemInfo.AISCatcherVersion}}{{end}}</p>
+                    {{if .SystemInfo.AISCatcherCommit}}
+                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.AISCatcherCommit}}</p>
+                    {{end}}
+                </div>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Build Type</p>
+                <div id="buildTypeDisplay">
+                    {{if .SystemInfo.AISCatcherBuildType}}
+                    <p class="text-sm font-medium text-slate-700 font-mono">{{.SystemInfo.AISCatcherBuildType}}</p>
+                    {{else}}
+                    <p class="text-sm font-medium text-slate-500">-</p>
+                    {{end}}
+                </div>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Latest</p>
+                <div id="latestVersionDisplay">
+                    {{if .SystemInfo.LatestVersionTag}}
+                    <p class="text-sm font-medium font-mono">
+                        {{if .SystemInfo.UpdateAvailable}}
+                        <span class="text-amber-600">{{.SystemInfo.LatestVersionTag}}</span>
+                        {{else}}
+                        <span class="text-emerald-600">{{.SystemInfo.LatestVersionTag}}</span>
+                        {{end}}
+                    </p>
+                    {{if .SystemInfo.LatestCommit}}
+                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{.SystemInfo.LatestCommit}}</p>
+                    {{end}}
+                    {{else}}
+                    <p class="text-xs text-slate-400">Checking...</p>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+
+        <!-- AIS-catcher Control row -->
+        <div class="px-4 sm:px-5 pt-3">
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">AIS-catcher Control</p>
+        </div>
+        <div class="px-4 sm:px-5 py-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Version</p>
+                <p class="text-sm font-medium text-slate-700 font-mono">{{.SystemInfo.BuildVersion}}</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Latest</p>
+                {{if .SystemInfo.ControlLatestCommit}}
+                <p class="text-sm font-medium font-mono">
+                    {{if .SystemInfo.ControlUpdateAvailable}}
+                    <span class="text-amber-600">{{.SystemInfo.ControlLatestCommit}}</span>
+                    <span class="ml-1 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">update</span>
+                    {{else}}
+                    <span class="text-emerald-600">{{.SystemInfo.ControlLatestCommit}}</span>
+                    {{end}}
+                </p>
+                {{else}}
+                <p class="text-xs text-slate-400">Checking...</p>
+                {{end}}
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. System -->
+    <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border border-slate-200 overflow-hidden">
+        <div class="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center space-x-2">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+            </svg>
+            <h2 class="text-sm sm:text-base font-semibold text-slate-700">System</h2>
+        </div>
+        <div class="px-4 sm:px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">OS / Arch</p>
+                <p class="text-sm font-medium text-slate-700">{{.SystemInfo.OS}} / {{.SystemInfo.Architecture}}</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Kernel</p>
+                <p class="text-sm font-medium text-slate-700 font-mono">{{.SystemInfo.KernelVersion}}</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">CPU</p>
+                <p class="text-sm font-medium text-slate-700">{{.SystemInfo.CPUInfo}}</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Memory</p>
+                <p class="text-sm font-medium text-slate-700 font-mono">{{printf "%.2f GB" .MemoryGB}}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Maintenance -->
+    <div id="maintenance-card" class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border border-slate-200 overflow-hidden">
+        <div class="px-4 sm:px-5 py-3 sm:py-5 border-b border-slate-100 bg-slate-50/50 flex items-start space-x-2">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            <div>
+                <h2 class="text-sm sm:text-base font-semibold text-slate-700">Maintenance</h2>
+                <p class="text-xs sm:text-sm text-slate-600 mt-0.5">Run system operations such as updates, restarts, and reboots. Output is streamed live below.</p>
+            </div>
+        </div>
+
+        <div class="p-4 sm:p-6">
+            <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <!-- Styled Select -->
+                <div class="relative flex-1">
+                    <select id="actionSelect" class="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 px-3 sm:px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent shadow-sm text-sm sm:text-base">
+                        <option value="" disabled selected>Select an operation...</option>
+                        <optgroup label="── AIS-catcher ──">
+                            <option value="ais-update-prebuilt">Update (prebuilt binary)</option>
+                            <option value="ais-update-source">Build from source</option>
+                        </optgroup>
+                        <optgroup label="── Mode ──">
+                            {{if .SystemInfo.ManagedMode}}
+                            <option value="switch-unmanaged">Switch to unmanaged mode (deprecated)</option>
+                            {{else}}
+                            <option value="switch-managed">Switch to managed mode (recommended)</option>
+                            {{end}}
+                        </optgroup>
+                        <optgroup label="── Control Panel ──">
+                            <option value="control-update">Update control panel</option>
+                            <option value="control-restart">Restart control panel</option>
+                        </optgroup>
+                        <optgroup label="── Full Updates ──">
+                            <option value="update-all">Update all (AIS-catcher + control)</option>
+                            <option value="update-all-reboot">Update all &amp; reboot</option>
+                        </optgroup>
+                        <optgroup label="── System ──">
+                            <option value="system-update">Upgrade system packages (apt)</option>
+                            <option value="system-reboot">Reboot</option>
+                            <option value="system-halt">Halt (shutdown)</option>
+                            <option value="shutdown-cancel">Cancel pending shutdown</option>
+                        </optgroup>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                </div>
+
+                <!-- Execute Button -->
+                <button onclick="executeSelectedAction()" id="executeButton"
+                    class="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-lg transition-all duration-200 shadow-sm flex items-center justify-center gap-2 text-sm sm:text-base">
+                    <span>Execute</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </button>
+            </div>
+
+            <!-- Terminal Output Display -->
+            <div id="progressDisplay" class="mt-4 sm:mt-6 hidden">
+                <div class="bg-slate-900 rounded-none sm:rounded-lg overflow-hidden border-x-0 sm:border-x border border-slate-700 shadow-inner">
+                    <div class="flex items-center justify-between px-3 sm:px-4 py-2 bg-slate-800 border-b border-slate-700">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-slate-600 animate-pulse" id="terminalIndicator"></div>
+                            <h4 class="text-[10px] sm:text-xs font-mono text-slate-300" id="progressTitle">Terminal</h4>
+                        </div>
+                        <span class="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] uppercase font-bold tracking-wide rounded bg-slate-700 text-slate-300" id="progressStatus">Ready</span>
+                    </div>
+
+                    <!-- Live System Status During Operation -->
+                    <div id="liveStatus" class="hidden px-3 sm:px-4 py-2 bg-slate-800/50 border-b border-slate-700 grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] sm:text-xs">
+                        <div class="flex items-center gap-1.5">
+                            <div class="w-1.5 h-1.5 rounded-full bg-emerald-500" id="serviceIndicator"></div>
+                            <span class="text-slate-400">Service:</span>
+                            <span class="text-slate-300 font-mono" id="serviceStatus">-</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <span class="text-slate-400">Version:</span>
+                            <span class="text-slate-300 font-mono" id="versionStatus">-</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <span class="text-slate-400">CPU:</span>
+                            <span class="text-slate-300 font-mono" id="cpuStatus">-</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path></svg>
+                            <span class="text-slate-400">Memory:</span>
+                            <span class="text-slate-300 font-mono" id="memStatus">-</span>
+                        </div>
+                    </div>
+
+                    <div class="h-48 sm:h-64 overflow-auto p-3 sm:p-4 font-mono text-[11px] sm:text-xs leading-relaxed text-slate-300" id="progressOutput" style="white-space: pre;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Logs -->
     <div
         class="bg-slate-900 rounded-none sm:rounded-xl shadow-lg overflow-hidden border-x-0 sm:border-x border border-slate-700 flex flex-col">
         <div class="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
@@ -259,9 +510,29 @@
         </div>
     </div>
 
-    <script>
-        let operationInProgress = false;
+    <!-- Support Card -->
+    <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border border-slate-200 p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4">
+        <div class="p-2 sm:p-3 bg-slate-50 rounded-full border border-slate-100 shrink-0">
+            <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+        </div>
+        <div class="flex-1 text-center sm:text-left text-slate-600 text-xs sm:text-sm">
+            <p class="font-semibold text-slate-800 mb-0.5">Need Assistance?</p>
+            <p>Check the <a href="https://docs.aiscatcher.org/usage/gui/" target="_blank" class="text-slate-900 font-medium underline decoration-slate-300 underline-offset-2 hover:decoration-slate-800 transition-all">documentation</a> to learn more about configuration. Visit our <a href="https://github.com/jvde-github/AIS-catcher/discussions" target="_blank" class="text-slate-900 font-medium underline decoration-slate-300 underline-offset-2 hover:decoration-slate-800 transition-all">community forum</a> for support.</p>
+        </div>
+    </div>
 
+    <script>
+        // ---------------------------------------------------------------
+        // Shared state
+        // ---------------------------------------------------------------
+        let operationInProgress = false;   // service action buttons (start/stop/…)
+        let currentOperation = null;       // maintenance action SSE stream
+        let currentAction = null;
+        let statusPoller = null;
+
+        // ---------------------------------------------------------------
+        // AIS-catcher Process card (daemon status + inline actions)
+        // ---------------------------------------------------------------
         function svcSubstateHTML(sub) {
             if (!sub) return '—';
             if (sub === 'start-limit-hit') return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-800">start-limit-hit</span>';
@@ -276,7 +547,7 @@
             return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">${result}</span>`;
         }
 
-        function updateStatus() {
+        function refreshDaemonCard() {
             Promise.all([
                 fetch('/status').then(r => r.json()),
                 fetch('/api/watchdog-status').then(r => r.json())
@@ -362,44 +633,454 @@
 
                 // Icon library
                 const ico = {
-                    stop: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" stroke-width="2"></rect></svg>',
-                    start: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"/></svg>',
+                    stop: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" stroke-width="2"></rect></svg>',
+                    start: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"/></svg>',
                     restart: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>',
                     enable: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>',
                     disable: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>',
+                    shield: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>',
+                    repeat: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4m14-2v2a4 4 0 01-4 4H3"/></svg>',
                 };
 
-                // Primary button (left): Stop when running, Start otherwise
-                const primBase = 'action-button inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1';
-                let primaryHTML;
-                if (running) {
-                    primaryHTML = `<button class="${primBase} bg-rose-600 hover:bg-rose-700 text-white focus:ring-rose-500" data-action="stop" title="Stop">${ico.stop}<span class="hidden sm:inline">Stop</span></button>`;
-                } else {
-                    primaryHTML = `<button class="${primBase} bg-slate-800 hover:bg-slate-700 text-white focus:ring-slate-500" data-action="start" title="Start">${ico.start}<span class="hidden sm:inline">Start</span></button>`;
-                }
-                document.getElementById('action-primary').innerHTML = primaryHTML;
+                // All buttons share the same sizing; primary Start/Stop sits at the far right
+                const btnBase = 'action-button inline-flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border whitespace-nowrap transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1';
+                const ghost = `${btnBase} border-slate-300 text-slate-700 bg-white hover:bg-slate-50 focus:ring-slate-400`;
+                const danger = `${btnBase} border-transparent bg-rose-600 hover:bg-rose-700 text-white focus:ring-rose-500`;
+                const primary = `${btnBase} border-transparent bg-slate-800 hover:bg-slate-700 text-white focus:ring-slate-500`;
 
-                // Secondary buttons (right): Restart | Enable/Disable
-                const secBase = 'action-button inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1';
-                const ghost = `${secBase} border-slate-300 text-slate-700 bg-white hover:bg-slate-50 focus:ring-slate-400`;
-                const secBtn = (action, cls, icon, label) =>
-                    `<button class="${cls}" data-action="${action}" title="${label}">${icon}<span class="hidden sm:inline">${label}</span></button>`;
+                const svcBtn = (action, cls, icon, label) =>
+                    `<button class="${cls}" data-action="${action}" title="${label}">${icon}<span>${label}</span></button>`;
 
-                let secondaryHTML = '';
-                if (running) secondaryHTML += secBtn('restart', ghost, ico.restart, 'Restart');
-                if (svc.enabled === false) secondaryHTML += secBtn('enable', ghost, ico.enable, 'Enable');
-                if (svc.enabled === true) secondaryHTML += secBtn('disable', ghost, ico.disable, 'Disable');
-                document.getElementById('action-secondary').innerHTML = secondaryHTML;
+                let barHTML = '';
+
+                // Watchdog: wd.enabled = reboot-on-failure armed
+                barHTML += wd.enabled
+                    ? svcBtn('watchdog-off', ghost, ico.shield, 'Disarm Watchdog')
+                    : svcBtn('watchdog-on', ghost, ico.shield, 'Arm Watchdog');
+
+                // Auto-restart policy toggle
+                const autoRestartOn = wd.restart && wd.restart !== 'no';
+                barHTML += autoRestartOn
+                    ? svcBtn('auto-restart-off', ghost, ico.repeat, 'Disable Auto-Restart')
+                    : svcBtn('auto-restart-on', ghost, ico.repeat, 'Enable Auto-Restart');
+
+                // Start at boot
+                if (svc.enabled === false) barHTML += svcBtn('enable', ghost, ico.enable, 'Enable at Boot');
+                if (svc.enabled === true) barHTML += svcBtn('disable', ghost, ico.disable, 'Disable at Boot');
+
+                if (running) barHTML += svcBtn('restart', ghost, ico.restart, 'Restart');
+
+                // Primary contextual action last (far right). Starting always
+                // clears a failed state server-side, so a failed service gets
+                // an explicit "Reset & Start".
+                const failed = svc.status === 'failed' || wd.start_limit_hit;
+                const primSpan = ' col-span-2 sm:col-span-1'; // full-width row on phones
+                barHTML += running
+                    ? svcBtn('stop', danger + primSpan, ico.stop, 'Stop')
+                    : svcBtn('start', primary + primSpan, ico.start, failed ? 'Reset & Start' : 'Start');
+
+                document.getElementById('action-bar').innerHTML = barHTML;
             }).catch(error => console.error('Error fetching status:', error));
         }
 
+        // ---------------------------------------------------------------
+        // Software / diagnostics cards
+        // ---------------------------------------------------------------
+        function updateMainDiagnosticCards(data) {
+            const installedEl = document.getElementById('installedStatus');
+            if (installedEl && data.ais_catcher_available !== undefined) {
+                installedEl.innerHTML = data.ais_catcher_available
+                    ? '<span class="text-emerald-600">Yes</span>'
+                    : '<span class="text-rose-600">No</span>';
+            }
+
+            const modeEl = document.getElementById('modeDisplay');
+            if (modeEl && data.managed_mode !== undefined) {
+                modeEl.innerHTML = data.managed_mode
+                    ? '<span class="text-emerald-600">Managed</span>'
+                    : 'Unmanaged';
+            }
+
+            const currentVersionEl = document.getElementById('currentVersionDisplay');
+            if (currentVersionEl && data.ais_catcher_version) {
+                let html = `<p class="text-sm font-medium text-slate-700 font-mono">${data.ais_catcher_version}</p>`;
+                if (data.ais_catcher_commit) {
+                    html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.ais_catcher_commit}</p>`;
+                }
+                currentVersionEl.innerHTML = html;
+            }
+
+            const buildTypeEl = document.getElementById('buildTypeDisplay');
+            if (buildTypeEl && data.ais_catcher_build_type) {
+                buildTypeEl.innerHTML = `<p class="text-sm font-medium text-slate-700 font-mono">${data.ais_catcher_build_type}</p>`;
+            }
+
+            const latestVersionEl = document.getElementById('latestVersionDisplay');
+            if (latestVersionEl && data.latest_version_tag) {
+                const color = data.update_available ? 'text-amber-600' : 'text-emerald-600';
+                let html = `<p class="text-sm font-medium font-mono"><span class="${color}">${data.latest_version_tag}</span></p>`;
+                if (data.latest_commit) {
+                    html += `<p class="text-[10px] text-slate-400 font-mono mt-0.5">${data.latest_commit}</p>`;
+                }
+                latestVersionEl.innerHTML = html;
+            }
+
+            const updateBadge = document.getElementById('updateBadge');
+            const updateBadgeText = document.getElementById('updateBadgeText');
+            if (updateBadge && data.update_available !== undefined) {
+                if (data.update_available) {
+                    updateBadge.classList.remove('hidden');
+                    updateBadge.classList.add('inline-flex');
+                    if (data.latest_version_tag && data.ais_catcher_version) {
+                        const currentVer = data.ais_catcher_version.replace('v', '').split(/[\s-]/)[0];
+                        const latestVer = data.latest_version_tag.replace('v', '');
+                        updateBadgeText.textContent = (currentVer !== latestVer) ? 'New Version Available' : 'Updates Available';
+                    }
+                } else {
+                    updateBadge.classList.add('hidden');
+                    updateBadge.classList.remove('inline-flex');
+                }
+            }
+        }
+
+        async function updateSystemInfo() {
+            try {
+                const sysResp = await fetch('/api/system-status');
+                if (sysResp.ok) updateMainDiagnosticCards(await sysResp.json());
+            } catch (error) {
+                console.error('Failed to update system info:', error);
+            }
+            refreshDaemonCard();
+        }
+
+        // ---------------------------------------------------------------
+        // Maintenance actions (select + streaming terminal)
+        // ---------------------------------------------------------------
+        function preselectAction(action) {
+            const select = document.getElementById('actionSelect');
+            if (!select || !action || !select.querySelector(`option[value="${action}"]`)) return;
+            select.value = action;
+            document.getElementById('maintenance-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(blinkExecuteButton, 400);
+        }
+
+        function startModeSwitch() {
+            preselectAction('switch-managed');
+        }
+
+        function appendOutput(text) {
+            const output = document.getElementById('progressOutput');
+            const wasScrolledToBottom = output.scrollHeight - output.clientHeight <= output.scrollTop + 10;
+
+            output.innerHTML += text.replace(/\n/g, '<br>');
+
+            if (wasScrolledToBottom) {
+                output.scrollTop = output.scrollHeight;
+            }
+        }
+
+        function setTerminalStatus(status, isError = false) {
+            const statusElement = document.getElementById('progressStatus');
+            statusElement.className = `px-2 py-0.5 text-[10px] uppercase font-bold tracking-wide rounded ${
+                isError ? 'bg-rose-600 text-white' : (status === 'Completed' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300')
+            }`;
+            statusElement.textContent = status;
+        }
+
+        function showProgress(show = true) {
+            const display = document.getElementById('progressDisplay');
+            const liveStatus = document.getElementById('liveStatus');
+            const executeButton = document.getElementById('executeButton');
+            const terminalIndicator = document.getElementById('terminalIndicator');
+
+            if (show) {
+                display.classList.remove('hidden');
+                liveStatus.classList.remove('hidden');
+
+                startStatusPolling();
+
+                executeButton.disabled = true;
+                executeButton.classList.add('opacity-70', 'cursor-not-allowed', 'bg-slate-600');
+                executeButton.classList.remove('bg-slate-800', 'hover:bg-slate-700');
+                executeButton.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Processing...
+          `;
+            } else {
+                stopStatusPolling();
+
+                if (terminalIndicator) {
+                    terminalIndicator.classList.remove('animate-pulse');
+                }
+
+                executeButton.disabled = false;
+                executeButton.classList.remove('opacity-70', 'cursor-not-allowed', 'bg-slate-600');
+                executeButton.classList.add('bg-slate-800', 'hover:bg-slate-700');
+                executeButton.innerHTML = `
+            <span>Execute</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+          `;
+            }
+        }
+
+        function startStatusPolling() {
+            if (statusPoller) return;
+
+            updateLiveStatus();
+            statusPoller = setInterval(() => {
+                updateLiveStatus();
+            }, 4000);
+        }
+
+        function stopStatusPolling() {
+            if (statusPoller) {
+                clearInterval(statusPoller);
+                statusPoller = null;
+            }
+        }
+
+        async function updateLiveStatus() {
+            try {
+                const response = await fetch('/api/system-status');
+                if (!response.ok) return;
+
+                const data = await response.json();
+
+                const serviceEl = document.getElementById('serviceStatus');
+                const serviceIndicator = document.getElementById('serviceIndicator');
+                if (serviceEl && data.service_status) {
+                    const isRunning = data.service_status === 'active (running)';
+                    serviceEl.textContent = isRunning ? 'Running' : 'Stopped';
+                    if (serviceIndicator) {
+                        serviceIndicator.className = `w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-500' : 'bg-slate-500'}`;
+                    }
+                }
+
+                const versionEl = document.getElementById('versionStatus');
+                if (versionEl && data.ais_catcher_version) {
+                    versionEl.textContent = data.ais_catcher_version;
+                }
+
+                const cpuEl = document.getElementById('cpuStatus');
+                if (cpuEl && data.process_cpu_usage !== undefined) {
+                    cpuEl.textContent = data.process_cpu_usage > 0 ? `${data.process_cpu_usage.toFixed(1)}%` : '-';
+                }
+
+                const memEl = document.getElementById('memStatus');
+                if (memEl && data.process_memory_usage !== undefined) {
+                    memEl.textContent = data.process_memory_usage > 0 ? `${data.process_memory_usage.toFixed(0)} MB` : '-';
+                }
+
+                // Keep the main cards fresh during operations too
+                updateMainDiagnosticCards(data);
+            } catch (error) {
+                console.error('Failed to update live status:', error);
+            }
+        }
+
+        async function executeSelectedAction() {
+            const select = document.getElementById('actionSelect');
+            const action = select.value;
+
+            if (!action) {
+                alert('Please select an operation from the list.');
+                select.focus();
+                return;
+            }
+
+            if (currentOperation) {
+                return;
+            }
+
+            // Handle confirmations for destructive actions
+            if (action === 'system-reboot' || action === 'update-all-reboot') {
+                if (!confirm('Are you sure you want to reboot the system? This will stop the AIS service temporarily.')) {
+                    return;
+                }
+            }
+            if (action === 'system-halt') {
+                if (!confirm('Are you sure you want to shut down the system? AIS-catcher will stop until manually powered back on.')) {
+                    return;
+                }
+            }
+            if (action === 'shutdown-cancel') {
+                if (!confirm('Cancel the currently scheduled shutdown/reboot?')) {
+                    return;
+                }
+            }
+            if (action === 'switch-managed') {
+                if (!confirm('Switch AIS-catcher to managed mode? This reinstalls the prebuilt package and AIS-catcher will manage its own configuration from then on. Your current config.json stays on disk but is no longer used.')) {
+                    return;
+                }
+            }
+            if (action === 'switch-unmanaged') {
+                if (!confirm('Switch AIS-catcher back to unmanaged (classic) mode? This reinstalls the prebuilt package and configuration returns to this control panel (config.json). Note: classic configuration is deprecated and will be removed in a future release.')) {
+                    return;
+                }
+            }
+            currentAction = action;
+            document.getElementById('progressOutput').innerHTML = '<span class="text-slate-500">Initializing sequence...</span><br>';
+            document.getElementById('progressTitle').textContent = getActionTitle(action);
+            setTerminalStatus('Running');
+            showProgress(true);
+
+            fetch('/api/system-action-start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action })
+            })
+                .then(async (resp) => {
+                    if (!resp.ok) {
+                        let message = 'Failed to start action';
+                        try {
+                            const data = await resp.json();
+                            if (data.error) message = data.error;
+                        } catch (e) {}
+                        throw new Error(message);
+                    }
+                    connectSSE(action);
+                })
+                .catch((err) => {
+                    appendOutput('\n<span class="text-rose-400">✗ Error: ' + err.message + '</span>\n');
+                    finishOperation('Failed', true);
+                });
+        }
+
+        function finishOperation(status, isError = false, connectionLost = false) {
+            setTerminalStatus(status, isError);
+            if (currentOperation) {
+                currentOperation.close();
+                currentOperation = null;
+            }
+            currentAction = null;
+
+            // Reset dropdown to default
+            const select = document.getElementById('actionSelect');
+            if (select && !connectionLost) {
+                select.value = '';
+            }
+
+            // Re-enable button
+            const executeButton = document.getElementById('executeButton');
+            executeButton.disabled = false;
+            executeButton.classList.remove('opacity-70', 'cursor-not-allowed', 'bg-slate-600');
+            executeButton.classList.add('bg-slate-800', 'hover:bg-slate-700');
+            executeButton.innerHTML = `
+          <span>Execute</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+      `;
+
+            // Ensure display stays visible to show logs
+            const progressDisplay = document.getElementById('progressDisplay');
+            progressDisplay.classList.remove('hidden');
+
+            // Reload page after connection lost
+            if (connectionLost) {
+                setTimeout(() => window.location.reload(), 3000);
+            }
+        }
+
+        function getActionTitle(action) {
+            const titles = {
+                'ais-update-prebuilt': 'AIS-catcher Update (Binary)',
+                'ais-update-source':   'AIS-catcher Update (Source)',
+                'switch-managed':      'Switch to Managed Mode',
+                'switch-unmanaged':    'Switch to Unmanaged Mode',
+                'control-update':      'Control Panel Update',
+                'control-restart':     'Control Panel Restart',
+                'update-all':          'Full Upgrade (AIS-catcher + Control)',
+                'update-all-reboot':   'Full Upgrade & Reboot',
+                'system-update':       'System Update (APT)',
+                'system-reboot':       'System Reboot',
+                'system-halt':         'System Shutdown',
+                'shutdown-cancel':     'Cancel Pending Shutdown'
+            };
+            return titles[action] || 'System Operation';
+        }
+
+        function blinkExecuteButton() {
+            const btn = document.getElementById('executeButton');
+            if (!btn) return;
+            let count = 0;
+            const interval = setInterval(() => {
+                btn.classList.toggle('ring-4');
+                btn.classList.toggle('ring-orange-400');
+                btn.classList.toggle('ring-offset-2');
+                if (++count >= 8) {
+                    clearInterval(interval);
+                    btn.classList.remove('ring-4', 'ring-orange-400', 'ring-offset-2');
+                }
+            }, 400);
+        }
+
+        function connectSSE(action) {
+            if (currentOperation) return;
+
+            currentOperation = new EventSource(`/system-action-progress?action=${action}`);
+
+            currentOperation.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'output') {
+                    appendOutput(data.content + '\n');
+                } else if (data.type === 'status') {
+                    setTerminalStatus(data.content);
+                } else if (data.type === 'complete') {
+                    appendOutput('\n<span class="text-emerald-400">✓ Operation completed successfully.</span>\n');
+
+                    let shouldReload = false;
+                    try {
+                        const result = JSON.parse(data.content);
+                        if (result.reload) shouldReload = true;
+                    } catch (e) {
+                        // Content might not be JSON, ignore
+                    }
+
+                    if (shouldReload) {
+                        appendOutput('\n<span class="text-amber-400">⟳ Page will reload in 5 seconds to reflect changes...</span>');
+                        setTimeout(() => window.location.reload(), 5000);
+                    } else {
+                        // Keep the console open — just silently refresh the cards
+                        appendOutput('\n<span class="text-slate-500">─── Select a new operation and press Execute to continue. ───</span>\n');
+                        setTimeout(() => updateSystemInfo(), 1500);
+                        // Extra refreshes to ensure new version number is picked up after binary install
+                        setTimeout(() => updateSystemInfo(), 4000);
+                        setTimeout(() => updateSystemInfo(), 8000);
+                    }
+
+                    finishOperation('Completed', false);
+                } else if (data.type === 'error') {
+                    appendOutput('\n<span class="text-rose-400">✗ Error: ' + data.content + '</span>\n');
+                    appendOutput('<span class="text-slate-500">→ Operation failed. Please check the logs above.</span>\n');
+                    finishOperation('Failed', true);
+                }
+            };
+
+            currentOperation.onerror = () => {
+                if (currentAction) {
+                    finishOperation('Connection Lost', true, true);
+                }
+            };
+        }
+
+        // ---------------------------------------------------------------
+        // Page wiring: pollers, update check, service action bar, logs
+        // ---------------------------------------------------------------
         document.addEventListener('DOMContentLoaded', function () {
             let eventSource = null;
             let currentLogSource = 'ais-catcher';
             let currentPriority = 'info';
 
-            updateStatus();
-            setInterval(updateStatus, 3000);
+            refreshDaemonCard();
+            setInterval(refreshDaemonCard, 3000);
+
+            // Poll software/diagnostic cards every 15 seconds when idle
+            setInterval(() => {
+                if (!currentOperation) updateSystemInfo();
+            }, 15000);
 
             // Check for updates on page load and every 15 minutes
             // Add 3-second delay on initial load to allow backend version check to complete
@@ -425,13 +1106,13 @@
 
                         // Show AIS-catcher card if not installed or update available
                         if (!data.ais_catcher_available) {
-                            aisCatcherCard.href = `/system?action=${aisAction}`;
+                            aisCatcherCard.dataset.action = aisAction;
                             aisCatcherCard.classList.remove('hidden');
                             aisCatcherTitle.textContent = 'AIS-catcher Not Installed';
-                            aisCatcherInfo.textContent = 'Click to view installation options';
+                            aisCatcherInfo.textContent = 'Click to select an installation action';
                             hasUpdates = true;
                         } else if (data.ais_catcher_update_available) {
-                            aisCatcherCard.href = `/system?action=${aisAction}`;
+                            aisCatcherCard.dataset.action = aisAction;
                             aisCatcherCard.classList.remove('hidden');
                             aisCatcherTitle.textContent = 'AIS-catcher Update Available';
                             // Show commit info if versions are the same
@@ -452,7 +1133,6 @@
 
                         // Show Control panel update if available
                         if (data.control_update_available) {
-                            controlCard.href = '/system?action=control-update';
                             controlCard.classList.remove('hidden');
                             controlInfo.textContent = `${data.control_current || 'Current'} → ${data.control_latest || 'Latest'}`;
                             hasUpdates = true;
@@ -466,7 +1146,33 @@
                     .catch(error => console.error('Error checking updates:', error));
             }
 
-            // Load initial logs with priority filter
+            // Resume a running maintenance action or pre-select one from the URL
+            fetch('/system-action-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.running && data.action) {
+                        const select = document.getElementById('actionSelect');
+                        if (select) select.value = data.action;
+
+                        currentAction = data.action;
+                        document.getElementById('progressTitle').textContent = getActionTitle(data.action);
+                        document.getElementById('progressOutput').innerHTML = ''; // Will be filled by history
+                        setTerminalStatus('Running');
+                        showProgress(true);
+
+                        connectSSE(data.action);
+                    } else {
+                        // Pre-select action from URL param (e.g. from update notification link)
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const preAction = urlParams.get('action');
+                        if (preAction) preselectAction(preAction);
+                    }
+                })
+                .catch(console.error);
+
+            // -----------------------------------------------------------
+            // Live logs
+            // -----------------------------------------------------------
             const logsContentDiv = document.getElementById('logs-content');
             logsContentDiv.innerHTML = '<div class="text-slate-500 italic text-sm" id="loading-message">Loading logs...</div>';
 
@@ -610,12 +1316,23 @@
 
             initializeSSE();
 
+            // -----------------------------------------------------------
+            // Service action buttons (start/stop/restart/enable/disable)
+            // -----------------------------------------------------------
+            const actionConfirms = {
+                'watchdog-on':      'Arm the reboot watchdog? The system will reboot automatically if AIS-catcher keeps failing.',
+                'watchdog-off':     'Disarm the reboot watchdog?',
+                'auto-restart-on':  'Enable automatic service restart on crash?',
+                'auto-restart-off': 'Disable automatic service restart on crash?'
+            };
+
             const handleAction = (e) => {
                 const button = e.target.closest('.action-button');
                 if (!button || operationInProgress) return;
 
                 e.preventDefault();
                 const action = button.getAttribute('data-action');
+                if (actionConfirms[action] && !confirm(actionConfirms[action])) return;
 
                 // Grey out entire action bar immediately
                 operationInProgress = true;
@@ -630,24 +1347,24 @@
                             if (action === 'restart' || action === 'enable' || action === 'disable') {
                                 setTimeout(() => {
                                     operationInProgress = false;
-                                    updateStatus();
+                                    refreshDaemonCard();
                                 }, action === 'restart' ? 3000 : 1000);
                             } else {
-                                // Reset operation flag before updateStatus so buttons get enabled
+                                // Reset operation flag before refresh so buttons get enabled
                                 operationInProgress = false;
-                                updateStatus();
+                                refreshDaemonCard();
                             }
                         } else {
                             alert('Action failed: ' + (data.message || 'Unknown error'));
                             operationInProgress = false;
-                            updateStatus();
+                            refreshDaemonCard();
                         }
                     })
                     .catch(err => {
                         console.error('Error:', err);
                         alert('Error: ' + err);
                         operationInProgress = false;
-                        updateStatus();
+                        refreshDaemonCard();
                     });
             };
 
@@ -655,7 +1372,7 @@
 
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) { if (eventSource) eventSource.close(); }
-                else { initializeSSE(); updateStatus(); }
+                else { initializeSSE(); refreshDaemonCard(); }
             });
 
             // Track whether the user has manually scrolled up

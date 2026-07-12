@@ -73,6 +73,8 @@ type SystemInfo struct {
 	KernelVersion          string    `json:"kernel_version"`           // Linux kernel version
 	ServiceStatus          string    `json:"service_status"`           // systemd service status
 	ServiceNRestarts       int       `json:"service_n_restarts"`       // number of times systemd restarted the service
+	ManagedMode            bool      `json:"managed_mode"`             // service is self-configured (-E flag in ExecStart)
+	ManagedPort            string    `json:"managed_port"`             // port of AIS-catcher's own web UI in managed mode
 	BuildVersion           string    `json:"build_version"`            // Git version/build info
 	ProcessID              int32     `json:"process_id"`
 	ProcessMemoryUsage     float64   `json:"process_memory_usage"` // in MB
@@ -161,16 +163,6 @@ func parseJournalJSON(line string) (msg string, priority int, ts string, ok bool
 		}
 	}
 	return msg, priority, ts, true
-}
-
-type Control struct {
-	CssVersion      string `json:"css_version"`
-	JsVersion       string `json:"js_version"`
-	Title           string `json:"title"`
-	Status          string `json:"status"`
-	Uptime          string `json:"uptime"`
-	ServiceEnabled  bool   `json:"service_enabled"`
-	ContentTemplate string `json:"content_template"`
 }
 
 type ConfigJSON struct {
@@ -367,16 +359,16 @@ func getActionScript(action string) (string, bool) {
         echo "System update completed"`
 
 	case "ais-update-prebuilt":
-		script = `echo "Starting AIS-catcher prebuilt update..." && \
+		script = fmt.Sprintf(`echo "Starting AIS-catcher prebuilt update..." && \
         echo "Downloading and executing installation script..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p && \
-        echo "AIS-catcher installation completed"`
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p%s && \
+        echo "AIS-catcher installation completed"`, managedInstallFlag())
 
 	case "ais-update-source":
-		script = `echo "Starting AIS-catcher source update..." && \
+		script = fmt.Sprintf(`echo "Starting AIS-catcher source update..." && \
         echo "Downloading and executing installation script..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash && \
-        echo "AIS-catcher installation completed"`
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s --%s && \
+        echo "AIS-catcher installation completed"`, managedInstallFlag())
 
 	case "control-update":
 		script = `echo "Starting AIS-catcher Control update..." && \
@@ -400,44 +392,38 @@ func getActionScript(action string) (string, bool) {
 		reload = true
 
 	case "update-all":
-		script = `echo "Starting full system update..." && \
+		script = fmt.Sprintf(`echo "Starting full system update..." && \
         echo "Step 1: Installing AIS-catcher..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p%s && \
         echo "Step 2: Installing AIS-catcher Control..." && \
         curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
-        echo "Full system update completed"`
+        echo "Full system update completed"`, managedInstallFlag())
 		reload = true
 
 	case "update-all-reboot":
-		script = `echo "Starting full system update with reboot..." && \
+		script = fmt.Sprintf(`echo "Starting full system update with reboot..." && \
         echo "Step 1: Installing AIS-catcher..." && \
-        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p%s && \
         echo "Step 2: Installing AIS-catcher Control..." && \
         curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher-control/main/install_ais_catcher_control.sh | bash && \
         echo "Full system update completed" && \
         echo "Step 3: Preparing for reboot..." && \
-        reboot`
+        reboot`, managedInstallFlag())
 		reload = true
 
-	case "watchdog-on":
-		script = `echo "Arming reboot on failure..." && \
-        bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install) --set-reboot-on-failure" && \
-        echo "Reboot on failure armed successfully"`
+	case "switch-managed":
+		script = `echo "Switching AIS-catcher to managed mode..." && \
+        echo "Reinstalling prebuilt package with managed service configuration..." && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p -M && \
+        echo "AIS-catcher now runs in managed mode"`
+		reload = true
 
-	case "watchdog-off":
-		script = `echo "Disarming reboot on failure..." && \
-        bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install) --unset-reboot-on-failure" && \
-        echo "Reboot on failure disarmed successfully"`
-
-	case "auto-restart-on":
-		script = `echo "Enabling auto-restart on crash..." && \
-        bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install) --set-auto-restart" && \
-        echo "Auto-restart on crash enabled successfully"`
-
-	case "auto-restart-off":
-		script = `echo "Disabling auto-restart on crash..." && \
-        bash -c "$(curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install) --unset-auto-restart" && \
-        echo "Auto-restart on crash disabled successfully"`
+	case "switch-unmanaged":
+		script = `echo "Switching AIS-catcher to unmanaged (classic) mode..." && \
+        echo "Reinstalling prebuilt package with classic service configuration..." && \
+        curl -fsSL https://raw.githubusercontent.com/jvde-github/AIS-catcher/main/scripts/aiscatcher-install | bash -s -- -p && \
+        echo "AIS-catcher now runs in unmanaged mode"`
+		reload = true
 
 	case "shutdown-cancel":
 		script = `echo "Cancelling pending shutdown/reboot..." && \
@@ -445,14 +431,6 @@ func getActionScript(action string) (string, bool) {
         systemctl stop ais-catcher-reboot.service ; \
         echo "Scheduled shutdown/reboot has been cancelled"`
 
-	case "ais-reset-failed":
-		script = `echo "Resetting AIS-catcher failed state..." && \
-        shutdown -c ; \
-        systemctl stop ais-catcher-reboot.service ; \
-        systemctl reset-failed ais-catcher && \
-        echo "Failed state cleared" && \
-        systemctl start ais-catcher && \
-        echo "AIS-catcher service started"`
 	}
 
 	return script, reload
@@ -1017,6 +995,9 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 	serviceStatus := getServiceStatus()
 	info.ServiceStatus = serviceStatus
 
+	info.ManagedMode, _ = getManagedMode()
+	info.ManagedPort = managedPort()
+
 	// Collect NRestarts from systemd
 	{
 		nrCtx, nrCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1314,6 +1295,11 @@ func init() {
 			err := templates.ExecuteTemplate(&buf, name, data)
 			return template.HTML(buf.String()), err
 		},
+		"managedMode": func() bool {
+			managed, _ := getManagedMode()
+			return managed
+		},
+		"managedPort": managedPort,
 	}
 
 	templates = template.New("").Funcs(funcMap)
@@ -1333,7 +1319,6 @@ func init() {
 		"templates/content/device-setup.html",
 		"templates/content/integrity-error.html",
 		"templates/content/server-setup.html",
-		"templates/content/system.html",
 		"templates/content/edit-config-json.html",
 		"templates/content/edit-config-cmd.html",
 		"templates/content/tcp-servers.html",
@@ -1661,10 +1646,9 @@ func acceptLicenseHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
-func authenticate(username, password string) bool {
-	if username != defaultUsername {
-		return false
-	}
+// Login is password-only; defaultUsername survives purely as the internal
+// marker stored in sessions.
+func authenticate(password string) bool {
 	return verifyPassword(password, getConfig().PasswordHash)
 }
 
@@ -1684,7 +1668,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username := r.FormValue("username")
 	password := r.FormValue("password")
 
 	ip := clientIP(r)
@@ -1698,7 +1681,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if authenticate(username, password) {
+	if authenticate(password) {
 		loginAttempts.recordSuccess(ip)
 
 		// upgrade legacy SHA-256 hash to bcrypt
@@ -1708,7 +1691,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		sessionID := sessionManager.Create(username)
+		sessionID := sessionManager.Create(defaultUsername)
 		http.SetCookie(w, &http.Cookie{
 			Name:     sessionCookieName,
 			Value:    sessionID,
@@ -1905,14 +1888,29 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	controlData := Control{
-		CssVersion:      cssVersion,
-		JsVersion:       jsVersion,
-		Title:           "Control Dashboard",
-		ContentTemplate: "control",
+	// Return immediately with cached data (even if stale) for fast page load
+	cachedSysInfo.RLock()
+	sysInfo := cachedSysInfo.info
+	stale := time.Since(cachedSysInfo.lastFetch) > cachedSysInfo.cacheTTL
+	cachedSysInfo.RUnlock()
+	if sysInfo.BuildVersion == "" {
+		// First time, need to collect at least basic info
+		sysInfo = getCachedSystemInfo()
+	} else if stale {
+		// Trigger async refresh if data is getting old
+		go func() {
+			getCachedSystemInfo() // Refresh in background
+		}()
 	}
 
-	renderTemplate(w, "layout.html", controlData)
+	renderTemplate(w, "layout.html", map[string]interface{}{
+		"CssVersion":      cssVersion,
+		"JsVersion":       jsVersion,
+		"Title":           "Control Dashboard",
+		"ContentTemplate": "control",
+		"SystemInfo":      sysInfo,
+		"MemoryGB":        float64(sysInfo.TotalMemory) / 1073741824.0,
+	})
 }
 
 func getServiceStatus() string {
@@ -1943,6 +1941,92 @@ func getServiceStatus() string {
 		return "active (running)"
 	}
 	return status
+}
+
+// managedModeCache caches the detected run mode briefly so page renders and
+// action starts don't each shell out to systemctl, while a mode change made
+// by an install/update is still picked up within seconds.
+var managedModeCache = struct {
+	sync.Mutex
+	managed bool
+	bind    string
+	checked time.Time
+}{}
+
+// getManagedMode reports whether ais-catcher.service runs in managed mode
+// (AIS-catcher configures itself, started with -E <config> <bind>) and the
+// bind address following the flag, e.g. "0.0.0.0:8118". In unmanaged mode
+// the service reads config.json/config.cmd owned by this panel.
+func getManagedMode() (bool, string) {
+	managedModeCache.Lock()
+	defer managedModeCache.Unlock()
+	if time.Since(managedModeCache.checked) < 3*time.Second {
+		return managedModeCache.managed, managedModeCache.bind
+	}
+
+	managed := false
+	bind := ""
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "systemctl", "show", "ais-catcher.service", "--property=ExecStart").Output()
+	if err == nil {
+		managed, bind = parseExecStartManaged(string(out))
+	}
+
+	managedModeCache.managed = managed
+	managedModeCache.bind = bind
+	managedModeCache.checked = time.Now()
+	return managed, bind
+}
+
+// parseExecStartManaged extracts the run mode from systemctl's ExecStart
+// property, e.g.:
+// ExecStart={ path=/usr/bin/AIS-catcher ; argv[]=/usr/bin/AIS-catcher -E /etc/AIS-catcher/aiscatcher.json 0.0.0.0:8118 ; ignore_errors=no ; ... }
+func parseExecStartManaged(line string) (managed bool, bind string) {
+	if idx := strings.Index(line, "argv[]="); idx >= 0 {
+		args := line[idx+len("argv[]="):]
+		if end := strings.Index(args, " ; "); end >= 0 {
+			args = args[:end]
+		}
+		fields := strings.Fields(args)
+		for i, f := range fields {
+			if f == "-E" {
+				managed = true
+				// argv is: ... -E <config file> <bind address>
+				if i+2 < len(fields) {
+					bind = fields[i+2]
+				}
+				break
+			}
+		}
+	}
+	if managed && bind == "" {
+		bind = "0.0.0.0:8118"
+	}
+	return managed, bind
+}
+
+// managedPort returns the TCP port of AIS-catcher's own web UI in managed
+// mode, or "" when unmanaged.
+func managedPort() string {
+	managed, bind := getManagedMode()
+	if !managed {
+		return ""
+	}
+	if idx := strings.LastIndex(bind, ":"); idx >= 0 {
+		return bind[idx+1:]
+	}
+	return bind
+}
+
+// managedInstallFlag preserves the current run mode across reinstalls: an
+// update of a managed system must pass -M or the installer would rewrite the
+// unit back to unmanaged.
+func managedInstallFlag() string {
+	if managed, _ := getManagedMode(); managed {
+		return " -M"
+	}
+	return ""
 }
 
 func getServiceUptime() string {
@@ -2410,8 +2494,28 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // makeConfigHandler creates a handler for config pages that follow the same pattern
+// configEditingBlocked guards config-editing endpoints when the service runs
+// in managed mode: AIS-catcher owns its configuration there, so edits to
+// config.json/config.cmd would silently have no effect. GETs are sent to the
+// system page (where the mode is explained), writes are refused.
+func configEditingBlocked(w http.ResponseWriter, r *http.Request) bool {
+	managed, _ := getManagedMode()
+	if !managed {
+		return false
+	}
+	if r.Method == http.MethodGet {
+		http.Redirect(w, r, "/control", http.StatusSeeOther)
+	} else {
+		http.Error(w, "Configuration is managed by AIS-catcher itself (managed mode)", http.StatusConflict)
+	}
+	return true
+}
+
 func makeConfigHandler(title, contentTemplate string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if configEditingBlocked(w, r) {
+			return
+		}
 		if r.Method == http.MethodGet {
 			renderTemplateWithConfig(w, title, contentTemplate)
 		} else if r.Method == http.MethodPost {
@@ -2462,6 +2566,18 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 	webviewerActive := false
 	serversJSON := template.JS("[]")
 	requestedPort := ""
+
+	// In managed mode the embedded viewer page is not used; send the browser
+	// to AIS-catcher's own dashboard on the -E port, at the same host the
+	// panel is being reached on.
+	if managed, _ := getManagedMode(); managed {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		http.Redirect(w, r, "http://"+net.JoinHostPort(host, managedPort()), http.StatusTemporaryRedirect)
+		return
+	}
 
 	jsonContent, err := readConfigJSON()
 	if err == nil && len(jsonContent) > 0 {
@@ -2528,6 +2644,10 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func webviewerToggleHandler(w http.ResponseWriter, r *http.Request) {
+	if managed, _ := getManagedMode(); managed {
+		sendJSONResponse(w, false, "Configuration is managed by AIS-catcher itself (managed mode)", http.StatusConflict)
+		return
+	}
 	if r.Method != http.MethodPost {
 		sendJSONResponse(w, false, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
@@ -2617,6 +2737,9 @@ func webviewerToggleHandler(w http.ResponseWriter, r *http.Request) {
 // makeReadOnlyConfigHandler creates a handler for GET-only config pages
 func makeReadOnlyConfigHandler(title, contentTemplate string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if configEditingBlocked(w, r) {
+			return
+		}
 		if r.Method == http.MethodGet {
 			renderTemplateWithConfig(w, title, contentTemplate)
 		} else {
@@ -2687,6 +2810,10 @@ func getFileVersion(staticFSys fs.FS, paths ...string) string {
 }
 
 func apiConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if managed, _ := getManagedMode(); managed && r.Method == http.MethodPost {
+		http.Error(w, "Configuration is managed by AIS-catcher itself (managed mode)", http.StatusConflict)
+		return
+	}
 	if r.Method == http.MethodGet {
 		jsonContent, err := readConfigJSON()
 		if err != nil {
@@ -2756,7 +2883,127 @@ func serviceActionHandler(action string) http.HandlerFunc {
 	}
 }
 
+const (
+	serviceUnitFilePath   = "/etc/systemd/system/ais-catcher.service"
+	rebootServiceUnitName = "ais-catcher-reboot.service"
+	// Watchdog defaults, matching the install script's --set-reboot-on-failure
+	watchdogBurst    = "3"
+	watchdogInterval = "1800"
+)
+
+// unitSetKey replaces an existing "key=" line in unit-file lines or inserts
+// it right after the given section header — the Go equivalent of the install
+// script's sed_replace_or_insert.
+func unitSetKey(lines []string, key, val, section string) []string {
+	prefix := key + "="
+	for i, l := range lines {
+		if strings.HasPrefix(l, prefix) {
+			lines[i] = key + "=" + val
+			return lines
+		}
+	}
+	header := "[" + section + "]"
+	for i, l := range lines {
+		if strings.TrimSpace(l) == header {
+			out := append([]string{}, lines[:i+1]...)
+			out = append(out, key+"="+val)
+			return append(out, lines[i+1:]...)
+		}
+	}
+	return lines
+}
+
+func unitRemoveKey(lines []string, key string) []string {
+	prefix := key + "="
+	out := lines[:0]
+	for _, l := range lines {
+		if !strings.HasPrefix(l, prefix) {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func unitHasKey(lines []string, key string) bool {
+	prefix := key + "="
+	for _, l := range lines {
+		if strings.HasPrefix(l, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// applyServicePolicy edits the systemd unit for the watchdog / auto-restart
+// toggles — the same keys the install script's --set-reboot-on-failure and
+// --set-auto-restart set, applied natively so no script download is needed.
+func applyServicePolicy(action string, lines []string) []string {
+	switch action {
+	case "watchdog-on":
+		lines = unitSetKey(lines, "StartLimitBurst", watchdogBurst, "Unit")
+		lines = unitSetKey(lines, "StartLimitIntervalSec", watchdogInterval, "Unit")
+		if !unitHasKey(lines, "OnFailure") {
+			lines = unitSetKey(lines, "OnFailure", rebootServiceUnitName, "Unit")
+		}
+	case "watchdog-off":
+		lines = unitSetKey(lines, "StartLimitBurst", "0", "Unit")
+		lines = unitSetKey(lines, "StartLimitIntervalSec", "0", "Unit")
+		// With burst=0 OnFailure would fire on every crash, not just limit-hit
+		lines = unitRemoveKey(lines, "OnFailure")
+	case "auto-restart-on":
+		lines = unitSetKey(lines, "Restart", "always", "Service")
+	case "auto-restart-off":
+		lines = unitSetKey(lines, "Restart", "no", "Service")
+	}
+	return lines
+}
+
+// servicePolicyHandler toggles the reboot watchdog / auto-restart policy by
+// editing the service unit and reloading systemd. Policy directives take
+// effect on the next crash/start, so the service is not restarted.
+func servicePolicyHandler(action string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			sendJSONResponse(w, false, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		data, err := os.ReadFile(serviceUnitFilePath)
+		if err != nil {
+			sendJSONResponse(w, false, "ais-catcher.service not found — is AIS-catcher installed?", http.StatusConflict)
+			return
+		}
+		if action == "watchdog-on" {
+			if _, err := os.Stat("/etc/systemd/system/" + rebootServiceUnitName); err != nil {
+				sendJSONResponse(w, false, rebootServiceUnitName+" not found — update AIS-catcher first", http.StatusConflict)
+				return
+			}
+		}
+
+		lines := applyServicePolicy(action, strings.Split(string(data), "\n"))
+		if err := writeFileAtomic(serviceUnitFilePath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+			log.Printf("Service policy write error (%s): %v", action, err)
+			sendJSONResponse(w, false, "failed to write service file", http.StatusInternalServerError)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := exec.CommandContext(ctx, "systemctl", "daemon-reload").Run(); err != nil {
+			log.Printf("daemon-reload failed after %s: %v", action, err)
+			sendJSONResponse(w, false, "systemd reload failed", http.StatusInternalServerError)
+			return
+		}
+		exec.CommandContext(ctx, "systemctl", "reset-failed", "ais-catcher.service").Run()
+
+		sendJSONResponse(w, true, "", http.StatusOK)
+	}
+}
+
 func editConfigJSONHandler(w http.ResponseWriter, r *http.Request) {
+	if configEditingBlocked(w, r) {
+		return
+	}
 	if r.Method == http.MethodGet {
 		jsonContent, err := readConfigJSON()
 		if err != nil {
@@ -2798,6 +3045,9 @@ func editConfigJSONHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
+	if configEditingBlocked(w, r) {
+		return
+	}
 	if r.Method == http.MethodGet {
 		cmdContent, err := os.ReadFile(configCmdFilePath)
 		if err != nil {
@@ -2830,39 +3080,14 @@ func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type SystemInfoTemplate struct {
-	SystemInfo SystemInfo
-	MemoryGB   float64
-	CssVersion string
-	JsVersion  string
-}
-
-func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
-	// Return immediately with cached data (even if stale) for fast page load
-	cachedSysInfo.RLock()
-	sysInfo := cachedSysInfo.info
-	stale := time.Since(cachedSysInfo.lastFetch) > cachedSysInfo.cacheTTL
-	cachedSysInfo.RUnlock()
-	if sysInfo.BuildVersion == "" {
-		// First time, need to collect at least basic info
-		sysInfo = getCachedSystemInfo()
-	} else if stale {
-		// Trigger async refresh if data is getting old
-		go func() {
-			getCachedSystemInfo() // Refresh in background
-		}()
+// systemRedirectHandler preserves old /system links (bookmarks, update-card
+// deep links with ?action=...) now that the page is merged into /control.
+func systemRedirectHandler(w http.ResponseWriter, r *http.Request) {
+	target := "/control"
+	if r.URL.RawQuery != "" {
+		target += "?" + r.URL.RawQuery
 	}
-
-	memoryGB := float64(sysInfo.TotalMemory) / 1073741824.0
-
-	renderTemplate(w, "layout.html", map[string]interface{}{
-		"CssVersion":      cssVersion,
-		"JsVersion":       jsVersion,
-		"Title":           "System Information",
-		"ContentTemplate": "system",
-		"SystemInfo":      sysInfo,
-		"MemoryGB":        memoryGB,
-	})
+	http.Redirect(w, r, target, http.StatusMovedPermanently)
 }
 
 // updateCheckHandler provides update status with 15-minute caching
@@ -3085,6 +3310,10 @@ func main() {
 	http.HandleFunc("/api/enable", authMiddleware(serviceActionHandler("enable")))
 	http.HandleFunc("/api/disable", authMiddleware(serviceActionHandler("disable")))
 	http.HandleFunc("/api/reset-failed", authMiddleware(serviceActionHandler("reset-failed")))
+	http.HandleFunc("/api/watchdog-on", authMiddleware(servicePolicyHandler("watchdog-on")))
+	http.HandleFunc("/api/watchdog-off", authMiddleware(servicePolicyHandler("watchdog-off")))
+	http.HandleFunc("/api/auto-restart-on", authMiddleware(servicePolicyHandler("auto-restart-on")))
+	http.HandleFunc("/api/auto-restart-off", authMiddleware(servicePolicyHandler("auto-restart-off")))
 	http.HandleFunc("/api/recent-logs", authMiddleware(recentLogsHandler))
 	http.HandleFunc("/logs-stream", authMiddleware(logsStreamHandler))
 	http.HandleFunc("/status", authMiddleware(statusHandler))
@@ -3098,7 +3327,7 @@ func main() {
 	http.HandleFunc("/serial-list", authMiddleware(serialListHandler))
 	http.HandleFunc("/editjson", authMiddleware(editConfigJSONHandler))
 	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
-	http.HandleFunc("/system", authMiddleware(systemInfoHandler))
+	http.HandleFunc("/system", authMiddleware(systemRedirectHandler))
 	http.HandleFunc("/api/update-check", authMiddleware(updateCheckHandler))
 	http.HandleFunc("/api/system-action-start", authMiddleware(systemActionStartHandler))
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))

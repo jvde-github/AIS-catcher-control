@@ -165,9 +165,6 @@
                 <p class="text-sm text-slate-500 mb-4">Authentication required to continue.</p>
                 <div id="login-error" class="hidden mb-3 text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></div>
                 <form id="login-form" onsubmit="submitLogin(event)" class="space-y-3">
-                    <input id="login-username" name="username" type="text" autocomplete="username"
-                        placeholder="Username"
-                        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400" />
                     <input id="login-password" name="password" type="password" autocomplete="current-password"
                         placeholder="Password"
                         class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400" />
@@ -306,7 +303,7 @@
             // Replace Start/Restart button with Login
             const srBtn = document.getElementById('nav-start-restart');
             if (srBtn) {
-                srBtn.onclick = () => { pendingAction = null; document.getElementById('login-overlay').classList.add('open'); setTimeout(() => document.getElementById('login-username').focus(), 50); };
+                srBtn.onclick = () => { pendingAction = null; document.getElementById('login-overlay').classList.add('open'); setTimeout(() => document.getElementById('login-password').focus(), 50); };
                 document.getElementById('nav-sr-icon').innerHTML = '<path d="M480-120v-80h280v-560H480v-80h280q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H480Zm-80-160-55-58 102-102H120v-80h327L345-622l55-58 200 200-200 200Z"/>';
                 document.getElementById('nav-sr-label').textContent = 'Login';
             }
@@ -425,7 +422,7 @@
             pendingAction = callback;
             const overlay = document.getElementById('login-overlay');
             overlay.classList.add('open');
-            setTimeout(() => document.getElementById('login-username').focus(), 50);
+            setTimeout(() => document.getElementById('login-password').focus(), 50);
         }
 
         function closeLoginModal() {
@@ -437,7 +434,6 @@
 
         function submitLogin(e) {
             e.preventDefault();
-            const username = document.getElementById('login-username').value;
             const password = document.getElementById('login-password').value;
             const submitBtn = document.getElementById('login-submit');
             const errorEl = document.getElementById('login-error');
@@ -446,7 +442,7 @@
             submitBtn.textContent = 'Signing in...';
             errorEl.classList.add('hidden');
 
-            const body = new URLSearchParams({ username, password });
+            const body = new URLSearchParams({ password });
             fetch('/login', {
                 method: 'POST',
                 credentials: 'include',
