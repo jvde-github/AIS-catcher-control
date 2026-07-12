@@ -937,7 +937,6 @@
                 return;
             }
 
-            // Handle confirmations for destructive actions
             if (action === 'system-reboot' || action === 'update-all-reboot') {
                 if (!confirm('Are you sure you want to reboot the system? This will stop the AIS service temporarily.')) {
                     return;
@@ -1181,7 +1180,6 @@
                 initializeSSE();
             };
 
-            // Log Processing
             // priority: 0=emerg,1=alert,2=crit,3=err,4=warning,5=notice,6=info,7=debug
             function formatLogLine(message, priority, time) {
                 const div = document.createElement('div');
@@ -1236,7 +1234,6 @@
 
                 eventSource.onmessage = function (event) {
                     try {
-                        // Remove loading message if it still exists
                         const loadingMsg = document.getElementById('loading-message');
                         if (loadingMsg) loadingMsg.remove();
 
@@ -1244,7 +1241,6 @@
                         const newLog = formatLogLine(logMsg.message, logMsg.priority, logMsg.time);
                         logsContentDiv.appendChild(newLog);
 
-                        // Limit the number of log lines to prevent memory issues
                         const maxLogs = 1000;
                         while (logsContentDiv.children.length > maxLogs) {
                             logsContentDiv.removeChild(logsContentDiv.firstChild);
@@ -1286,7 +1282,6 @@
                 const action = button.getAttribute('data-action');
                 if (actionConfirms[action] && !confirm(actionConfirms[action])) return;
 
-                // Grey out entire action bar immediately
                 operationInProgress = true;
                 const actionBar = document.getElementById('action-bar');
                 actionBar.classList.add('opacity-50', 'pointer-events-none');

@@ -37,8 +37,6 @@ var (
 	ansiEscape   = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 )
 
-// Embedding the templates and static files
-
 //go:embed templates/*
 var templatesFS embed.FS
 
@@ -165,7 +163,6 @@ func parseJournalJSON(line string) (msg string, priority int, ts string, ok bool
 	return msg, priority, ts, true
 }
 
-// Global state for system actions
 type SystemActionState struct {
 	sync.Mutex
 	IsRunning   bool
@@ -294,14 +291,11 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 	// Attach-only: actions are started via POST /api/system-action-start (CSRF).
 	globalActionState.Lock()
 	if globalActionState.IsRunning {
-		// If an action is running, we can only attach to it if the requested action matches
-		// or if no specific action was requested (just viewing status)
 		if requestedAction != "" && requestedAction != globalActionState.ActionName {
 			globalActionState.Unlock()
 			sendSSEMessage(w, flusher, "error", "Another system action is already in progress")
 			return
 		}
-		// Proceed to attach
 	} else {
 		// Not running: replay the recent result for late-connecting clients.
 		if globalActionState.Result != nil {
@@ -322,23 +316,18 @@ func systemActionProgressHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Subscribe to updates
 	msgChan := make(chan SSEMessage, 100)
 	globalActionState.Subscribers[msgChan] = true
 
-	// Send history immediately
 	history := make([]string, len(globalActionState.Logs))
 	copy(history, globalActionState.Logs)
 
 	globalActionState.Unlock()
 
-	// Send history
 	for _, log := range history {
 		sendSSEMessage(w, flusher, "output", log)
 	}
 
-	// Listen for new messages
-	// Use r.Context().Done() to detect client disconnect
 	ctx := r.Context()
 
 	for {
@@ -405,10 +394,8 @@ func systemActionStartHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func runSystemAction(actionName, script string, reload bool) {
-	// Create a unique unit name for this execution
 	unitName := fmt.Sprintf("ais-update-%d", time.Now().UnixNano())
 
-	// Check if systemd is available
 	useSystemd := false
 	if _, err := os.Stat("/run/systemd/system"); err == nil {
 		useSystemd = true
@@ -419,7 +406,6 @@ func runSystemAction(actionName, script string, reload bool) {
 	defer cancel()
 
 	if useSystemd {
-		// Set proper unit properties for systemd-run
 		runCmd = exec.CommandContext(ctx, "systemd-run",
 			"--unit="+unitName,
 			"--property=Type=oneshot",
@@ -427,12 +413,9 @@ func runSystemAction(actionName, script string, reload bool) {
 			"--collect",
 			"/bin/bash", "-c", script)
 	} else {
-		// Run directly
 		runCmd = exec.CommandContext(ctx, "/bin/bash", "-c", script)
 	}
 
-	// Set environment variables for systemctl to work properly
-	// Copy the parent environment and add critical systemd variables
 	runCmd.Env = os.Environ()
 	// Ensure systemctl can communicate with systemd even in non-interactive contexts
 	runCmd.Env = append(runCmd.Env,
@@ -452,7 +435,6 @@ func runSystemAction(actionName, script string, reload bool) {
 		return
 	}
 
-	// Stream output
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -478,7 +460,6 @@ func broadcastLog(content string) {
 	globalActionState.Lock()
 	defer globalActionState.Unlock()
 
-	// Append to history (limit to 1000 lines)
 	if len(globalActionState.Logs) >= 1000 {
 		globalActionState.Logs = globalActionState.Logs[1:]
 	}
@@ -704,7 +685,6 @@ func getCachedSystemInfo() SystemInfo {
 	}
 	cachedSysInfo.RUnlock()
 
-	// Need to fetch new data
 	cachedSysInfo.Lock()
 	defer cachedSysInfo.Unlock()
 
@@ -736,7 +716,6 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 			info.ProcessCPUUsage = processCPUPercent(pid, utime+stime, info.ProcessStartTime)
 		}
 	} else {
-		// Process not found - reset all process-related fields
 		info.ProcessID = 0
 		info.ProcessMemoryUsage = 0
 		info.ProcessCPUUsage = 0
@@ -748,7 +727,6 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		info.SystemCPUUsage = pct
 	}
 
-	// Keep existing system info collection
 	info.OS = runtime.GOOS
 	info.Architecture = runtime.GOARCH
 
@@ -764,7 +742,6 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 	info.ManagedMode, _ = getManagedMode()
 	info.ManagedPort = managedPort()
 
-	// Collect NRestarts from systemd
 	{
 		nrCtx, nrCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer nrCancel()
@@ -778,13 +755,9 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		}
 	}
 
-	// Only check version if no action is running or if service is running
 	skipVersionCheck := isActionRunning && serviceStatus != "active (running)"
 
-	if skipVersionCheck {
-		// Keep existing version info during updates - don't log repeatedly
-		// Version info is preserved from previous checks in cached info
-	} else {
+	if !skipVersionCheck {
 		// reset so values from a previously installed binary never survive a reinstall
 		info.AISCatcherCommit = ""
 		info.AISCatcherBuildType = ""
@@ -836,7 +809,6 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 					info.AISCatcherDescribe = ""
 				}
 
-				// Try to get commit directly from JSON if available
 				if commitVal, ok := jsonOutput["commit"]; ok {
 					if commitStr, ok := commitVal.(string); ok && commitStr != "" {
 						info.AISCatcherCommit = commitStr
@@ -849,7 +821,6 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 				// Parse build type from describe string (format: v0.66-0-g1abc2def or v0.66-123-g1abc2def)
 				describe := info.AISCatcherDescribe
 				if idx := strings.LastIndex(describe, "-g"); idx != -1 {
-					// If we didn't get commit from JSON, extract from describe
 					if info.AISCatcherCommit == "" {
 						info.AISCatcherCommit = describe[idx+2:] // Extract hash after '-g'
 						if len(info.AISCatcherCommit) > 7 {
@@ -857,8 +828,6 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 						}
 					}
 
-					// Find the build number between version and -g
-					// Format: v0.66-123-g1abc2def
 					parts := strings.Split(describe[:idx], "-")
 					if len(parts) >= 2 {
 						buildNum := parts[len(parts)-1]
@@ -876,7 +845,6 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		}
 	}
 
-	// Get CPU Info
 	if cpuinfo, err := os.ReadFile("/proc/cpuinfo"); err == nil {
 		scanner := bufio.NewScanner(strings.NewReader(string(cpuinfo)))
 		for scanner.Scan() {
@@ -888,7 +856,6 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		}
 	}
 
-	// Get Memory Info
 	if meminfo, err := os.ReadFile("/proc/meminfo"); err == nil {
 		scanner := bufio.NewScanner(strings.NewReader(string(meminfo)))
 		for scanner.Scan() {
@@ -905,7 +872,6 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		}
 	}
 
-	// Get Kernel Version
 	if kernel, err := exec.Command("uname", "-r").Output(); err == nil {
 		info.KernelVersion = strings.TrimSpace(string(kernel))
 	}
@@ -1014,7 +980,6 @@ func checkControlLatestVersion() {
 		Timeout: 5 * time.Second,
 	}
 
-	// Get the latest commit from main branch
 	resp, err := client.Get("https://api.github.com/repos/jvde-github/AIS-catcher-control/commits/main")
 	if err != nil {
 		log.Printf("Failed to check Control latest version: %v", err)
@@ -1046,7 +1011,6 @@ func checkControlLatestVersion() {
 	info.ControlLatestCommit = commit.SHA[:7]
 	info.ControlLastChecked = time.Now()
 
-	// Compare raw short commit hash against latest commit on main
 	if buildCommit != "unknown" && buildCommit != "" {
 		current := buildCommit
 		if len(current) > 7 {
@@ -1139,7 +1103,6 @@ func (sm *SessionManager) Create(username string) string {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	// Generate a secure random session ID
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		// crypto/rand failure means the OS entropy pool is broken — do not
@@ -1382,12 +1345,7 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 	return os.Rename(tmpName, path)
 }
 
-// Authentication functions
-
 func licenseHandler(w http.ResponseWriter, r *http.Request) {
-	// Check if user is authenticated to determine if we should show the "Accept" button or just the license
-	// For now, we just show the license page.
-	// If we wanted to hide the accept button for logged-in users, we could check the cookie here.
 
 	data := map[string]interface{}{
 		"CssVersion": cssVersion,
@@ -1617,7 +1575,6 @@ func serialListHandler(w http.ResponseWriter, r *http.Request) {
 
 	devices := []string{}
 
-	// Add USB serial devices from by-id if directory exists
 	if entries, err := os.ReadDir("/dev/serial/by-id"); err == nil {
 		for _, entry := range entries {
 			if !entry.IsDir() {
@@ -1626,11 +1583,9 @@ func serialListHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Check /dev for serial devices
 	if entries, err := os.ReadDir("/dev"); err == nil {
 		for _, entry := range entries {
 			name := entry.Name()
-			// Common serial device patterns
 			if strings.HasPrefix(name, "ttyUSB") || // USB serial devices
 				strings.HasPrefix(name, "ttyACM") || // USB ACM devices
 				strings.HasPrefix(name, "ttyAMA") || // Raspberry Pi and others
@@ -1638,7 +1593,6 @@ func serialListHandler(w http.ResponseWriter, r *http.Request) {
 				name == "serial0" || name == "serial1" { // Raspberry Pi aliases
 
 				devicePath := "/dev/" + name
-				// Verify it's a character device
 				if stat, err := os.Stat(devicePath); err == nil && (stat.Mode()&os.ModeCharDevice) != 0 {
 					devices = append(devices, devicePath)
 				}
@@ -1665,10 +1619,7 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 		// First time, need to collect at least basic info
 		sysInfo = getCachedSystemInfo()
 	} else if stale {
-		// Trigger async refresh if data is getting old
-		go func() {
-			getCachedSystemInfo() // Refresh in background
-		}()
+		go getCachedSystemInfo()
 	}
 
 	renderTemplate(w, "layout.html", map[string]interface{}{
@@ -1941,7 +1892,6 @@ func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("failed to read request body: %v", err)
 	}
 
-	// Validate the JSON data
 	var jsonMap map[string]interface{}
 	err = json.Unmarshal(body, &jsonMap)
 	if err != nil {
@@ -1949,7 +1899,6 @@ func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("invalid JSON: %v", err)
 	}
 
-	// Check that "config" is "aiscatcher" and "version" is 1
 	configValue, ok := jsonMap["config"].(string)
 	if !ok || configValue != "aiscatcher" {
 		log.Printf("Config validation failed: config=%v, ok=%v", configValue, ok)
@@ -1983,7 +1932,6 @@ func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 }
 
 func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
-	// Panic recovery to prevent crashes
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Recovered from panic in recentLogsHandler: %v", r)
@@ -2014,7 +1962,6 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 		priority = "info"
 	}
 
-	// Verify journalctl is available
 	if _, err := exec.LookPath("journalctl"); err != nil {
 		log.Printf("journalctl command not found: %v", err)
 		w.Header().Set("Content-Type", "application/json")
@@ -2025,7 +1972,6 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set timeout for command execution
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
@@ -2074,7 +2020,6 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
-	// Set headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -2087,7 +2032,6 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Get log source from query parameter
 	logSource := r.URL.Query().Get("source")
 	if logSource == "" {
 		logSource = "ais-catcher"
@@ -2104,7 +2048,6 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 	// The channel is garbage-collected once both sides exit.
 	clientChan := make(chan LogMessage, 100)
 
-	// Verify journalctl is available
 	if _, err := exec.LookPath("journalctl"); err != nil {
 		log.Printf("journalctl command not found: %v", err)
 		fmt.Fprintf(w, "data: %s\n\n", `{"message":"[ERROR] journalctl not available on this system"}`)
@@ -2112,7 +2055,6 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Start log tailing goroutine using journalctl
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -2130,7 +2072,6 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			log.Printf("Error creating pipe for %s logs: %v", logSource, err)
-			// Try to send error message to client
 			select {
 			case clientChan <- LogMessage{Message: fmt.Sprintf("[ERROR] Failed to create pipe: %v", err)}:
 			default:
@@ -2140,7 +2081,6 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 		if err := cmd.Start(); err != nil {
 			log.Printf("Error starting journalctl for %s logs: %v", logSource, err)
-			// Try to send error message to client
 			select {
 			case clientChan <- LogMessage{Message: fmt.Sprintf("[ERROR] Failed to start journalctl: %v", err)}:
 			default:
@@ -2148,7 +2088,6 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Ensure process is killed when context is done
 		go func() {
 			<-ctx.Done()
 			if cmd.Process != nil {
@@ -2175,12 +2114,10 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Check for scanner errors
 		if err := scanner.Err(); err != nil {
 			log.Printf("Scanner error for %s logs: %v", logSource, err)
 		}
 
-		// Wait for command to finish
 		if err := cmd.Wait(); err != nil {
 			// Only log if not killed by context cancellation
 			select {
@@ -2192,18 +2129,14 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Heartbeat ticker
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	// Listen for log messages and send them to the client
 	for {
 		select {
 		case <-ctx.Done():
-			// Client disconnected
 			return
 		case <-ticker.C:
-			// Send heartbeat
 			fmt.Fprintf(w, ": heartbeat\n\n")
 			flusher.Flush()
 		case msg, ok := <-clientChan:
@@ -2221,7 +2154,6 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// makeConfigHandler creates a handler for config pages that follow the same pattern
 // configEditingBlocked guards config-editing endpoints when the service runs
 // in managed mode: AIS-catcher owns its configuration there, so edits to
 // config.json/config.cmd would silently have no effect. GETs are sent to the
@@ -2553,7 +2485,6 @@ func apiConfigHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(jsonContent)
 	} else if r.Method == http.MethodPost {
-		// Handle POST request to save JSON data
 		err := saveConfigJSON(w, r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -2736,14 +2667,12 @@ func editConfigJSONHandler(w http.ResponseWriter, r *http.Request) {
 	} else if r.Method == http.MethodPost {
 		newContent := r.FormValue("file_content")
 
-		// Validate JSON
 		var jsonMap map[string]interface{}
 		if err := json.Unmarshal([]byte(newContent), &jsonMap); err != nil {
 			renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "Invalid JSON: "+err.Error(), "")
 			return
 		}
 
-		// Save file
 		configFileMu.Lock()
 		defer configFileMu.Unlock()
 		if err := writeFileAtomic(configJSONFilePath, []byte(newContent), 0644); err != nil {
@@ -2906,7 +2835,6 @@ func main() {
 		}
 		config.ConfigJSONHash = calculate32BitHash(string(jsonContent))
 
-		// Calculate and set hash for config.cmd
 		cmdContent, err := os.ReadFile(configCmdFilePath)
 		if err != nil {
 			log.Fatal("Failed to read config.cmd:", err)
