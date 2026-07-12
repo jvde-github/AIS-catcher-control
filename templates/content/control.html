@@ -74,7 +74,7 @@
             </div>
         </div>
         <a id="managedUILink" href="#" target="_blank" rel="noopener" class="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors">
-            Open AIS-catcher Control
+            Open AIS-catcher
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
         </a>
     </div>
@@ -548,11 +548,8 @@
         }
 
         function refreshDaemonCard() {
-            Promise.all([
-                fetch('/status').then(r => r.json()),
-                fetch('/api/watchdog-status').then(r => r.json())
-            ]).then(([svc, wd]) => {
-                const running = svc.status === 'active (running)';
+            fetch('/status').then(r => r.json()).then(data => {
+                const running = data.status === 'active (running)';
 
                 // --- Header status badge ---
                 const indicator = document.getElementById('service-status-indicator');
@@ -561,26 +558,26 @@
                 if (running) {
                     indicator.classList.add('bg-emerald-100', 'text-emerald-800', 'border-emerald-200');
                     indicator.textContent = 'Running';
-                } else if (svc.status === 'failed') {
+                } else if (data.status === 'failed') {
                     indicator.classList.add('bg-rose-100', 'text-rose-800', 'border-rose-200');
                     indicator.textContent = 'Failed';
-                } else if (svc.status === 'inactive (stopped)') {
+                } else if (data.status === 'inactive (stopped)') {
                     indicator.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200');
                     indicator.textContent = 'Stopped';
                 } else {
                     indicator.classList.add('bg-amber-100', 'text-amber-800', 'border-amber-200');
-                    indicator.textContent = svc.status || 'Unknown';
+                    indicator.textContent = data.status || 'Unknown';
                 }
 
                 // Start-limit-hit warning badge
                 const limitBadge = document.getElementById('svc-limit-badge');
-                if (wd.start_limit_hit) limitBadge.classList.remove('hidden');
+                if (data.start_limit_hit) limitBadge.classList.remove('hidden');
                 else limitBadge.classList.add('hidden');
 
                 // Uptime in header
                 const uptimeBadge = document.getElementById('svc-uptime-badge');
-                if (running && svc.uptime) {
-                    uptimeBadge.textContent = svc.uptime;
+                if (running && data.uptime) {
+                    uptimeBadge.textContent = data.uptime;
                     uptimeBadge.classList.remove('hidden');
                 } else {
                     uptimeBadge.classList.add('hidden');
@@ -590,37 +587,37 @@
                 const processRow = document.getElementById('svc-process-row');
                 if (running) {
                     processRow.classList.remove('hidden');
-                    document.getElementById('service-uptime').textContent = svc.uptime_since || '—';
-                    document.getElementById('stat-pid').textContent = svc.pid || '—';
-                    document.getElementById('stat-cpu').textContent = (svc.cpu != null) ? svc.cpu.toFixed(1) + '%' : '—';
-                    document.getElementById('stat-memory').textContent = (svc.memory != null && svc.memory > 0) ? svc.memory.toFixed(1) + ' MB' : '—';
+                    document.getElementById('service-uptime').textContent = data.uptime_since || '—';
+                    document.getElementById('stat-pid').textContent = data.pid || '—';
+                    document.getElementById('stat-cpu').textContent = (data.cpu != null) ? data.cpu.toFixed(1) + '%' : '—';
+                    document.getElementById('stat-memory').textContent = (data.memory != null && data.memory > 0) ? data.memory.toFixed(1) + ' MB' : '—';
                 } else {
                     processRow.classList.add('hidden');
                 }
 
                 // --- Systemd health grid ---
-                const nr = wd.n_restarts;
+                const nr = data.n_restarts;
                 document.getElementById('svc-restarts').innerHTML = (nr != null)
                     ? (nr > 0 ? `<span class="text-amber-600">${nr}</span>` : nr)
                     : '—';
-                document.getElementById('svc-limit').textContent = (wd.start_limit_burst && wd.start_limit_burst > 0) ? wd.start_limit_burst + ' restarts' : '—';
-                document.getElementById('svc-window').textContent = (wd.start_limit_interval && wd.start_limit_interval !== '0') ? wd.start_limit_interval : '—';
-                document.getElementById('svc-substate').innerHTML = svcSubstateHTML(wd.sub_state);
-                document.getElementById('svc-result').innerHTML = svcResultHTML(wd.result);
-                document.getElementById('svc-exitcode').textContent = (wd.result && wd.exit_code != null) ? wd.exit_code : '—';
-                document.getElementById('svc-restartdelay').textContent = wd.restart_delay || '';
+                document.getElementById('svc-limit').textContent = (data.start_limit_burst && data.start_limit_burst > 0) ? data.start_limit_burst + ' restarts' : '—';
+                document.getElementById('svc-window').textContent = (data.start_limit_interval && data.start_limit_interval !== '0') ? data.start_limit_interval : '—';
+                document.getElementById('svc-substate').innerHTML = svcSubstateHTML(data.sub_state);
+                document.getElementById('svc-result').innerHTML = svcResultHTML(data.result);
+                document.getElementById('svc-exitcode').textContent = (data.result && data.exit_code != null) ? data.exit_code : '—';
+                document.getElementById('svc-restartdelay').textContent = data.restart_delay || '';
 
                 // Auto-restart policy
                 const restartEl = document.getElementById('svc-restartpolicy');
                 if (restartEl) {
-                    if (!wd.restart || wd.restart === 'no') restartEl.innerHTML = '<span class="text-slate-500">Disabled</span>';
-                    else restartEl.innerHTML = `<span class="text-emerald-600">${wd.restart}</span>`;
+                    if (!data.restart || data.restart === 'no') restartEl.innerHTML = '<span class="text-slate-500">Disabled</span>';
+                    else restartEl.innerHTML = `<span class="text-emerald-600">${data.restart}</span>`;
                 }
 
                 // --- Auto-start label in grid ---
                 const enabledEl = document.getElementById('enabled-status');
-                if (svc.enabled === true) enabledEl.innerHTML = '<span class="text-emerald-600">Enabled</span>';
-                else if (svc.enabled === false) enabledEl.innerHTML = '<span class="text-slate-500">Disabled</span>';
+                if (data.enabled === true) enabledEl.innerHTML = '<span class="text-emerald-600">Enabled</span>';
+                else if (data.enabled === false) enabledEl.innerHTML = '<span class="text-slate-500">Disabled</span>';
                 else enabledEl.innerHTML = '<span class="text-amber-600">Unknown</span>';
 
                 // --- Action bar: grey out while operation in progress ---
@@ -653,27 +650,27 @@
 
                 let barHTML = '';
 
-                // Watchdog: wd.enabled = reboot-on-failure armed
-                barHTML += wd.enabled
+                // Watchdog: reboot-on-failure armed
+                barHTML += data.watchdog_armed
                     ? svcBtn('watchdog-off', ghost, ico.shield, 'Disarm Watchdog')
                     : svcBtn('watchdog-on', ghost, ico.shield, 'Arm Watchdog');
 
                 // Auto-restart policy toggle
-                const autoRestartOn = wd.restart && wd.restart !== 'no';
+                const autoRestartOn = data.restart && data.restart !== 'no';
                 barHTML += autoRestartOn
                     ? svcBtn('auto-restart-off', ghost, ico.repeat, 'Disable Auto-Restart')
                     : svcBtn('auto-restart-on', ghost, ico.repeat, 'Enable Auto-Restart');
 
                 // Start at boot
-                if (svc.enabled === false) barHTML += svcBtn('enable', ghost, ico.enable, 'Enable at Boot');
-                if (svc.enabled === true) barHTML += svcBtn('disable', ghost, ico.disable, 'Disable at Boot');
+                if (data.enabled === false) barHTML += svcBtn('enable', ghost, ico.enable, 'Enable at Boot');
+                if (data.enabled === true) barHTML += svcBtn('disable', ghost, ico.disable, 'Disable at Boot');
 
                 if (running) barHTML += svcBtn('restart', ghost, ico.restart, 'Restart');
 
                 // Primary contextual action last (far right). Starting always
                 // clears a failed state server-side, so a failed service gets
                 // an explicit "Reset & Start".
-                const failed = svc.status === 'failed' || wd.start_limit_hit;
+                const failed = data.status === 'failed' || data.start_limit_hit;
                 const primSpan = ' col-span-2 sm:col-span-1'; // full-width row on phones
                 barHTML += running
                     ? svcBtn('stop', danger + primSpan, ico.stop, 'Stop')
@@ -800,7 +797,6 @@
             } catch (error) {
                 console.error('Failed to update system info:', error);
             }
-            refreshDaemonCard();
         }
 
         // ---------------------------------------------------------------
@@ -873,7 +869,7 @@
 
             updateLiveStatus();
             statusPoller = setInterval(() => {
-                updateLiveStatus();
+                if (!document.hidden) updateLiveStatus();
             }, 4000);
         }
 
@@ -1106,11 +1102,14 @@
             let currentPriority = 'info';
 
             refreshDaemonCard();
-            setInterval(refreshDaemonCard, 3000);
+            // pollers pause while the tab is hidden; visibilitychange refreshes on return
+            setInterval(() => {
+                if (!document.hidden) refreshDaemonCard();
+            }, 3000);
 
             // Poll software/diagnostic cards every 15 seconds when idle
             setInterval(() => {
-                if (!currentOperation) updateSystemInfo();
+                if (!document.hidden && !currentOperation) updateSystemInfo();
             }, 15000);
 
             // Initial refresh delayed so the backend version check can complete;

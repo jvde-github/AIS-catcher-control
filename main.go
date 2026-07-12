@@ -50,6 +50,7 @@ const (
 	configJSONFilePath = "/etc/AIS-catcher/config.json"
 	configCmdFilePath  = "/etc/AIS-catcher/config.cmd"
 	settingsFilePath   = "/etc/AIS-catcher/control.json"
+	aisBinaryPath      = "/usr/bin/AIS-catcher"
 )
 
 var (
@@ -70,7 +71,6 @@ type SystemInfo struct {
 	TotalMemory            uint64    `json:"total_memory"`             // Total system memory
 	KernelVersion          string    `json:"kernel_version"`           // Linux kernel version
 	ServiceStatus          string    `json:"service_status"`           // systemd service status
-	ServiceNRestarts       int       `json:"service_n_restarts"`       // number of times systemd restarted the service
 	ManagedMode            bool      `json:"managed_mode"`             // service is self-configured (-E flag in ExecStart)
 	ManagedPort            string    `json:"managed_port"`             // port of AIS-catcher's own web UI in managed mode
 	BuildVersion           string    `json:"build_version"`            // Git version/build info
@@ -89,6 +89,8 @@ type SystemInfo struct {
 	ControlLatestCommit    string    `json:"control_latest_commit"`    // Latest Control panel commit from GitHub
 	ControlUpdateAvailable bool      `json:"control_update_available"` // Whether Control panel update is available
 	ControlLastChecked     time.Time `json:"control_last_checked"`     // Last time we checked Control repo
+
+	UnitProps map[string]string `json:"-"` // raw systemctl show values backing /status
 }
 
 type GitHubRelease struct {
@@ -184,10 +186,7 @@ var globalActionState = SystemActionState{
 func rebootPendingHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	cmd := exec.CommandContext(ctx, "systemctl", "is-active", "ais-catcher-reboot.service")
-	out, _ := cmd.Output() // ignore exit code — non-zero for activating/inactive
-	cancel()
+	out, _ := runCmd(3*time.Second, "systemctl", "is-active", "ais-catcher-reboot.service") // non-zero exit for inactive
 
 	state := strings.TrimSpace(string(out))
 	pending := state == "active" || state == "activating"
@@ -519,23 +518,21 @@ func sendSSEMessage(w http.ResponseWriter, flusher http.Flusher, messageType str
 	flusher.Flush()
 }
 
+// runCmd runs a command with a timeout and returns its stdout.
+func runCmd(timeout time.Duration, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return exec.CommandContext(ctx, name, args...).Output()
+}
+
 // userHZ is the kernel USER_HZ used for /proc tick values; fixed at 100 on Linux.
 const userHZ = 100
 
-func findAISCatcherPID() (int32, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if out, err := exec.CommandContext(ctx, "systemctl", "show", "ais-catcher.service", "--property=MainPID").Output(); err == nil {
-		s := strings.TrimPrefix(strings.TrimSpace(string(out)), "MainPID=")
-		if pid, err := strconv.ParseInt(s, 10, 32); err == nil && pid > 0 {
-			return int32(pid), nil
-		}
-	}
-
-	// fallback for AIS-catcher running outside the service
+// scanForAISCatcherPID finds AIS-catcher running outside the service.
+func scanForAISCatcherPID() int32 {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
-		return 0, err
+		return 0
 	}
 	for _, e := range entries {
 		pid, err := strconv.ParseInt(e.Name(), 10, 32)
@@ -544,10 +541,10 @@ func findAISCatcherPID() (int32, error) {
 		}
 		comm, err := os.ReadFile("/proc/" + e.Name() + "/comm")
 		if err == nil && strings.TrimSpace(string(comm)) == "AIS-catcher" {
-			return int32(pid), nil
+			return int32(pid)
 		}
 	}
-	return 0, fmt.Errorf("AIS-catcher process not found")
+	return 0
 }
 
 func readProcStatus(pid int32) (rssKB uint64, threads int32, err error) {
@@ -611,8 +608,10 @@ func bootTime() (int64, error) {
 	return 0, fmt.Errorf("btime not found in /proc/stat")
 }
 
-// prevProcCPU and prevSysCPU are only touched from collectSystemInfo, which
-// runs under the cachedSysInfo write lock.
+// prevProcCPU, prevSysCPU and lastAISBinaryModTime are only touched from
+// collectSystemInfo, which runs under the cachedSysInfo write lock.
+var lastAISBinaryModTime time.Time
+
 var prevProcCPU struct {
 	pid   int32
 	ticks uint64
@@ -698,12 +697,56 @@ func getCachedSystemInfo() SystemInfo {
 	return cachedSysInfo.info
 }
 
+// unitShowProps is the single systemctl query per cache refresh; it feeds the
+// cached system info, the managed-mode cache and the /status endpoint.
+var unitShowProps = []string{"ActiveState", "SubState", "UnitFileState", "ActiveEnterTimestamp",
+	"MainPID", "ExecStart", "NRestarts", "StartLimitBurst", "StartLimitIntervalUSec",
+	"OnFailure", "Result", "ExecMainStatus", "RestartUSec", "Restart"}
+
+func queryUnitProps() map[string]string {
+	args := []string{"show", "ais-catcher.service"}
+	for _, p := range unitShowProps {
+		args = append(args, "--property="+p)
+	}
+	props := map[string]string{}
+	if out, err := runCmd(5*time.Second, "systemctl", args...); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			if idx := strings.IndexByte(line, '='); idx > 0 {
+				props[line[:idx]] = line[idx+1:]
+			}
+		}
+	}
+	return props
+}
+
+func serviceStatusFromProps(props map[string]string) string {
+	switch props["ActiveState"] {
+	case "active":
+		return "active (running)"
+	case "inactive":
+		return "inactive (stopped)"
+	case "":
+		return "unknown"
+	}
+	return props["ActiveState"]
+}
+
 func collectSystemInfo(prev SystemInfo) SystemInfo {
 	info := prev // seeds LastChecked, LatestVersion, etc. from cache
 
 	info.BuildVersion = buildVersion
 
-	if pid, err := findAISCatcherPID(); err == nil {
+	props := queryUnitProps()
+	info.UnitProps = props
+
+	pid := int32(0)
+	if v, err := strconv.ParseInt(props["MainPID"], 10, 32); err == nil && v > 0 {
+		pid = int32(v)
+	} else {
+		pid = scanForAISCatcherPID()
+	}
+
+	if pid > 0 {
 		info.ProcessID = pid
 		if rssKB, threads, err := readProcStatus(pid); err == nil {
 			info.ProcessMemoryUsage = float64(rssKB) / 1024 // Convert to MB
@@ -736,28 +779,28 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 	isActionRunning := globalActionState.IsRunning
 	globalActionState.Unlock()
 
-	serviceStatus := getServiceStatus()
+	serviceStatus := serviceStatusFromProps(props)
 	info.ServiceStatus = serviceStatus
 
-	info.ManagedMode, _ = getManagedMode()
+	// derive managed mode from the same query and refresh its cache
+	managed, bind := parseExecStartManaged(props["ExecStart"])
+	setManagedModeCache(managed, bind)
+	info.ManagedMode = managed
 	info.ManagedPort = managedPort()
-
-	{
-		nrCtx, nrCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer nrCancel()
-		cmd := exec.CommandContext(nrCtx, "systemctl", "show", "ais-catcher.service", "--property=NRestarts")
-		if out, err := cmd.Output(); err == nil {
-			for _, line := range strings.Split(string(out), "\n") {
-				if idx := strings.IndexByte(line, '='); idx > 0 && line[:idx] == "NRestarts" {
-					info.ServiceNRestarts, _ = strconv.Atoi(strings.TrimSpace(line[idx+1:]))
-				}
-			}
-		}
-	}
 
 	skipVersionCheck := isActionRunning && serviceStatus != "active (running)"
 
-	if !skipVersionCheck {
+	// only exec the binary when it changed on disk (or was never parsed)
+	fi, statErr := os.Stat(aisBinaryPath)
+	binaryChanged := statErr != nil || !fi.ModTime().Equal(lastAISBinaryModTime) || info.AISCatcherVersion == ""
+
+	if !skipVersionCheck && binaryChanged {
+		if statErr == nil {
+			lastAISBinaryModTime = fi.ModTime()
+		} else {
+			lastAISBinaryModTime = time.Time{}
+		}
+
 		// reset so values from a previously installed binary never survive a reinstall
 		info.AISCatcherCommit = ""
 		info.AISCatcherBuildType = ""
@@ -765,7 +808,7 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		// runs while the system-info cache lock is held, so it must be bounded
 		vCtx, vCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer vCancel()
-		cmd := exec.CommandContext(vCtx, "/usr/bin/AIS-catcher", "-h", "JSON")
+		cmd := exec.CommandContext(vCtx, aisBinaryPath, "-h", "JSON")
 		output, err := cmd.CombinedOutput()
 		firstLine := strings.Split(string(output), "\n")[0]
 
@@ -845,35 +888,42 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 		}
 	}
 
-	if cpuinfo, err := os.ReadFile("/proc/cpuinfo"); err == nil {
-		scanner := bufio.NewScanner(strings.NewReader(string(cpuinfo)))
-		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.HasPrefix(line, "model name") {
-				info.CPUInfo = strings.TrimSpace(strings.Split(line, ":")[1])
-				break
-			}
-		}
-	}
-
-	if meminfo, err := os.ReadFile("/proc/meminfo"); err == nil {
-		scanner := bufio.NewScanner(strings.NewReader(string(meminfo)))
-		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.HasPrefix(line, "MemTotal:") {
-				fields := strings.Fields(line)
-				if len(fields) >= 2 {
-					if mem, err := strconv.ParseUint(fields[1], 10, 64); err == nil {
-						info.TotalMemory = mem * 1024 // Convert from KB to bytes
-					}
+	// static hardware info: collect once
+	if info.CPUInfo == "" {
+		if cpuinfo, err := os.ReadFile("/proc/cpuinfo"); err == nil {
+			scanner := bufio.NewScanner(strings.NewReader(string(cpuinfo)))
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.HasPrefix(line, "model name") {
+					info.CPUInfo = strings.TrimSpace(strings.Split(line, ":")[1])
+					break
 				}
-				break
 			}
 		}
 	}
 
-	if kernel, err := exec.Command("uname", "-r").Output(); err == nil {
-		info.KernelVersion = strings.TrimSpace(string(kernel))
+	if info.TotalMemory == 0 {
+		if meminfo, err := os.ReadFile("/proc/meminfo"); err == nil {
+			scanner := bufio.NewScanner(strings.NewReader(string(meminfo)))
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.HasPrefix(line, "MemTotal:") {
+					fields := strings.Fields(line)
+					if len(fields) >= 2 {
+						if mem, err := strconv.ParseUint(fields[1], 10, 64); err == nil {
+							info.TotalMemory = mem * 1024 // Convert from KB to bytes
+						}
+					}
+					break
+				}
+			}
+		}
+	}
+
+	if info.KernelVersion == "" {
+		if kernel, err := runCmd(5*time.Second, "uname", "-r"); err == nil {
+			info.KernelVersion = strings.TrimSpace(string(kernel))
+		}
 	}
 
 	// GitHub checks run async so a slow/unreachable API never blocks page load
@@ -920,47 +970,46 @@ func recomputeUpdateAvailable(info *SystemInfo) {
 			info.AISCatcherCommit != info.LatestCommit)
 }
 
-// checkLatestVersion fetches the latest release from GitHub
-func checkLatestVersion() {
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
-	resp, err := client.Get("https://api.github.com/repos/jvde-github/AIS-catcher/releases/latest")
+// githubGet fetches and decodes a GitHub API response; false on any failure.
+func githubGet(url string, v interface{}) bool {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
 	if err != nil {
-		log.Printf("Failed to check latest version: %v", err)
-		return
+		log.Printf("GitHub request failed (%s): %v", url, err)
+		return false
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("GitHub API returned status %d", resp.StatusCode)
-		return
+		log.Printf("GitHub API returned status %d for %s", resp.StatusCode, url)
+		return false
 	}
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		log.Printf("Failed to decode GitHub response (%s): %v", url, err)
+		return false
+	}
+	return true
+}
 
+// githubLatestCommit returns the short HEAD commit of a repo's main branch.
+func githubLatestCommit(repo string) string {
+	var commit struct {
+		SHA string `json:"sha"`
+	}
+	if githubGet("https://api.github.com/repos/"+repo+"/commits/main", &commit) && len(commit.SHA) >= 7 {
+		return commit.SHA[:7]
+	}
+	return ""
+}
+
+// checkLatestVersion fetches the latest AIS-catcher release and main commit
+// from GitHub, updating only the GitHub-related cache fields.
+func checkLatestVersion() {
 	var release GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		log.Printf("Failed to decode GitHub release: %v", err)
+	if !githubGet("https://api.github.com/repos/jvde-github/AIS-catcher/releases/latest", &release) {
 		return
 	}
+	latestCommit := githubLatestCommit("jvde-github/AIS-catcher")
 
-	// Get the latest commit from main branch (not from the release tag)
-	var latestCommit string
-	commitResp, err := client.Get("https://api.github.com/repos/jvde-github/AIS-catcher/commits/main")
-	if err == nil {
-		if commitResp.StatusCode == http.StatusOK {
-			var commit struct {
-				SHA string `json:"sha"`
-			}
-			if json.NewDecoder(commitResp.Body).Decode(&commit) == nil && len(commit.SHA) >= 7 {
-				latestCommit = commit.SHA[:7]
-			}
-		}
-		commitResp.Body.Close()
-	}
-
-	// Only update GitHub-related fields on the cache, preserving the
-	// installed binary fields that collectSystemInfo() keeps fresh.
 	cachedSysInfo.Lock()
 	defer cachedSysInfo.Unlock()
 
@@ -974,33 +1023,10 @@ func checkLatestVersion() {
 	recomputeUpdateAvailable(info)
 }
 
-// checkControlLatestVersion fetches the latest commit from Control GitHub repo
+// checkControlLatestVersion fetches the latest Control panel commit from GitHub.
 func checkControlLatestVersion() {
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
-	resp, err := client.Get("https://api.github.com/repos/jvde-github/AIS-catcher-control/commits/main")
-	if err != nil {
-		log.Printf("Failed to check Control latest version: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("GitHub API returned status %d for Control repo", resp.StatusCode)
-		return
-	}
-
-	var commit struct {
-		SHA string `json:"sha"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil {
-		log.Printf("Failed to decode Control commit: %v", err)
-		return
-	}
-	if len(commit.SHA) < 7 {
-		log.Printf("Unexpected Control commit SHA from GitHub: %q", commit.SHA)
+	latestCommit := githubLatestCommit("jvde-github/AIS-catcher-control")
+	if latestCommit == "" {
 		return
 	}
 
@@ -1008,7 +1034,7 @@ func checkControlLatestVersion() {
 	defer cachedSysInfo.Unlock()
 
 	info := &cachedSysInfo.info
-	info.ControlLatestCommit = commit.SHA[:7]
+	info.ControlLatestCommit = latestCommit
 	info.ControlLastChecked = time.Now()
 
 	if buildCommit != "unknown" && buildCommit != "" {
@@ -1378,6 +1404,35 @@ func authenticate(password string) bool {
 	return verifyPassword(password, getConfig().PasswordHash)
 }
 
+func setSessionCookie(w http.ResponseWriter, r *http.Request, value string, maxAge int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    value,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func isAuthenticated(r *http.Request) bool {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return false
+	}
+	user, ok := sessionManager.Get(cookie.Value)
+	return ok && user == defaultUsername
+}
+
+func renderLoginPage(w http.ResponseWriter, message string) {
+	renderTemplate(w, "login.html", map[string]interface{}{
+		"CssVersion": cssVersion,
+		"JsVersion":  jsVersion,
+		"message":    message,
+	})
+}
+
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if !getConfig().LicenseAccepted {
 		http.Redirect(w, r, "/license", http.StatusSeeOther)
@@ -1385,12 +1440,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
-		data := map[string]interface{}{
-			"CssVersion": cssVersion,
-			"JsVersion":  jsVersion,
-			"message":    "",
-		}
-		renderTemplate(w, "login.html", data)
+		renderLoginPage(w, "")
 		return
 	}
 
@@ -1398,78 +1448,45 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	ip := clientIP(r)
 	if wait, blocked := loginAttempts.blocked(ip); blocked {
-		data := map[string]interface{}{
-			"CssVersion": cssVersion,
-			"JsVersion":  jsVersion,
-			"message":    fmt.Sprintf("Too many failed attempts. Try again in %d seconds.", int(wait.Seconds())+1),
-		}
-		renderTemplate(w, "login.html", data)
+		renderLoginPage(w, fmt.Sprintf("Too many failed attempts. Try again in %d seconds.", int(wait.Seconds())+1))
 		return
 	}
 
-	if authenticate(password) {
-		loginAttempts.recordSuccess(ip)
-
-		// upgrade legacy SHA-256 hash to bcrypt
-		if !strings.HasPrefix(getConfig().PasswordHash, "$2") {
-			if err := updateConfig(func(c *Config) { c.PasswordHash = hashPassword(password) }); err != nil {
-				log.Printf("Failed to upgrade password hash to bcrypt: %v", err)
-			}
-		}
-
-		sessionID := sessionManager.Create(defaultUsername)
-		http.SetCookie(w, &http.Cookie{
-			Name:     sessionCookieName,
-			Value:    sessionID,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   r.TLS != nil,
-			SameSite: http.SameSiteLaxMode,
-		})
-
-		if password == defaultPassword {
-			http.Redirect(w, r, "/change-password", http.StatusSeeOther)
-		} else {
-			http.Redirect(w, r, "/control", http.StatusSeeOther)
-		}
-	} else {
+	if !authenticate(password) {
 		loginAttempts.recordFailure(ip)
-		data := map[string]interface{}{
-			"CssVersion": cssVersion,
-			"JsVersion":  jsVersion,
-			"message":    "Invalid credentials",
+		renderLoginPage(w, "Invalid credentials")
+		return
+	}
+
+	loginAttempts.recordSuccess(ip)
+
+	// upgrade legacy SHA-256 hash to bcrypt
+	if !strings.HasPrefix(getConfig().PasswordHash, "$2") {
+		if err := updateConfig(func(c *Config) { c.PasswordHash = hashPassword(password) }); err != nil {
+			log.Printf("Failed to upgrade password hash to bcrypt: %v", err)
 		}
-		renderTemplate(w, "login.html", data)
+	}
+
+	setSessionCookie(w, r, sessionManager.Create(defaultUsername), 0)
+
+	if password == defaultPassword {
+		http.Redirect(w, r, "/change-password", http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/control", http.StatusSeeOther)
 	}
 }
 
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(sessionCookieName)
-	if err == nil {
+	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		sessionManager.Delete(cookie.Value)
-		http.SetCookie(w, &http.Cookie{
-			Name:     sessionCookieName,
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-			Secure:   r.TLS != nil,
-			SameSite: http.SameSiteLaxMode,
-		})
+		setSessionCookie(w, r, "", -1)
 	}
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(sessionCookieName)
-		if err != nil {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
-		}
-
-		user, ok := sessionManager.Get(cookie.Value)
-		if !ok || user != defaultUsername {
+		if !isAuthenticated(r) {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -1477,63 +1494,35 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func renderChangePassword(w http.ResponseWriter, message string) {
+	renderTemplate(w, "layout.html", map[string]interface{}{
+		"CssVersion":      cssVersion,
+		"JsVersion":       jsVersion,
+		"Title":           "Change Password",
+		"ContentTemplate": "change-password",
+		"message":         message,
+	})
+}
+
 func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		data := map[string]interface{}{
-			"CssVersion":      cssVersion,
-			"JsVersion":       jsVersion,
-			"Title":           "Change Password",
-			"ContentTemplate": "change-password",
-			"message":         "",
-		}
-
-		renderTemplate(w, "layout.html", data)
+		renderChangePassword(w, "")
 		return
 	}
 
 	newPassword := r.FormValue("new_password")
-	confirmPassword := r.FormValue("confirm_password")
-
-	if newPassword != confirmPassword {
-		data := map[string]interface{}{
-			"CssVersion":      cssVersion,
-			"JsVersion":       jsVersion,
-			"Title":           "Change Password",
-			"ContentTemplate": "change-password",
-			"message":         "Passwords do not match",
-		}
-
-		renderTemplate(w, "layout.html", data)
-
+	if newPassword != r.FormValue("confirm_password") {
+		renderChangePassword(w, "Passwords do not match")
 		return
 	}
 
-	err := updateConfig(func(c *Config) {
-		c.PasswordHash = hashPassword(newPassword)
-	})
-	if err != nil {
-		data := map[string]interface{}{
-			"CssVersion":      cssVersion,
-			"JsVersion":       jsVersion,
-			"Title":           "Change Password",
-			"ContentTemplate": "change-password",
-			"message":         "Failed to save new password",
-		}
-
-		renderTemplate(w, "layout.html", data)
+	if err := updateConfig(func(c *Config) { c.PasswordHash = hashPassword(newPassword) }); err != nil {
+		renderChangePassword(w, "Failed to save new password")
 		return
 	}
 
 	sessionManager.DeleteAll()
-	sessionID := sessionManager.Create(defaultUsername)
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    sessionID,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   r.TLS != nil,
-		SameSite: http.SameSiteLaxMode,
-	})
+	setSessionCookie(w, r, sessionManager.Create(defaultUsername), 0)
 
 	http.Redirect(w, r, "/control", http.StatusSeeOther)
 }
@@ -1632,36 +1621,6 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func getServiceStatus() string {
-	saCtx, saCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer saCancel()
-	cmd := exec.CommandContext(saCtx, "systemctl", "is-active", "ais-catcher.service")
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			// exit 3 is used for both inactive and failed; read actual output text
-			text := strings.TrimSpace(string(exitErr.Stderr))
-			if text == "" {
-				// is-active writes to stdout, not stderr
-				text = strings.TrimSpace(string(output))
-			}
-			if text == "failed" {
-				return "failed"
-			}
-			if exitErr.ExitCode() == 3 {
-				return "inactive (stopped)"
-			}
-		}
-		return "unknown"
-	}
-
-	status := strings.TrimSpace(string(output))
-	if status == "active" {
-		return "active (running)"
-	}
-	return status
-}
-
 // managedModeCache caches the detected run mode briefly so page renders and
 // action starts don't each shell out to systemctl, while a mode change made
 // by an install/update is still picked up within seconds.
@@ -1685,9 +1644,7 @@ func getManagedMode() (bool, string) {
 
 	managed := false
 	bind := ""
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "systemctl", "show", "ais-catcher.service", "--property=ExecStart").Output()
+	out, err := runCmd(5*time.Second, "systemctl", "show", "ais-catcher.service", "--property=ExecStart")
 	if err == nil {
 		managed, bind = parseExecStartManaged(string(out))
 	}
@@ -1696,6 +1653,14 @@ func getManagedMode() (bool, string) {
 	managedModeCache.bind = bind
 	managedModeCache.checked = time.Now()
 	return managed, bind
+}
+
+func setManagedModeCache(managed bool, bind string) {
+	managedModeCache.Lock()
+	defer managedModeCache.Unlock()
+	managedModeCache.managed = managed
+	managedModeCache.bind = bind
+	managedModeCache.checked = time.Now()
 }
 
 // parseExecStartManaged extracts the run mode from systemctl's ExecStart
@@ -1748,26 +1713,6 @@ func managedInstallFlag() string {
 	return ""
 }
 
-func getServiceUptime() (duration, since string) {
-	aeCtx, aeCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer aeCancel()
-	cmd := exec.CommandContext(aeCtx, "systemctl", "show", "ais-catcher.service", "--property=ActiveEnterTimestamp")
-	output, err := cmd.Output()
-	if err != nil {
-		return "Unknown", ""
-	}
-	line := strings.TrimSpace(string(output))
-	parts := strings.SplitN(line, "=", 2)
-	if len(parts) != 2 {
-		return "Unknown", ""
-	}
-	t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", parts[1])
-	if err != nil {
-		return "Unknown", ""
-	}
-	return formatDuration(time.Since(t)), t.Format("Jan 2, 2006 15:04:05")
-}
-
 func formatDuration(d time.Duration) string {
 	days := d / (24 * time.Hour)
 	d -= days * 24 * time.Hour
@@ -1794,41 +1739,16 @@ func formatDuration(d time.Duration) string {
 }
 
 func cancelPendingShutdown() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	exec.CommandContext(ctx, "shutdown", "-c").Run()
-	exec.CommandContext(ctx, "systemctl", "stop", "ais-catcher-reboot.service").Run()
+	runCmd(10*time.Second, "shutdown", "-c")
+	runCmd(10*time.Second, "systemctl", "stop", "ais-catcher-reboot.service")
 }
 
 func controlService(action string) error {
 	cancelPendingShutdown()
 	// Reset failed state and NRestarts counter before any action
-	rfCtx, rfCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	exec.CommandContext(rfCtx, "systemctl", "reset-failed", "ais-catcher.service").Run()
-	rfCancel()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "systemctl", action, "ais-catcher.service")
-	return cmd.Run()
-}
-
-func getServiceEnabled() (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "systemctl", "is-enabled", "ais-catcher.service")
-	output, err := cmd.Output()
-	status := strings.TrimSpace(string(output))
-
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if exitErr.ExitCode() == 1 {
-				return false, nil
-			}
-		}
-		return false, err
-	}
-
-	return status == "enabled", nil
+	runCmd(10*time.Second, "systemctl", "reset-failed", "ais-catcher.service")
+	_, err := runCmd(30*time.Second, "systemctl", action, "ais-catcher.service")
+	return err
 }
 
 // journalctlArgs builds the argument list for reading logs from the given
@@ -1848,43 +1768,50 @@ func journalctlArgs(source, priority string, extra ...string) []string {
 	return append(args, extra...)
 }
 
-func readConfigJSON() ([]byte, error) {
-	jsonContent, err := os.ReadFile(configJSONFilePath)
+// readConfigFile reads a panel-owned config file and flags an integrity error
+// when its content no longer matches the stored hash.
+func readConfigFile(path string, storedHash uint32) ([]byte, error) {
+	content, err := os.ReadFile(path)
 	if err != nil {
-		log.Printf("Error reading config.json: %v", err)
+		log.Printf("Error reading %s: %v", path, err)
 		return []byte(""), err
 	}
 
-	calculatedHash := calculate32BitHash(string(jsonContent))
-
-	if uint32(calculatedHash) != getConfig().ConfigJSONHash {
-		fmt.Printf("hash mismatch: config.json content does not match the stored hash (%d != %d)\n", calculatedHash, getConfig().ConfigJSONHash)
+	calculatedHash := calculate32BitHash(string(content))
+	if calculatedHash != storedHash {
+		log.Printf("hash mismatch: %s content does not match the stored hash (%d != %d)", path, calculatedHash, storedHash)
 		setIntegrityError(true)
 	} else {
 		setIntegrityError(false)
 	}
 
-	return jsonContent, nil
+	return content, nil
+}
+
+func readConfigJSON() ([]byte, error) {
+	return readConfigFile(configJSONFilePath, getConfig().ConfigJSONHash)
 }
 
 func readConfigCmd() ([]byte, error) {
-	cmdContent, err := os.ReadFile(configCmdFilePath)
-	if err != nil {
-		log.Printf("Error reading config.cmd: %v", err)
-		return []byte(""), err
-	}
-
-	calculatedHash := calculate32BitHash(string(cmdContent))
-
-	if uint32(calculatedHash) != getConfig().ConfigCmdHash {
-		fmt.Printf("hash mismatch: config.cmd content does not match the stored hash (%d != %d)\n", calculatedHash, getConfig().ConfigCmdHash)
-		setIntegrityError(true)
-	} else {
-		setIntegrityError(false)
-	}
-
-	return cmdContent, nil
+	return readConfigFile(configCmdFilePath, getConfig().ConfigCmdHash)
 }
+
+// writeConfigWithHash writes a config file atomically and records its hash so
+// the integrity check accepts the new content; the hash must only ever
+// describe content that made it to disk.
+func writeConfigWithHash(path string, content []byte, set func(*Config, uint32)) error {
+	if err := writeFileAtomic(path, content, 0644); err != nil {
+		return fmt.Errorf("failed to save %s: %v", filepath.Base(path), err)
+	}
+	hash := calculate32BitHash(string(content))
+	if err := updateConfig(func(c *Config) { set(c, hash) }); err != nil {
+		return fmt.Errorf("failed to update control settings with new hash: %v", err)
+	}
+	return nil
+}
+
+func setJSONHash(c *Config, h uint32) { c.ConfigJSONHash = h }
+func setCmdHash(c *Config, h uint32)  { c.ConfigCmdHash = h }
 
 func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
@@ -1914,33 +1841,28 @@ func saveConfigJSON(w http.ResponseWriter, r *http.Request) error {
 	configFileMu.Lock()
 	defer configFileMu.Unlock()
 
-	// the hash must only ever describe content that made it to disk
-	err = writeFileAtomic(configJSONFilePath, body, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to save config.json: %v", err)
-	}
+	return writeConfigWithHash(configJSONFilePath, body, setJSONHash)
+}
 
-	hashValue := calculate32BitHash(string(body))
-	err = updateConfig(func(c *Config) {
-		c.ConfigJSONHash = hashValue
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update control settings with new hash: %v", err)
+// writeLogsJSON writes the recent-logs response; errMsg is included when set.
+func writeLogsJSON(w http.ResponseWriter, logs []LogMessage, errMsg string) {
+	w.Header().Set("Content-Type", "application/json")
+	if logs == nil {
+		logs = []LogMessage{}
 	}
-
-	return nil
+	resp := map[string]interface{}{"logs": logs}
+	if errMsg != "" {
+		resp["error"] = errMsg
+	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Recovered from panic in recentLogsHandler: %v", r)
-			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"logs":  []LogMessage{},
-				"error": "Internal server error",
-			})
+			writeLogsJSON(w, nil, "Internal server error")
 		}
 	}()
 
@@ -1964,11 +1886,7 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := exec.LookPath("journalctl"); err != nil {
 		log.Printf("journalctl command not found: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"logs":  []LogMessage{},
-			"error": "journalctl not available",
-		})
+		writeLogsJSON(w, nil, "journalctl not available")
 		return
 	}
 
@@ -1977,11 +1895,7 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	args := journalctlArgs(logSource, priority, "-n", strconv.Itoa(lines))
 	if args == nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"logs":  []LogMessage{},
-			"error": "Invalid log source",
-		})
+		writeLogsJSON(w, nil, "Invalid log source")
 		return
 	}
 
@@ -1992,11 +1906,7 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			log.Printf("Error fetching recent %s logs: %v", logSource, err)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"logs":  []LogMessage{},
-			"error": "Failed to fetch logs",
-		})
+		writeLogsJSON(w, nil, "Failed to fetch logs")
 		return
 	}
 
@@ -2013,10 +1923,7 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"logs": logs,
-	})
+	writeLogsJSON(w, logs, "")
 }
 
 func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
@@ -2172,21 +2079,29 @@ func configEditingBlocked(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func makeConfigHandler(title, contentTemplate string) http.HandlerFunc {
+	return configPageHandler(title, contentTemplate, true)
+}
+
+func makeReadOnlyConfigHandler(title, contentTemplate string) http.HandlerFunc {
+	return configPageHandler(title, contentTemplate, false)
+}
+
+func configPageHandler(title, contentTemplate string, writable bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if configEditingBlocked(w, r) {
 			return
 		}
-		if r.Method == http.MethodGet {
+		switch {
+		case r.Method == http.MethodGet:
 			renderTemplateWithConfig(w, title, contentTemplate)
-		} else if r.Method == http.MethodPost {
-			err := saveConfigJSON(w, r)
-			if err != nil {
+		case r.Method == http.MethodPost && writable:
+			if err := saveConfigJSON(w, r); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Configuration saved successfully."))
-		} else {
+		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	}
@@ -2208,18 +2123,24 @@ func renderTemplateWithConfig(w http.ResponseWriter, title string, contentTempla
 	})
 }
 
+// jsonPort renders a config "port" value (number or string) as a string.
+func jsonPort(v interface{}) string {
+	switch p := v.(type) {
+	case float64:
+		return fmt.Sprintf("%.0f", p)
+	case string:
+		return p
+	}
+	return ""
+}
+
 type webviewerServer struct {
 	Port   string `json:"port"`
 	Active bool   `json:"active"`
 }
 
 func webviewerHandler(w http.ResponseWriter, r *http.Request) {
-	isLoggedIn := false
-	if cookie, err := r.Cookie(sessionCookieName); err == nil {
-		if user, ok := sessionManager.Get(cookie.Value); ok && user == defaultUsername {
-			isLoggedIn = true
-		}
-	}
+	isLoggedIn := isAuthenticated(r)
 
 	hasServer := false
 	port := ""
@@ -2250,12 +2171,7 @@ func webviewerHandler(w http.ResponseWriter, r *http.Request) {
 					if !ok {
 						continue
 					}
-					entry := webviewerServer{Active: true}
-					if portVal, ok := sv["port"].(float64); ok {
-						entry.Port = fmt.Sprintf("%.0f", portVal)
-					} else if portStr, ok := sv["port"].(string); ok {
-						entry.Port = portStr
-					}
+					entry := webviewerServer{Active: true, Port: jsonPort(sv["port"])}
 					portNum, err := strconv.Atoi(entry.Port)
 					if err != nil || portNum < 1 || portNum > 65535 {
 						continue
@@ -2355,13 +2271,7 @@ func webviewerToggleHandler(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		var svPort string
-		if p, ok := sv["port"].(float64); ok {
-			svPort = fmt.Sprintf("%.0f", p)
-		} else if p, ok := sv["port"].(string); ok {
-			svPort = p
-		}
-		if svPort == req.Port {
+		if jsonPort(sv["port"]) == req.Port {
 			sv["active"] = req.Active
 			found = true
 			break
@@ -2381,31 +2291,12 @@ func webviewerToggleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := writeFileAtomic(configJSONFilePath, body, 0644); err != nil {
+	if err := writeConfigWithHash(configJSONFilePath, body, setJSONHash); err != nil {
 		sendJSONResponse(w, false, "Failed to save config", http.StatusInternalServerError)
-		return
-	}
-	hashValue := calculate32BitHash(string(body))
-	if err := updateConfig(func(c *Config) { c.ConfigJSONHash = hashValue }); err != nil {
-		sendJSONResponse(w, false, "Failed to update hash", http.StatusInternalServerError)
 		return
 	}
 
 	sendJSONResponse(w, true, "", http.StatusOK)
-}
-
-// makeReadOnlyConfigHandler creates a handler for GET-only config pages
-func makeReadOnlyConfigHandler(title, contentTemplate string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if configEditingBlocked(w, r) {
-			return
-		}
-		if r.Method == http.MethodGet {
-			renderTemplateWithConfig(w, title, contentTemplate)
-		} else {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		}
-	}
 }
 
 // renderTemplate executes a named template into a buffer first. If rendering
@@ -2497,24 +2388,65 @@ func apiConfigHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// statusHandler reports service, uptime and watchdog state for the daemon
+// card, served entirely from the cached systemctl show values so any number
+// of clients cost one exec per cache refresh.
 func statusHandler(w http.ResponseWriter, r *http.Request) {
-	enabled, _ := getServiceEnabled()
-	status := getServiceStatus()
 	sysInfo := getCachedSystemInfo()
+	values := sysInfo.UnitProps
+	if len(values) == 0 {
+		http.Error(w, "failed to query systemctl", http.StatusInternalServerError)
+		return
+	}
 
-	uptimeDuration, uptimeSince := getServiceUptime()
+	status := serviceStatusFromProps(values)
+
+	uptime, uptimeSince := "", ""
+	if t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", values["ActiveEnterTimestamp"]); err == nil {
+		uptime = formatDuration(time.Since(t))
+		uptimeSince = t.Format("Jan 2, 2006 15:04:05")
+	}
+
+	nRestarts, _ := strconv.Atoi(values["NRestarts"])
+	burst, _ := strconv.Atoi(values["StartLimitBurst"])
+	interval := values["StartLimitIntervalUSec"]
+	if interval == "infinity" {
+		interval = ""
+	}
+	exitCode, _ := strconv.Atoi(values["ExecMainStatus"])
+	restart := values["Restart"]
+	restartDelay := ""
+	if restart != "" && restart != "no" {
+		restartDelay = values["RestartUSec"]
+		if restartDelay == "infinity" {
+			restartDelay = ""
+		}
+	}
+	result := values["Result"]
+	if result == "success" {
+		result = ""
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":       status,
-		"running":      status == "active (running)",
-		"uptime":       uptimeDuration,
-		"uptime_since": uptimeSince,
-		"enabled":      enabled,
-		"pid":          sysInfo.ProcessID,
-		"cpu":          sysInfo.ProcessCPUUsage,
-		"memory":       sysInfo.ProcessMemoryUsage,
-		"n_restarts":   sysInfo.ServiceNRestarts,
+		"status":               status,
+		"running":              values["ActiveState"] == "active",
+		"enabled":              values["UnitFileState"] == "enabled",
+		"uptime":               uptime,
+		"uptime_since":         uptimeSince,
+		"pid":                  sysInfo.ProcessID,
+		"cpu":                  sysInfo.ProcessCPUUsage,
+		"memory":               sysInfo.ProcessMemoryUsage,
+		"n_restarts":           nRestarts,
+		"watchdog_armed":       strings.Contains(values["OnFailure"], "reboot"),
+		"start_limit_hit":      values["SubState"] == "start-limit-hit",
+		"start_limit_burst":    burst,
+		"start_limit_interval": interval,
+		"sub_state":            values["SubState"],
+		"result":               result,
+		"exit_code":            exitCode,
+		"restart":              restart,
+		"restart_delay":        restartDelay,
 	})
 }
 
@@ -2639,93 +2571,59 @@ func servicePolicyHandler(action string) http.HandlerFunc {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := exec.CommandContext(ctx, "systemctl", "daemon-reload").Run(); err != nil {
+		if _, err := runCmd(10*time.Second, "systemctl", "daemon-reload"); err != nil {
 			log.Printf("daemon-reload failed after %s: %v", action, err)
 			sendJSONResponse(w, false, "systemd reload failed", http.StatusInternalServerError)
 			return
 		}
-		exec.CommandContext(ctx, "systemctl", "reset-failed", "ais-catcher.service").Run()
+		runCmd(10*time.Second, "systemctl", "reset-failed", "ais-catcher.service")
 
 		sendJSONResponse(w, true, "", http.StatusOK)
 	}
 }
 
-func editConfigJSONHandler(w http.ResponseWriter, r *http.Request) {
-	if configEditingBlocked(w, r) {
-		return
-	}
-	if r.Method == http.MethodGet {
-		jsonContent, err := readConfigJSON()
-		if err != nil {
-			log.Printf("Error reading config.json: %v", err)
-			jsonContent = []byte("")
-		}
-		renderEditorTemplate(w, "Edit config.json", "edit-config-json", string(jsonContent), "", "")
-
-	} else if r.Method == http.MethodPost {
-		newContent := r.FormValue("file_content")
-
-		var jsonMap map[string]interface{}
-		if err := json.Unmarshal([]byte(newContent), &jsonMap); err != nil {
-			renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "Invalid JSON: "+err.Error(), "")
+// makeEditorHandler serves the raw text editor for a panel-owned config file.
+// validate may be nil; it rejects content before anything is written.
+func makeEditorHandler(title, tmpl, path string, set func(*Config, uint32), validate func(string) error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if configEditingBlocked(w, r) {
 			return
 		}
-
-		configFileMu.Lock()
-		defer configFileMu.Unlock()
-		if err := writeFileAtomic(configJSONFilePath, []byte(newContent), 0644); err != nil {
-			renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "Failed to save file: "+err.Error(), "")
-			return
+		switch r.Method {
+		case http.MethodGet:
+			content, err := os.ReadFile(path)
+			if err != nil {
+				log.Printf("Error reading %s: %v", path, err)
+				content = []byte("")
+			}
+			renderEditorTemplate(w, title, tmpl, string(content), "", "")
+		case http.MethodPost:
+			newContent := r.FormValue("file_content")
+			if validate != nil {
+				if err := validate(newContent); err != nil {
+					renderEditorTemplate(w, title, tmpl, newContent, err.Error(), "")
+					return
+				}
+			}
+			configFileMu.Lock()
+			defer configFileMu.Unlock()
+			if err := writeConfigWithHash(path, []byte(newContent), set); err != nil {
+				renderEditorTemplate(w, title, tmpl, newContent, err.Error(), "")
+				return
+			}
+			renderEditorTemplate(w, title, tmpl, newContent, "", "Configuration saved successfully.")
+		default:
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
-
-		// Record the hash of what we just wrote so the integrity check passes.
-		hashValue := calculate32BitHash(newContent)
-		if err := updateConfig(func(c *Config) { c.ConfigJSONHash = hashValue }); err != nil {
-			renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "Failed to update control settings: "+err.Error(), "")
-			return
-		}
-
-		renderEditorTemplate(w, "Edit config.json", "edit-config-json", newContent, "", "Configuration saved successfully.")
-
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-func editConfigCMDHandler(w http.ResponseWriter, r *http.Request) {
-	if configEditingBlocked(w, r) {
-		return
+func validateJSONText(content string) error {
+	var jsonMap map[string]interface{}
+	if err := json.Unmarshal([]byte(content), &jsonMap); err != nil {
+		return fmt.Errorf("Invalid JSON: %v", err)
 	}
-	if r.Method == http.MethodGet {
-		cmdContent, err := os.ReadFile(configCmdFilePath)
-		if err != nil {
-			log.Printf("Error reading config.cmd: %v", err)
-			cmdContent = []byte("")
-		}
-		renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", string(cmdContent), "", "")
-
-	} else if r.Method == http.MethodPost {
-		newContent := r.FormValue("file_content")
-
-		if err := writeFileAtomic(configCmdFilePath, []byte(newContent), 0644); err != nil {
-			renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", newContent, "Failed to save file: "+err.Error(), "")
-			return
-		}
-
-		// Record the hash of what we just wrote so the integrity check passes.
-		hashValue := calculate32BitHash(newContent)
-		if err := updateConfig(func(c *Config) { c.ConfigCmdHash = hashValue }); err != nil {
-			renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", newContent, "Failed to update control settings: "+err.Error(), "")
-			return
-		}
-
-		renderEditorTemplate(w, "Edit config.cmd", "edit-config-cmd", newContent, "", "Configuration saved successfully.")
-
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-	}
+	return nil
 }
 
 // systemRedirectHandler preserves old /system links (bookmarks, update-card
@@ -2747,71 +2645,6 @@ func systemStatusAPIHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // watchdogStatusHandler returns the reboot-on-failure watchdog status for ais-catcher.service
-func watchdogStatusHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	props := []string{"NRestarts", "StartLimitBurst", "StartLimitIntervalUSec", "SubState", "OnFailure", "Result", "ExecMainStatus", "RestartUSec", "Restart"}
-	wdCtx, wdCancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer wdCancel()
-	cmd := exec.CommandContext(wdCtx, "systemctl", append([]string{"show", "ais-catcher.service"}, func() []string {
-		var args []string
-		for _, p := range props {
-			args = append(args, "--property="+p)
-		}
-		return args
-	}()...)...)
-	out, err := cmd.Output()
-	if err != nil {
-		http.Error(w, "failed to query systemctl", http.StatusInternalServerError)
-		return
-	}
-
-	values := make(map[string]string)
-	for _, line := range strings.Split(string(out), "\n") {
-		if idx := strings.IndexByte(line, '='); idx > 0 {
-			values[line[:idx]] = line[idx+1:]
-		}
-	}
-
-	nRestarts, _ := strconv.Atoi(values["NRestarts"])
-	burst, _ := strconv.Atoi(values["StartLimitBurst"])
-	interval := values["StartLimitIntervalUSec"]
-	if interval == "infinity" {
-		interval = ""
-	}
-	subState := values["SubState"]
-	onFailure := values["OnFailure"]
-
-	enabled := strings.Contains(onFailure, "reboot")
-	startLimitHit := subState == "start-limit-hit"
-
-	exitCode, _ := strconv.Atoi(values["ExecMainStatus"])
-	restart := values["Restart"]
-	restartDelay := ""
-	if restart != "" && restart != "no" {
-		restartDelay = values["RestartUSec"]
-		if restartDelay == "infinity" {
-			restartDelay = ""
-		}
-	}
-	result := values["Result"]
-	if result == "success" {
-		result = ""
-	}
-
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"enabled":              enabled,
-		"start_limit_hit":      startLimitHit,
-		"n_restarts":           nRestarts,
-		"start_limit_burst":    burst,
-		"start_limit_interval": interval,
-		"sub_state":            subState,
-		"result":               result,
-		"exit_code":            exitCode,
-		"restart":              restart,
-		"restart_delay":        restartDelay,
-	})
-}
 
 func main() {
 
@@ -2920,14 +2753,13 @@ func main() {
 	http.HandleFunc("/logout", authMiddleware(logoutHandler))
 	http.HandleFunc("/device-list", authMiddleware(deviceListHandler))
 	http.HandleFunc("/serial-list", authMiddleware(serialListHandler))
-	http.HandleFunc("/editjson", authMiddleware(editConfigJSONHandler))
-	http.HandleFunc("/editcmd", authMiddleware(editConfigCMDHandler))
+	http.HandleFunc("/editjson", authMiddleware(makeEditorHandler("Edit config.json", "edit-config-json", configJSONFilePath, setJSONHash, validateJSONText)))
+	http.HandleFunc("/editcmd", authMiddleware(makeEditorHandler("Edit config.cmd", "edit-config-cmd", configCmdFilePath, setCmdHash, nil)))
 	http.HandleFunc("/system", authMiddleware(systemRedirectHandler))
 	http.HandleFunc("/api/system-action-start", authMiddleware(systemActionStartHandler))
 	http.HandleFunc("/system-action-progress", authMiddleware(systemActionProgressHandler))
 	http.HandleFunc("/system-action-status", authMiddleware(systemActionStatusHandler))
 	http.HandleFunc("/api/system-status", authMiddleware(systemStatusAPIHandler))
-	http.HandleFunc("/api/watchdog-status", authMiddleware(watchdogStatusHandler))
 	http.HandleFunc("/tcp-servers", authMiddleware(makeConfigHandler("TCP Servers", "tcp-servers")))
 	http.HandleFunc("/general", authMiddleware(makeConfigHandler("General Settings", "general-settings")))
 	http.HandleFunc("/dataflow", authMiddleware(makeReadOnlyConfigHandler("Data Flow", "zones")))
@@ -2938,12 +2770,9 @@ func main() {
 			http.Redirect(w, r, "/license", http.StatusSeeOther)
 			return
 		}
-		cookie, err := r.Cookie(sessionCookieName)
-		if err == nil {
-			if user, ok := sessionManager.Get(cookie.Value); ok && user == defaultUsername {
-				http.Redirect(w, r, "/control", http.StatusSeeOther)
-				return
-			}
+		if isAuthenticated(r) {
+			http.Redirect(w, r, "/control", http.StatusSeeOther)
+			return
 		}
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	})
