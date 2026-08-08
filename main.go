@@ -1022,11 +1022,9 @@ func checkLatestVersion() {
 	if !githubGet("https://api.github.com/repos/jvde-github/AIS-catcher/releases/latest", &release) {
 		return
 	}
+	// manifest or nothing: the tip of main may not be built yet, and offering
+	// an uninstallable update is worse than offering none
 	latestCommit := githubLatestBuilt("jvde-github/AIS-catcher")
-	if latestCommit == "" {
-		// no manifest yet (pre-dates the workflow change): fall back to the tip
-		latestCommit = githubLatestCommit("jvde-github/AIS-catcher")
-	}
 
 	cachedSysInfo.Lock()
 	defer cachedSysInfo.Unlock()
