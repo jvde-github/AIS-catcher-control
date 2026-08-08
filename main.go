@@ -1001,6 +1001,20 @@ func githubLatestCommit(repo string) string {
 	return ""
 }
 
+// githubLatestBuilt returns the commit of the newest *successfully built*
+// Edge release, written by the build workflow only when every job passed.
+// This is what an update offer must compare against: the branch tip can be
+// ahead of any installable package by a CI run, or forever if the build broke.
+func githubLatestBuilt(repo string) string {
+	var manifest struct {
+		Commit string `json:"commit"`
+	}
+	if githubGet("https://github.com/"+repo+"/releases/download/Edge/latest.json", &manifest) && len(manifest.Commit) >= 7 {
+		return manifest.Commit[:7]
+	}
+	return ""
+}
+
 // checkLatestVersion fetches the latest AIS-catcher release and main commit
 // from GitHub, updating only the GitHub-related cache fields.
 func checkLatestVersion() {
@@ -1008,7 +1022,11 @@ func checkLatestVersion() {
 	if !githubGet("https://api.github.com/repos/jvde-github/AIS-catcher/releases/latest", &release) {
 		return
 	}
-	latestCommit := githubLatestCommit("jvde-github/AIS-catcher")
+	latestCommit := githubLatestBuilt("jvde-github/AIS-catcher")
+	if latestCommit == "" {
+		// no manifest yet (pre-dates the workflow change): fall back to the tip
+		latestCommit = githubLatestCommit("jvde-github/AIS-catcher")
+	}
 
 	cachedSysInfo.Lock()
 	defer cachedSysInfo.Unlock()
