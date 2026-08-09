@@ -1767,11 +1767,10 @@ func controlService(action string) error {
 	return err
 }
 
-// logRangePattern accepts relative journalctl --since ranges like "12h" or "3d".
 var logRangePattern = regexp.MustCompile(`^\d{1,3}[hd]$`)
 
-// maxLogLines caps a single fetch; the frontend requests the same amount for
-// range queries and severity-filters the result client-side.
+// the frontend requests this same amount for range queries and severity-filters
+// the result client-side
 const maxLogLines = 5000
 
 // journalctlArgs builds the argument list for reading logs from the given
@@ -1898,8 +1897,8 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	linesStr := r.URL.Query().Get("lines")
 	lines := 10
 	if linesStr != "" {
-		if parsedLines, err := strconv.Atoi(linesStr); err == nil && parsedLines > 0 && parsedLines <= maxLogLines {
-			lines = parsedLines
+		if parsedLines, err := strconv.Atoi(linesStr); err == nil && parsedLines > 0 {
+			lines = min(parsedLines, maxLogLines)
 		}
 	}
 
@@ -1975,7 +1974,7 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := exec.LookPath("journalctl"); err != nil {
 		log.Printf("journalctl command not found: %v", err)
-		fmt.Fprintf(w, "data: %s\n\n", `{"message":"[ERROR] journalctl not available on this system"}`)
+		fmt.Fprintf(w, "data: %s\n\n", `{"message":"[ERROR] journalctl not available on this system","priority":3}`)
 		flusher.Flush()
 		return
 	}

@@ -295,8 +295,7 @@
                     <div class="text-slate-500 italic text-sm">Loading logs...</div>
                 </div>
             </div>
-            <button id="scroll-bottom-btn"
-                onclick="const c=document.getElementById('logs-container');c.scrollTop=c.scrollHeight;userScrolledUp=false;document.getElementById('scroll-bottom-btn').classList.add('hidden');"
+            <button id="scroll-bottom-btn" onclick="jumpToLatest()"
                 class="hidden absolute bottom-3 right-5 flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-full shadow-lg transition-opacity">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -1161,9 +1160,11 @@
             const logsContainer = document.getElementById('logs-container');
             const MAX_LOG_LINES = 5000;
             const LOG_LEVELS = { debug: 7, info: 6, notice: 5, warning: 4, err: 3 };
-            let logMaxPriority = LOG_LEVELS.info;
-            let logSearchText = '';
+            let logMaxPriority;
+            let logSearchText;
             let logSearchTimer;
+            let logLoadSeq = 0;
+            let userScrolledUp = false;
 
             function scrollLogsDown() {
                 if (!userScrolledUp) logsContainer.scrollTop = logsContainer.scrollHeight;
@@ -1189,18 +1190,29 @@
                 logSearchTimer = setTimeout(applyLogFilters, 150);
             };
 
-            window.loadRecentLogs = function () {
-                logsContentDiv.innerHTML = '<div class="text-slate-500 italic text-sm" id="loading-message">Loading logs...</div>';
+            window.jumpToLatest = function () {
+                userScrolledUp = false;
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+                document.getElementById('scroll-bottom-btn').classList.add('hidden');
+            };
 
+            function logsNotice(text) {
+                logsContentDiv.innerHTML = `<div class="text-slate-500 italic text-sm" id="loading-message">${text}</div>`;
+            }
+
+            window.loadRecentLogs = function () {
+                logsNotice('Loading logs...');
+
+                const seq = ++logLoadSeq;
                 const range = document.getElementById('log-range-select').value;
                 const query = range ? `&lines=${MAX_LOG_LINES}&range=${range}` : '&lines=200';
                 fetch(`/api/recent-logs?source=${currentLogSource}${query}`)
                     .then(response => response.json())
                     .then(data => {
-                        const loadingMsg = document.getElementById('loading-message');
-                        if (loadingMsg) loadingMsg.remove();
+                        if (seq !== logLoadSeq) return;
 
                         if (data.logs && data.logs.length > 0) {
+                            logsContentDiv.textContent = '';
                             const fragment = document.createDocumentFragment();
                             data.logs.forEach(log => {
                                 const line = formatLogLine(log.message, log.priority, log.time);
@@ -1209,15 +1221,19 @@
                             });
                             logsContentDiv.appendChild(fragment);
                             logsContainer.scrollTop = logsContainer.scrollHeight;
+                        } else if (data.error) {
+                            logsNotice(data.error);
+                        } else {
+                            logsNotice(range ? 'No log entries in the selected range.' : 'No recent log entries.');
                         }
                     })
                     .catch(error => {
                         console.error('Error fetching initial logs:', error);
-                        const loadingMsg = document.getElementById('loading-message');
-                        if (loadingMsg) loadingMsg.remove();
+                        if (seq === logLoadSeq) logsNotice('Failed to load logs.');
                     });
             };
 
+            applyLogFilters();
             loadRecentLogs();
 
             // Switch log source
@@ -1270,8 +1286,6 @@
                 return div;
             }
 
-            let userScrolledUp = false;
-
             function initializeSSE() {
                 if (eventSource) eventSource.close();
 
@@ -1294,7 +1308,7 @@
 
                         if (!userScrolledUp) {
                             logsContainer.scrollTop = logsContainer.scrollHeight;
-                        } else {
+                        } else if (!newLog.classList.contains('filtered')) {
                             document.getElementById('scroll-bottom-btn').classList.remove('hidden');
                         }
                     } catch (e) {
