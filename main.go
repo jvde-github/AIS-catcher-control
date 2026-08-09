@@ -1767,9 +1767,17 @@ func controlService(action string) error {
 	return err
 }
 
+// logRangePattern accepts relative journalctl --since ranges like "12h" or "3d".
+var logRangePattern = regexp.MustCompile(`^\d{1,3}[hd]$`)
+
+// maxLogLines caps a single fetch; the frontend requests the same amount for
+// range queries and severity-filters the result client-side.
+const maxLogLines = 5000
+
 // journalctlArgs builds the argument list for reading logs from the given
-// source; returns nil for an unknown source.
-func journalctlArgs(source, priority string, extra ...string) []string {
+// source; returns nil for an unknown source. No priority filter: all levels
+// are fetched, the frontend filters what it displays.
+func journalctlArgs(source string, extra ...string) []string {
 	var args []string
 	switch source {
 	case "ais-catcher":
@@ -1780,7 +1788,7 @@ func journalctlArgs(source, priority string, extra ...string) []string {
 	default:
 		return nil
 	}
-	args = append(args, "-p", priority, "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
+	args = append(args, "--no-pager", "-o", "json", "--output-fields=MESSAGE,PRIORITY,__REALTIME_TIMESTAMP")
 	return append(args, extra...)
 }
 
@@ -1890,14 +1898,9 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	linesStr := r.URL.Query().Get("lines")
 	lines := 10
 	if linesStr != "" {
-		if parsedLines, err := strconv.Atoi(linesStr); err == nil && parsedLines > 0 && parsedLines <= 1000 {
+		if parsedLines, err := strconv.Atoi(linesStr); err == nil && parsedLines > 0 && parsedLines <= maxLogLines {
 			lines = parsedLines
 		}
-	}
-
-	priority := r.URL.Query().Get("priority")
-	if priority == "" {
-		priority = "info"
 	}
 
 	if _, err := exec.LookPath("journalctl"); err != nil {
@@ -1909,7 +1912,11 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	args := journalctlArgs(logSource, priority, "-n", strconv.Itoa(lines))
+	extra := []string{"-n", strconv.Itoa(lines)}
+	if rangeStr := r.URL.Query().Get("range"); logRangePattern.MatchString(rangeStr) {
+		extra = append(extra, "-S", "-"+rangeStr)
+	}
+	args := journalctlArgs(logSource, extra...)
 	if args == nil {
 		writeLogsJSON(w, nil, "Invalid log source")
 		return
@@ -1960,11 +1967,6 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		logSource = "ais-catcher"
 	}
 
-	priority := r.URL.Query().Get("priority")
-	if priority == "" {
-		priority = "info"
-	}
-
 	// Create dedicated channel for log streaming using journalctl.
 	// Do NOT close this channel here — the background goroutine writes to it
 	// and closing a channel from the reader side causes a panic on write.
@@ -1985,7 +1987,7 @@ func logsStreamHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 
-		args := journalctlArgs(logSource, priority, "-f", "-n", "0")
+		args := journalctlArgs(logSource, "-f", "-n", "0")
 		if args == nil {
 			log.Printf("Invalid log source: %s", logSource)
 			return

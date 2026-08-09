@@ -27,6 +27,11 @@
             line-height: 1.5;
             padding: 1px 0;
             white-space: pre;
+            display: flex;
+        }
+
+        .log-line.filtered {
+            display: none;
         }
 
         .log-line.error {
@@ -243,7 +248,65 @@
         </div>
     </div>
 
-    <!-- 2. Software -->
+    <!-- 2. Logs -->
+    <div
+        class="bg-slate-900 rounded-none sm:rounded-xl shadow-lg overflow-hidden border-x-0 sm:border-x border border-slate-700 flex flex-col">
+        <div class="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+            <div class="flex items-center space-x-3 flex-1">
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3"></path>
+                </svg>
+                <select id="log-source-select" onchange="switchLogSource()"
+                    class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="ais-catcher">ais-catcher</option>
+                    <option value="control">control panel</option>
+                    <option value="system">system</option>
+                </select>
+                <select id="log-priority-select" onchange="applyLogFilters()"
+                    class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="debug">debug</option>
+                    <option value="info" selected>info</option>
+                    <option value="notice">notice</option>
+                    <option value="warning">warning</option>
+                    <option value="err">error</option>
+                </select>
+                <select id="log-range-select" onchange="loadRecentLogs()"
+                    class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="" selected>recent</option>
+                    <option value="1h">last hour</option>
+                    <option value="6h">last 6h</option>
+                    <option value="12h">last 12h</option>
+                    <option value="24h">last 24h</option>
+                    <option value="3d">last 3 days</option>
+                </select>
+                <input id="log-search" type="text" placeholder="search&hellip;" oninput="searchLogsInput()"
+                    class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0 max-w-48" />
+            </div>
+            <div class="flex space-x-1.5">
+                <div class="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
+                <div class="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50"></div>
+            </div>
+        </div>
+
+        <div class="relative">
+            <div id="logs-container" class="overflow-auto custom-scrollbar p-4 bg-slate-900" style="min-height:20rem;max-height:60vh">
+                <div id="logs-content" class="flex flex-col">
+                    <div class="text-slate-500 italic text-sm">Loading logs...</div>
+                </div>
+            </div>
+            <button id="scroll-bottom-btn"
+                onclick="const c=document.getElementById('logs-container');c.scrollTop=c.scrollHeight;userScrolledUp=false;document.getElementById('scroll-bottom-btn').classList.add('hidden');"
+                class="hidden absolute bottom-3 right-5 flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-full shadow-lg transition-opacity">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+                new messages
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. Software -->
     <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border border-slate-200 overflow-hidden">
         <div class="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
             <div class="flex items-center space-x-2">
@@ -338,7 +401,7 @@
         </div>
     </div>
 
-    <!-- 3. System -->
+    <!-- 4. System -->
     <div class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border border-slate-200 overflow-hidden">
         <div class="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center space-x-2">
             <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -366,7 +429,7 @@
         </div>
     </div>
 
-    <!-- 4. Maintenance -->
+    <!-- 5. Maintenance -->
     <div id="maintenance-card" class="bg-white rounded-none sm:rounded-xl shadow-sm border-x-0 sm:border-x border border-slate-200 overflow-hidden">
         <div class="px-4 sm:px-5 py-3 sm:py-5 border-b border-slate-100 bg-slate-50/50 flex items-start space-x-2">
             <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
@@ -459,54 +522,6 @@
                     <div class="h-48 sm:h-64 overflow-auto p-3 sm:p-4 font-mono text-[11px] sm:text-xs leading-relaxed text-slate-300" id="progressOutput" style="white-space: pre;"></div>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- 5. Logs -->
-    <div
-        class="bg-slate-900 rounded-none sm:rounded-xl shadow-lg overflow-hidden border-x-0 sm:border-x border border-slate-700 flex flex-col">
-        <div class="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
-            <div class="flex items-center space-x-3 flex-1">
-                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3"></path>
-                </svg>
-                <select id="log-source-select" onchange="switchLogSource()"
-                    class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="ais-catcher">ais-catcher</option>
-                    <option value="control">control panel</option>
-                    <option value="system">system</option>
-                </select>
-                <select id="log-priority-select" onchange="switchLogSource()"
-                    class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="debug">debug</option>
-                    <option value="info" selected>info</option>
-                    <option value="notice">notice</option>
-                    <option value="warning">warning</option>
-                    <option value="err">error</option>
-                    <option value="crit">critical</option>
-                </select>
-            </div>
-            <div class="flex space-x-1.5">
-                <div class="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
-                <div class="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
-                <div class="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50"></div>
-            </div>
-        </div>
-
-        <div class="relative">
-            <div id="logs-container" class="overflow-auto custom-scrollbar p-4 bg-slate-900" style="min-height:20rem;max-height:60vh">
-                <div id="logs-content" class="flex flex-col">
-                    <div class="text-slate-500 italic text-sm">Loading logs...</div>
-                </div>
-            </div>
-            <button id="scroll-bottom-btn"
-                onclick="const c=document.getElementById('logs-container');c.scrollTop=c.scrollHeight;userScrolledUp=false;document.getElementById('scroll-bottom-btn').classList.add('hidden');"
-                class="hidden absolute bottom-3 right-5 flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-full shadow-lg transition-opacity">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                </svg>
-                new messages
-            </button>
         </div>
     </div>
 
@@ -1099,7 +1114,6 @@
         document.addEventListener('DOMContentLoaded', function () {
             let eventSource = null;
             let currentLogSource = 'ais-catcher';
-            let currentPriority = 'info';
 
             refreshDaemonCard();
             // pollers pause while the tab is hidden; visibilitychange refreshes on return
@@ -1144,21 +1158,56 @@
             // Live logs
             // -----------------------------------------------------------
             const logsContentDiv = document.getElementById('logs-content');
+            const logsContainer = document.getElementById('logs-container');
+            const MAX_LOG_LINES = 5000;
+            const LOG_LEVELS = { debug: 7, info: 6, notice: 5, warning: 4, err: 3 };
+            let logMaxPriority = LOG_LEVELS.info;
+            let logSearchText = '';
+            let logSearchTimer;
 
-            function loadRecentLogs() {
+            function scrollLogsDown() {
+                if (!userScrolledUp) logsContainer.scrollTop = logsContainer.scrollHeight;
+            }
+
+            // level and search are display filters over lines fetched at debug level:
+            // toggling them hides/reveals what is already on screen, nothing is refetched
+            function filterLogLine(line) {
+                line.classList.toggle('filtered',
+                    line._priority > logMaxPriority || (logSearchText !== '' && !line._searchText.includes(logSearchText)));
+            }
+
+            window.applyLogFilters = function () {
+                logMaxPriority = LOG_LEVELS[document.getElementById('log-priority-select').value];
+                logSearchText = document.getElementById('log-search').value.trim().toLowerCase();
+                for (const line of logsContentDiv.children)
+                    if (line.classList.contains('log-line')) filterLogLine(line);
+                scrollLogsDown();
+            };
+
+            window.searchLogsInput = function () {
+                clearTimeout(logSearchTimer);
+                logSearchTimer = setTimeout(applyLogFilters, 150);
+            };
+
+            window.loadRecentLogs = function () {
                 logsContentDiv.innerHTML = '<div class="text-slate-500 italic text-sm" id="loading-message">Loading logs...</div>';
 
-                fetch(`/api/recent-logs?source=${currentLogSource}&lines=10&priority=${currentPriority}`)
+                const range = document.getElementById('log-range-select').value;
+                const query = range ? `&lines=${MAX_LOG_LINES}&range=${range}` : '&lines=200';
+                fetch(`/api/recent-logs?source=${currentLogSource}${query}`)
                     .then(response => response.json())
                     .then(data => {
                         const loadingMsg = document.getElementById('loading-message');
                         if (loadingMsg) loadingMsg.remove();
 
                         if (data.logs && data.logs.length > 0) {
+                            const fragment = document.createDocumentFragment();
                             data.logs.forEach(log => {
-                                logsContentDiv.appendChild(formatLogLine(log.message, log.priority, log.time));
+                                const line = formatLogLine(log.message, log.priority, log.time);
+                                filterLogLine(line);
+                                fragment.appendChild(line);
                             });
-                            const logsContainer = document.getElementById('logs-container');
+                            logsContentDiv.appendChild(fragment);
                             logsContainer.scrollTop = logsContainer.scrollHeight;
                         }
                     })
@@ -1167,14 +1216,13 @@
                         const loadingMsg = document.getElementById('loading-message');
                         if (loadingMsg) loadingMsg.remove();
                     });
-            }
+            };
 
             loadRecentLogs();
 
             // Switch log source
             window.switchLogSource = function () {
                 currentLogSource = document.getElementById('log-source-select').value;
-                currentPriority = document.getElementById('log-priority-select').value;
                 loadRecentLogs();
                 initializeSSE();
             };
@@ -1205,7 +1253,8 @@
                 }
 
                 div.classList.add(level);
-                div.style.display = 'flex';
+                div._priority = (priority !== undefined && priority !== null) ? priority : 6;
+                div._searchText = ((time || '') + ' ' + message).toLowerCase();
 
                 if (time) {
                     const ts = document.createElement('span');
@@ -1225,10 +1274,8 @@
 
             function initializeSSE() {
                 if (eventSource) eventSource.close();
-                const logsContentDiv = document.getElementById('logs-content');
-                const logsContainer = document.getElementById('logs-container');
 
-                const streamUrl = '/logs-stream?source=' + currentLogSource + '&priority=' + currentPriority;
+                const streamUrl = '/logs-stream?source=' + currentLogSource;
                 eventSource = new EventSource(streamUrl);
 
                 eventSource.onmessage = function (event) {
@@ -1238,10 +1285,10 @@
 
                         const logMsg = JSON.parse(event.data);
                         const newLog = formatLogLine(logMsg.message, logMsg.priority, logMsg.time);
+                        filterLogLine(newLog);
                         logsContentDiv.appendChild(newLog);
 
-                        const maxLogs = 1000;
-                        while (logsContentDiv.children.length > maxLogs) {
+                        while (logsContentDiv.children.length > MAX_LOG_LINES) {
                             logsContentDiv.removeChild(logsContentDiv.firstChild);
                         }
 
@@ -1322,19 +1369,16 @@
             });
 
             // Track whether the user has manually scrolled up
-            const logsContainer = document.getElementById('logs-container');
-            if (logsContainer) {
-                logsContainer.addEventListener('scroll', () => {
-                    const atBottom = logsContainer.scrollHeight - logsContainer.scrollTop <= logsContainer.clientHeight + 4;
-                    if (atBottom) {
-                        userScrolledUp = false;
-                        document.getElementById('scroll-bottom-btn').classList.add('hidden');
-                    } else {
-                        userScrolledUp = true;
-                    }
-                });
-                logsContainer.scrollTop = logsContainer.scrollHeight;
-            }
+            logsContainer.addEventListener('scroll', () => {
+                const atBottom = logsContainer.scrollHeight - logsContainer.scrollTop <= logsContainer.clientHeight + 4;
+                if (atBottom) {
+                    userScrolledUp = false;
+                    document.getElementById('scroll-bottom-btn').classList.add('hidden');
+                } else {
+                    userScrolledUp = true;
+                }
+            });
+            logsContainer.scrollTop = logsContainer.scrollHeight;
         });
     </script>
 </div>
