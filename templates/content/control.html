@@ -1170,8 +1170,6 @@
                 if (!userScrolledUp) logsContainer.scrollTop = logsContainer.scrollHeight;
             }
 
-            // level and search are display filters over lines fetched at debug level:
-            // toggling them hides/reveals what is already on screen, nothing is refetched
             function filterLogLine(line) {
                 line.classList.toggle('filtered',
                     line._priority > logMaxPriority || (logSearchText !== '' && !line._searchText.includes(logSearchText)));

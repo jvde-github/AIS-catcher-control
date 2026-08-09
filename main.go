@@ -1769,13 +1769,10 @@ func controlService(action string) error {
 
 var logRangePattern = regexp.MustCompile(`^\d{1,3}[hd]$`)
 
-// the frontend requests this same amount for range queries and severity-filters
-// the result client-side
+// must match MAX_LOG_LINES in control.html
 const maxLogLines = 5000
 
-// journalctlArgs builds the argument list for reading logs from the given
-// source; returns nil for an unknown source. No priority filter: all levels
-// are fetched, the frontend filters what it displays.
+// no priority filter on purpose: all levels are fetched, the frontend filters the display
 func journalctlArgs(source string, extra ...string) []string {
 	var args []string
 	switch source {
