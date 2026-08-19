@@ -262,7 +262,7 @@
                     <option value="control">control panel</option>
                     <option value="system">system</option>
                 </select>
-                <select id="log-priority-select" onchange="applyLogFilters()"
+                <select id="log-priority-select" onchange="switchLogLevel()"
                     class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="debug">debug</option>
                     <option value="info" selected>info</option>
@@ -272,8 +272,7 @@
                 </select>
                 <select id="log-range-select" onchange="loadRecentLogs()"
                     class="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="" selected>recent</option>
-                    <option value="1h">last hour</option>
+                    <option value="1h" selected>last hour</option>
                     <option value="6h">last 6h</option>
                     <option value="12h">last 12h</option>
                     <option value="24h">last 24h</option>
@@ -1188,6 +1187,11 @@
                 logSearchTimer = setTimeout(applyLogFilters, 150);
             };
 
+            window.switchLogLevel = function () {
+                applyLogFilters();
+                loadRecentLogs();
+            };
+
             window.jumpToLatest = function () {
                 userScrolledUp = false;
                 logsContainer.scrollTop = logsContainer.scrollHeight;
@@ -1203,8 +1207,8 @@
 
                 const seq = ++logLoadSeq;
                 const range = document.getElementById('log-range-select').value;
-                const query = range ? `&lines=${MAX_LOG_LINES}&range=${range}` : '&lines=200';
-                fetch(`/api/recent-logs?source=${currentLogSource}${query}`)
+                const level = document.getElementById('log-priority-select').value;
+                fetch(`/api/recent-logs?source=${currentLogSource}&priority=${level}&lines=${MAX_LOG_LINES}&range=${range}`)
                     .then(response => response.json())
                     .then(data => {
                         if (seq !== logLoadSeq) return;
@@ -1222,7 +1226,7 @@
                         } else if (data.error) {
                             logsNotice(data.error);
                         } else {
-                            logsNotice(range ? 'No log entries in the selected range.' : 'No recent log entries.');
+                            logsNotice('No log entries in the selected range.');
                         }
                     })
                     .catch(error => {

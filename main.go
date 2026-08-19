@@ -1772,7 +1772,8 @@ var logRangePattern = regexp.MustCompile(`^\d{1,3}[hd]$`)
 // must match MAX_LOG_LINES in control.html
 const maxLogLines = 5000
 
-// no priority filter on purpose: all levels are fetched, the frontend filters the display
+// history queries pass -p for the selected level; the live stream fetches all
+// levels and filters client-side
 func journalctlArgs(source string, extra ...string) []string {
 	var args []string
 	switch source {
@@ -1908,8 +1909,14 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
+	base := []string{"-n", strconv.Itoa(lines)}
+	switch p := r.URL.Query().Get("priority"); p {
+	case "debug", "info", "notice", "warning", "err":
+		base = append(base, "-p", p)
+	}
+
 	fetch := func(extra ...string) ([]LogMessage, string) {
-		args := journalctlArgs(logSource, append([]string{"-n", strconv.Itoa(lines)}, extra...)...)
+		args := journalctlArgs(logSource, append(base, extra...)...)
 		if args == nil {
 			return nil, "Invalid log source"
 		}
