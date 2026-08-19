@@ -1911,6 +1911,9 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	extra := []string{"-n", strconv.Itoa(lines)}
 	if rangeStr := r.URL.Query().Get("range"); logRangePattern.MatchString(rangeStr) {
 		extra = append(extra, "-S", "-"+rangeStr)
+	} else {
+		// a time bound lets journalctl skip archive files without opening them
+		extra = append(extra, "-S", "-7d")
 	}
 	args := journalctlArgs(logSource, extra...)
 	if args == nil {
