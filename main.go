@@ -1946,12 +1946,8 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	if rangeStr := r.URL.Query().Get("range"); logRangePattern.MatchString(rangeStr) {
 		logs, errMsg = fetch("-S", "-"+rangeStr)
 	} else {
-		// a time bound lets journalctl skip archive files without opening them;
-		// a quiet journal falls back to the full scan so old lines still show
+		// a time bound lets journalctl skip archive files without opening them
 		logs, errMsg = fetch("-S", "-24h")
-		if errMsg == "" && len(logs) == 0 {
-			logs, errMsg = fetch()
-		}
 	}
 
 	if errMsg != "" {
