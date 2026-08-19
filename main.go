@@ -1905,7 +1905,7 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
 	extra := []string{"-n", strconv.Itoa(lines)}
@@ -1920,12 +1920,14 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	output, err := exec.CommandContext(ctx, "journalctl", args...).Output()
 	if err != nil {
+		detail := err.Error()
 		if ctx.Err() == context.DeadlineExceeded {
-			log.Printf("Timeout fetching recent %s logs", logSource)
-		} else {
-			log.Printf("Error fetching recent %s logs: %v", logSource, err)
+			detail = "timed out"
+		} else if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+			detail = strings.SplitN(strings.TrimSpace(string(exitErr.Stderr)), "\n", 2)[0]
 		}
-		writeLogsJSON(w, nil, "Failed to fetch logs")
+		log.Printf("Error fetching recent %s logs: %s", logSource, detail)
+		writeLogsJSON(w, nil, "journalctl: "+detail)
 		return
 	}
 
