@@ -89,6 +89,8 @@ type SystemInfo struct {
 	UpdateAvailable        bool      `json:"update_available"`         // Whether update is available
 	LastChecked            time.Time `json:"last_checked"`             // Last time we checked GitHub
 	ControlLatestCommit    string    `json:"control_latest_commit"`    // Latest Control panel commit from GitHub
+	ControlCompared        string    `json:"-"`                        // installed:latest pair ControlIsNewer applies to
+	ControlIsNewer         bool      `json:"-"`                        // whether ControlLatestCommit is ahead of this build
 	ControlUpdateAvailable bool      `json:"control_update_available"` // Whether Control panel update is available
 	ControlLastChecked     time.Time `json:"control_last_checked"`     // Last time we checked Control repo
 
@@ -500,8 +502,8 @@ func broadcastResult(msgType, content string) {
 		cachedSysInfo.lastFetch = time.Time{} // Force cache refresh
 		cachedSysInfo.Unlock()
 		// synchronous, so the update flags clear right after a successful update
-		getCachedSystemInfo()
-		checkLatestVersion()
+		fresh := getCachedSystemInfo()
+		checkLatestVersion(fresh.AISCatcherCommit)
 		checkControlLatestVersion()
 	}()
 }
@@ -931,7 +933,7 @@ func collectSystemInfo(prev SystemInfo) SystemInfo {
 	// GitHub checks run async so a slow/unreachable API never blocks page load
 	if time.Since(info.LastChecked) > 10*time.Minute {
 		info.LastChecked = time.Now() // pre-stamp to prevent thundering herd
-		go checkLatestVersion()
+		go checkLatestVersion(info.AISCatcherCommit)
 	}
 	if time.Since(info.ControlLastChecked) > 10*time.Minute {
 		info.ControlLastChecked = time.Now() // pre-stamp to prevent thundering herd
@@ -975,10 +977,11 @@ func recomputeUpdateAvailable(info *SystemInfo) {
 		(currentVersion == latestTag && commitNewer)
 }
 
+var githubClient = &http.Client{Timeout: 5 * time.Second}
+
 // githubGet fetches and decodes a GitHub API response; false on any failure.
 func githubGet(url string, v interface{}) bool {
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := githubClient.Get(url)
 	if err != nil {
 		log.Printf("GitHub request failed (%s): %v", url, err)
 		return false
@@ -993,17 +996,6 @@ func githubGet(url string, v interface{}) bool {
 		return false
 	}
 	return true
-}
-
-// githubLatestCommit returns the short HEAD commit of a repo's main branch.
-func githubLatestCommit(repo string) string {
-	var commit struct {
-		SHA string `json:"sha"`
-	}
-	if githubGet("https://api.github.com/repos/"+repo+"/commits/main", &commit) && len(commit.SHA) >= 7 {
-		return commit.SHA[:7]
-	}
-	return ""
 }
 
 // githubLatestBuilt returns the commit of the newest *successfully built*
@@ -1032,9 +1024,9 @@ func commitIsNewer(repo, installed, built string) bool {
 	return cmp.Status == "ahead" || cmp.Status == "diverged"
 }
 
-// checkLatestVersion fetches the latest AIS-catcher release and main commit
+// checkLatestVersion fetches the latest AIS-catcher release and built commit
 // from GitHub, updating only the GitHub-related cache fields.
-func checkLatestVersion() {
+func checkLatestVersion(installed string) {
 	var release GitHubRelease
 	if !githubGet("https://api.github.com/repos/jvde-github/AIS-catcher/releases/latest", &release) {
 		return
@@ -1043,15 +1035,8 @@ func checkLatestVersion() {
 	// an uninstallable update is worse than offering none
 	latestCommit := githubLatestBuilt("jvde-github/AIS-catcher", "Edge")
 
-	cachedSysInfo.Lock()
-	installed := cachedSysInfo.info.AISCatcherCommit
-	cachedSysInfo.Unlock()
-
-	pair, newer := "", false
-	if installed != "" && latestCommit != "" && installed != latestCommit {
-		pair = installed + ":" + latestCommit
-		newer = commitIsNewer("jvde-github/AIS-catcher", installed, latestCommit)
-	}
+	pair, newer := comparedNewer("jvde-github/AIS-catcher", installed, latestCommit,
+		func(i *SystemInfo) (string, bool) { return i.LatestCompared, i.LatestIsNewer })
 
 	cachedSysInfo.Lock()
 	defer cachedSysInfo.Unlock()
@@ -1070,16 +1055,42 @@ func checkLatestVersion() {
 	recomputeUpdateAvailable(info)
 }
 
+// comparedNewer resolves whether built is ahead of installed, reusing the
+// cached verdict when the same pair was already compared: the relationship
+// between two fixed commits never changes, and the mismatch is the steady
+// state on stations running ahead of the newest package.
+func comparedNewer(repo, installed, built string, cached func(*SystemInfo) (string, bool)) (string, bool) {
+	if installed == "" || built == "" || installed == built {
+		return "", false
+	}
+	pair := installed + ":" + built
+
+	cachedSysInfo.RLock()
+	prevPair, prevNewer := cached(&cachedSysInfo.info)
+	cachedSysInfo.RUnlock()
+	if prevPair == pair {
+		return pair, prevNewer
+	}
+	return pair, commitIsNewer(repo, installed, built)
+}
+
 // checkControlLatestVersion fetches the latest built Control panel commit.
 func checkControlLatestVersion() {
 	latestCommit := githubLatestBuilt("jvde-github/AIS-catcher-control", "v0.1")
 	if latestCommit == "" {
-		// no manifest yet: fall back to the branch tip
-		latestCommit = githubLatestCommit("jvde-github/AIS-catcher-control")
-	}
-	if latestCommit == "" {
 		return
 	}
+
+	current := buildCommit
+	if len(current) > 7 {
+		current = current[:7]
+	}
+	if current == "unknown" {
+		current = ""
+	}
+
+	pair, newer := comparedNewer("jvde-github/AIS-catcher-control", current, latestCommit,
+		func(i *SystemInfo) (string, bool) { return i.ControlCompared, i.ControlIsNewer })
 
 	cachedSysInfo.Lock()
 	defer cachedSysInfo.Unlock()
@@ -1087,13 +1098,12 @@ func checkControlLatestVersion() {
 	info := &cachedSysInfo.info
 	info.ControlLatestCommit = latestCommit
 	info.ControlLastChecked = time.Now()
-
-	if buildCommit != "unknown" && buildCommit != "" {
-		current := buildCommit
-		if len(current) > 7 {
-			current = current[:7]
-		}
-		info.ControlUpdateAvailable = current != info.ControlLatestCommit
+	if pair != "" {
+		info.ControlCompared = pair
+		info.ControlIsNewer = newer
+	}
+	if current != "" {
+		info.ControlUpdateAvailable = pair != "" && newer
 	}
 }
 
@@ -1950,52 +1960,45 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 		base = append(base, "-p", p)
 	}
 
-	fetch := func(extra ...string) ([]LogMessage, string) {
-		args := journalctlArgs(logSource, append(base, extra...)...)
-		if args == nil {
-			return nil, "Invalid log source"
-		}
-
-		output, err := exec.CommandContext(ctx, "journalctl", args...).Output()
-		if err != nil {
-			detail := err.Error()
-			if ctx.Err() == context.DeadlineExceeded {
-				detail = "timed out"
-			} else if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
-				detail = strings.SplitN(strings.TrimSpace(string(exitErr.Stderr)), "\n", 2)[0]
-			}
-			log.Printf("Error fetching recent %s logs: %s", logSource, detail)
-			return nil, "journalctl: " + detail
-		}
-
-		lines_output := strings.Split(strings.TrimSpace(string(output)), "\n")
-		logs := make([]LogMessage, 0, len(lines_output))
-		for _, line := range lines_output {
-			if line == "" {
-				continue
-			}
-			if msg, prio, ts, ok := parseJournalJSON(line); ok {
-				logs = append(logs, LogMessage{Message: msg, Priority: prio, Time: ts})
-			} else {
-				logs = append(logs, LogMessage{Message: line, Priority: 6})
-			}
-		}
-		return logs, ""
+	// a time bound lets journalctl skip archive files without opening them
+	rangeStr := r.URL.Query().Get("range")
+	if !logRangePattern.MatchString(rangeStr) {
+		rangeStr = "24h"
 	}
+	base = append(base, "-S", "-"+rangeStr)
 
-	var logs []LogMessage
-	var errMsg string
-	if rangeStr := r.URL.Query().Get("range"); logRangePattern.MatchString(rangeStr) {
-		logs, errMsg = fetch("-S", "-"+rangeStr)
-	} else {
-		// a time bound lets journalctl skip archive files without opening them
-		logs, errMsg = fetch("-S", "-24h")
-	}
-
-	if errMsg != "" {
-		writeLogsJSON(w, nil, errMsg)
+	args := journalctlArgs(logSource, base...)
+	if args == nil {
+		writeLogsJSON(w, nil, "Invalid log source")
 		return
 	}
+
+	output, err := exec.CommandContext(ctx, "journalctl", args...).Output()
+	if err != nil {
+		detail := err.Error()
+		if ctx.Err() == context.DeadlineExceeded {
+			detail = "timed out"
+		} else if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+			detail = strings.SplitN(strings.TrimSpace(string(exitErr.Stderr)), "\n", 2)[0]
+		}
+		log.Printf("Error fetching recent %s logs: %s", logSource, detail)
+		writeLogsJSON(w, nil, "journalctl: "+detail)
+		return
+	}
+
+	lines_output := strings.Split(strings.TrimSpace(string(output)), "\n")
+	logs := make([]LogMessage, 0, len(lines_output))
+	for _, line := range lines_output {
+		if line == "" {
+			continue
+		}
+		if msg, prio, ts, ok := parseJournalJSON(line); ok {
+			logs = append(logs, LogMessage{Message: msg, Priority: prio, Time: ts})
+		} else {
+			logs = append(logs, LogMessage{Message: line, Priority: 6})
+		}
+	}
+
 	writeLogsJSON(w, logs, "")
 }
 

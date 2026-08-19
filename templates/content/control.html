@@ -1163,6 +1163,7 @@
             let logSearchText;
             let logSearchTimer;
             let logLoadSeq = 0;
+            let logFetched = { level: null, truncated: false };
             let userScrolledUp = false;
 
             function scrollLogsDown() {
@@ -1174,9 +1175,13 @@
                     line._priority > logMaxPriority || (logSearchText !== '' && !line._searchText.includes(logSearchText)));
             }
 
-            window.applyLogFilters = function () {
+            function syncLogFilterVars() {
                 logMaxPriority = LOG_LEVELS[document.getElementById('log-priority-select').value];
                 logSearchText = document.getElementById('log-search').value.trim().toLowerCase();
+            }
+
+            window.applyLogFilters = function () {
+                syncLogFilterVars();
                 for (const line of logsContentDiv.children)
                     if (line.classList.contains('log-line')) filterLogLine(line);
                 scrollLogsDown();
@@ -1187,9 +1192,16 @@
                 logSearchTimer = setTimeout(applyLogFilters, 150);
             };
 
+            // narrowing the level on a complete buffer is answered from the DOM;
+            // widening (or a truncated fetch) needs journald lines we never loaded
             window.switchLogLevel = function () {
-                applyLogFilters();
-                loadRecentLogs();
+                const level = document.getElementById('log-priority-select').value;
+                if (logFetched.level && LOG_LEVELS[level] <= LOG_LEVELS[logFetched.level] && !logFetched.truncated) {
+                    applyLogFilters();
+                } else {
+                    syncLogFilterVars();
+                    loadRecentLogs();
+                }
             };
 
             window.jumpToLatest = function () {
@@ -1212,6 +1224,7 @@
                     .then(response => response.json())
                     .then(data => {
                         if (seq !== logLoadSeq) return;
+                        logFetched = { level, truncated: !!data.logs && data.logs.length >= MAX_LOG_LINES };
 
                         if (data.logs && data.logs.length > 0) {
                             logsContentDiv.textContent = '';
