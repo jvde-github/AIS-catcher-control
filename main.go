@@ -84,6 +84,8 @@ type SystemInfo struct {
 	LatestVersion          string    `json:"latest_version"`           // Latest release from GitHub
 	LatestVersionTag       string    `json:"latest_version_tag"`       // Latest tag
 	LatestCommit           string    `json:"latest_commit"`            // Latest commit hash from GitHub
+	LatestCompared         string    `json:"-"`                        // installed:latest pair LatestIsNewer applies to
+	LatestIsNewer          bool      `json:"-"`                        // whether LatestCommit is ahead of the installed commit
 	UpdateAvailable        bool      `json:"update_available"`         // Whether update is available
 	LastChecked            time.Time `json:"last_checked"`             // Last time we checked GitHub
 	ControlLatestCommit    string    `json:"control_latest_commit"`    // Latest Control panel commit from GitHub
@@ -959,15 +961,18 @@ func recomputeUpdateAvailable(info *SystemInfo) {
 	if parts := strings.Fields(info.AISCatcherVersion); len(parts) > 0 {
 		currentVersion = strings.TrimPrefix(parts[0], "v")
 	}
+	// a bare commit mismatch is not enough: a build from the branch tip is
+	// ahead of the newest package and must not be offered a downgrade
+	commitNewer := info.AISCatcherCommit != "" && info.LatestCommit != "" &&
+		info.AISCatcherCommit != info.LatestCommit &&
+		info.LatestCompared == info.AISCatcherCommit+":"+info.LatestCommit &&
+		info.LatestIsNewer
 	if strings.EqualFold(info.AISCatcherBuildType, "source") {
-		info.UpdateAvailable = info.LatestCommit != "" &&
-			info.AISCatcherCommit != "" && info.AISCatcherCommit != info.LatestCommit
+		info.UpdateAvailable = commitNewer
 		return
 	}
 	info.UpdateAvailable = (latestTag != "" && currentVersion != latestTag) ||
-		(currentVersion == latestTag &&
-			info.AISCatcherCommit != "" && info.LatestCommit != "" &&
-			info.AISCatcherCommit != info.LatestCommit)
+		(currentVersion == latestTag && commitNewer)
 }
 
 // githubGet fetches and decodes a GitHub API response; false on any failure.
@@ -1002,17 +1007,29 @@ func githubLatestCommit(repo string) string {
 }
 
 // githubLatestBuilt returns the commit of the newest *successfully built*
-// Edge release, written by the build workflow only when every job passed.
+// release, written by the build workflow only when every binary uploaded.
 // This is what an update offer must compare against: the branch tip can be
 // ahead of any installable package by a CI run, or forever if the build broke.
-func githubLatestBuilt(repo string) string {
+func githubLatestBuilt(repo, tag string) string {
 	var manifest struct {
 		Commit string `json:"commit"`
 	}
-	if githubGet("https://github.com/"+repo+"/releases/download/Edge/latest.json", &manifest) && len(manifest.Commit) >= 7 {
+	if githubGet("https://github.com/"+repo+"/releases/download/"+tag+"/latest.json", &manifest) && len(manifest.Commit) >= 7 {
 		return manifest.Commit[:7]
 	}
 	return ""
+}
+
+// commitIsNewer reports whether built is ahead of installed in the repo
+// history; an unknown installed commit (local build) counts as newer.
+func commitIsNewer(repo, installed, built string) bool {
+	var cmp struct {
+		Status string `json:"status"`
+	}
+	if !githubGet("https://api.github.com/repos/"+repo+"/compare/"+installed+"..."+built, &cmp) {
+		return true
+	}
+	return cmp.Status == "ahead" || cmp.Status == "diverged"
 }
 
 // checkLatestVersion fetches the latest AIS-catcher release and main commit
@@ -1024,7 +1041,17 @@ func checkLatestVersion() {
 	}
 	// manifest or nothing: the tip of main may not be built yet, and offering
 	// an uninstallable update is worse than offering none
-	latestCommit := githubLatestBuilt("jvde-github/AIS-catcher")
+	latestCommit := githubLatestBuilt("jvde-github/AIS-catcher", "Edge")
+
+	cachedSysInfo.Lock()
+	installed := cachedSysInfo.info.AISCatcherCommit
+	cachedSysInfo.Unlock()
+
+	pair, newer := "", false
+	if installed != "" && latestCommit != "" && installed != latestCommit {
+		pair = installed + ":" + latestCommit
+		newer = commitIsNewer("jvde-github/AIS-catcher", installed, latestCommit)
+	}
 
 	cachedSysInfo.Lock()
 	defer cachedSysInfo.Unlock()
@@ -1036,12 +1063,20 @@ func checkLatestVersion() {
 	if latestCommit != "" {
 		info.LatestCommit = latestCommit
 	}
+	if pair != "" {
+		info.LatestCompared = pair
+		info.LatestIsNewer = newer
+	}
 	recomputeUpdateAvailable(info)
 }
 
-// checkControlLatestVersion fetches the latest Control panel commit from GitHub.
+// checkControlLatestVersion fetches the latest built Control panel commit.
 func checkControlLatestVersion() {
-	latestCommit := githubLatestCommit("jvde-github/AIS-catcher-control")
+	latestCommit := githubLatestBuilt("jvde-github/AIS-catcher-control", "v0.1")
+	if latestCommit == "" {
+		// no manifest yet: fall back to the branch tip
+		latestCommit = githubLatestCommit("jvde-github/AIS-catcher-control")
+	}
 	if latestCommit == "" {
 		return
 	}
