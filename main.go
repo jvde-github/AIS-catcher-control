@@ -1908,45 +1908,56 @@ func recentLogsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	extra := []string{"-n", strconv.Itoa(lines)}
+	fetch := func(extra ...string) ([]LogMessage, string) {
+		args := journalctlArgs(logSource, append([]string{"-n", strconv.Itoa(lines)}, extra...)...)
+		if args == nil {
+			return nil, "Invalid log source"
+		}
+
+		output, err := exec.CommandContext(ctx, "journalctl", args...).Output()
+		if err != nil {
+			detail := err.Error()
+			if ctx.Err() == context.DeadlineExceeded {
+				detail = "timed out"
+			} else if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+				detail = strings.SplitN(strings.TrimSpace(string(exitErr.Stderr)), "\n", 2)[0]
+			}
+			log.Printf("Error fetching recent %s logs: %s", logSource, detail)
+			return nil, "journalctl: " + detail
+		}
+
+		lines_output := strings.Split(strings.TrimSpace(string(output)), "\n")
+		logs := make([]LogMessage, 0, len(lines_output))
+		for _, line := range lines_output {
+			if line == "" {
+				continue
+			}
+			if msg, prio, ts, ok := parseJournalJSON(line); ok {
+				logs = append(logs, LogMessage{Message: msg, Priority: prio, Time: ts})
+			} else {
+				logs = append(logs, LogMessage{Message: line, Priority: 6})
+			}
+		}
+		return logs, ""
+	}
+
+	var logs []LogMessage
+	var errMsg string
 	if rangeStr := r.URL.Query().Get("range"); logRangePattern.MatchString(rangeStr) {
-		extra = append(extra, "-S", "-"+rangeStr)
+		logs, errMsg = fetch("-S", "-"+rangeStr)
 	} else {
-		// a time bound lets journalctl skip archive files without opening them
-		extra = append(extra, "-S", "-7d")
+		// a time bound lets journalctl skip archive files without opening them;
+		// a quiet journal falls back to the full scan so old lines still show
+		logs, errMsg = fetch("-S", "-24h")
+		if errMsg == "" && len(logs) == 0 {
+			logs, errMsg = fetch()
+		}
 	}
-	args := journalctlArgs(logSource, extra...)
-	if args == nil {
-		writeLogsJSON(w, nil, "Invalid log source")
+
+	if errMsg != "" {
+		writeLogsJSON(w, nil, errMsg)
 		return
 	}
-
-	output, err := exec.CommandContext(ctx, "journalctl", args...).Output()
-	if err != nil {
-		detail := err.Error()
-		if ctx.Err() == context.DeadlineExceeded {
-			detail = "timed out"
-		} else if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
-			detail = strings.SplitN(strings.TrimSpace(string(exitErr.Stderr)), "\n", 2)[0]
-		}
-		log.Printf("Error fetching recent %s logs: %s", logSource, detail)
-		writeLogsJSON(w, nil, "journalctl: "+detail)
-		return
-	}
-
-	lines_output := strings.Split(strings.TrimSpace(string(output)), "\n")
-	logs := make([]LogMessage, 0, len(lines_output))
-	for _, line := range lines_output {
-		if line == "" {
-			continue
-		}
-		if msg, prio, ts, ok := parseJournalJSON(line); ok {
-			logs = append(logs, LogMessage{Message: msg, Priority: prio, Time: ts})
-		} else {
-			logs = append(logs, LogMessage{Message: line, Priority: 6})
-		}
-	}
-
 	writeLogsJSON(w, logs, "")
 }
 
